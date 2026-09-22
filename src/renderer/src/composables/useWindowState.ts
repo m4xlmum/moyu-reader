@@ -1,10 +1,10 @@
 /**
- * 窗口运行状态的响应式镜像（当前状态、分区显隐、命中策略等）。
+ * 窗口运行状态的响应式镜像（展开 / 收起成球、界面透明度）。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { onMounted, onUnmounted, ref } from 'vue'
-import type { WindowRuntime, ZoneState } from '@shared/types'
+import type { WindowRuntime } from '@shared/types'
 
 export function useWindowState() {
   const state = ref<WindowRuntime | null>(null)
@@ -19,10 +19,15 @@ export function useWindowState() {
 
   onUnmounted(() => unsubscribe?.())
 
-  async function applyZones(zones: ZoneState): Promise<void> {
-    const echoed = await window.moyu.win.applyZones(zones)
-    if (state.value) state.value = { ...state.value, zones: echoed }
+  /** 整个界面缩成悬浮球 */
+  function collapse(): void {
+    void window.moyu.win.collapse()
   }
 
-  return { state, applyZones }
+  /** 从悬浮球展开回完整界面 */
+  function expand(): void {
+    void window.moyu.win.expand()
+  }
+
+  return { state, collapse, expand }
 }

@@ -8,8 +8,6 @@
 export const TOP_BAR_H = 38
 /** 底部工具栏高度（DIP） */
 export const BOTTOM_BAR_H = 44
-/** 隐藏后仍可交互、用于显形与拖动的条带高度（DIP） */
-export const REVEAL_STRIP_H = 6
 
 /**
  * 窗口保持 16:9 横屏比例。
@@ -19,10 +17,15 @@ export const REVEAL_STRIP_H = 6
  */
 export const ASPECT_RATIO = 16 / 9
 
+/** 悬浮球直径（DIP）。收起后整个界面就是这么大一颗球 */
+export const BALL_SIZE = 52
+/** 悬浮球距屏幕边缘的留白 */
+export const BALL_MARGIN = 18
+
 /** 主进程鼠标位置轮询间隔（毫秒） */
 export const POLL_MS = 50
-/** 光标离开后多久才隐藏主体（毫秒）。隐藏慢、显形快，避免误触 */
-export const HIDE_DELAY_MS = 400
+/** 光标离开后多久才收起成球（毫秒）。收起慢、展开靠点击，避免误触 */
+export const HIDE_DELAY_MS = 700
 /** 淡入淡出时长（毫秒） */
 export const FADE_MS = 200
 /** 淡入淡出的计时器步长（毫秒） */
@@ -50,8 +53,9 @@ export const DEFAULT_BOSS_HIDE = 'Alt+X'
  * 配置文件版本，用于迁移。
  *
  * 2：窗口由竖屏改为 16:9 横屏，旧的竖屏尺寸不再适用。
+ * 3：隐藏策略改为收起成悬浮球，旧的按区域隐藏设置整体作废。
  */
-export const CONFIG_VERSION = 2
+export const CONFIG_VERSION = 3
 
 /** 1 版时代的竖屏尺寸；命中这些值说明是「没改过尺寸」的旧配置，迁移时重置 */
 export const LEGACY_PORTRAIT_SIZES: ReadonlyArray<{ width: number; height: number }> = [

@@ -28,29 +28,18 @@ export interface WindowConfig {
 }
 
 export interface StealthConfig {
-  /** 光标移出后自动隐藏顶部菜单栏 */
-  autoHideTop: boolean
-  /** 光标移出后自动隐藏主体（网页区域） */
-  autoHideBody: boolean
-  /** 光标移出后自动隐藏底部工具栏 */
-  autoHideBottom: boolean
-  /** 隐藏前的延迟，毫秒。隐藏慢、显形快，避免误触 */
+  /** 光标移出后自动收起成悬浮球 */
+  autoCollapse: boolean
+  /** 收起前的延迟，毫秒。收起慢、展开靠点击，避免误触 */
   hideDelayMs: number
-  /** 隐藏主体后仍可交互、用于显形与拖动的条带高度 */
-  revealStripHeight: number
-  /** 隐藏主体时暂停网页音视频 */
-  muteMediaOnHide: boolean
+  /** 隐藏时暂停网页音视频 */
+  muteMediaOnCollapse: boolean
   /** 从屏幕捕获中排除窗口（SetWindowDisplayAffinity） */
   contentProtection: boolean
-  /**
-   * 命中区域策略。
-   * 'shape'  —— win.setShape()，无轮询竞态，为首选
-   * 'ignoreMouse' —— setIgnoreMouseEvents() 轮询切换，降级用
-   * 'auto' —— 启动时探测
-   */
-  hitTestStrategy: 'auto' | 'shape' | 'ignoreMouse'
-  /** 'windowOpacity' 为首选（见 docs/spike-findings.md），'css' 为备选 */
-  fadeStrategy: 'windowOpacity' | 'css'
+  /** 悬浮球停靠的屏幕角落 */
+  ballCorner: BallCorner
+  /** 悬浮球直径（DIP） */
+  ballSize: number
 }
 
 export interface HotkeyConfig {
@@ -123,13 +112,17 @@ export interface HistoryEntry {
 // ---------------------------------------------------------------- 运行时（不持久化）
 
 /**
- * 窗口状态。所有窗口级 surface 属性只在 windowSurface.applySurface 中依此表变更。
+ * 窗口状态。
+ *
+ * 只有两个主状态：展开与收起成球。
+ * 收起时窗口本身缩小到一颗球——屏幕上没有「看不见却仍占着」的区域，
+ * 因此不需要再靠裁剪命中区域来实现点击穿透。
  */
 export type WindowMode =
-  /** 主体可见，正常交互 */
-  | 'normal'
-  /** 主体隐藏（点击穿透），栏位与显形条带仍可见 */
-  | 'bodyHidden'
+  /** 完整界面：顶栏 + 正文 + 底栏 */
+  | 'expanded'
+  /** 缩成悬浮球 */
+  | 'collapsed'
   /** 藏进托盘 */
   | 'trayHidden'
   /** 最小化 */
@@ -137,13 +130,8 @@ export type WindowMode =
   /** 正在退出 */
   | 'quitting'
 
-export type ZoneVisibility = 'shown' | 'hidden'
-
-export interface ZoneState {
-  top: ZoneVisibility
-  body: ZoneVisibility
-  bottom: ZoneVisibility
-}
+/** 悬浮球停靠的屏幕角落 */
+export type BallCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
 export interface TabState {
   id: string
@@ -161,12 +149,8 @@ export interface TabState {
 
 export interface WindowRuntime {
   mode: WindowMode
-  zones: ZoneState
   opacity: number
-  /** 自动隐藏被临时挂起（如弹出面板打开、拖动中） */
-  suspended: boolean
-  hitTestStrategy: 'shape' | 'ignoreMouse'
-  fadeStrategy: 'windowOpacity' | 'css'
+  ballCorner: BallCorner
 }
 
 export interface Rect {

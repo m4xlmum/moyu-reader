@@ -73,12 +73,9 @@ export class PopoverWindowService {
     this.win = win
     this.currentKind = req.kind
 
-    // 面板打开期间必须挂起自动隐藏，否则用户一移开光标主体就藏了，
+    // 面板打开期间必须挂起自动收起，否则用户一移开光标界面就缩成球，
     // 面板会孤零零飘在桌面上。
-    this.registry.add(win, {
-      interactiveScreenRects: () => null,
-      blocksAutoHide: true
-    })
+    this.registry.add(win, { blocksAutoHide: true })
 
     win.on('blur', () => this.close())
     win.on('closed', () => {

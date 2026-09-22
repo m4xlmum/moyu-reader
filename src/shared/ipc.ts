@@ -5,6 +5,7 @@
  */
 import type {
   AppConfig,
+  BallCorner,
   Bookmark,
   HistoryEntry,
   HotkeyInfo,
@@ -12,8 +13,7 @@ import type {
   Rect,
   SiteRecord,
   TabState,
-  WindowRuntime,
-  ZoneState
+  WindowRuntime
 } from './types'
 
 /** 渲染进程 → 主进程的请求通道（invoke/handle） */
@@ -53,7 +53,9 @@ export const INVOKE = {
   pageSetUa: 'page:setUa',
 
   winSetOpacity: 'window:setOpacity',
-  winApplyZones: 'window:applyZones',
+  winCollapse: 'window:collapse',
+  winExpand: 'window:expand',
+  winSetBallCorner: 'window:setBallCorner',
   winSetSize: 'window:setSize',
   winToggleMini: 'window:toggleMini',
   winMinimize: 'window:minimize',
@@ -150,7 +152,11 @@ export interface MoyuApi {
   }
   win: {
     setOpacity(input: { value: number }): Promise<void>
-    applyZones(zones: ZoneState): Promise<ZoneState>
+    /** 整个界面缩成悬浮球 */
+    collapse(): Promise<void>
+    /** 从悬浮球展开回完整界面 */
+    expand(): Promise<void>
+    setBallCorner(input: { corner: BallCorner }): Promise<void>
     setSize(input: { preset: string } | { width: number; height: number }): Promise<void>
     toggleMini(input: { enabled: boolean }): Promise<void>
     minimize(): Promise<void>

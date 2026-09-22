@@ -5,10 +5,12 @@
  */
 import path from 'node:path'
 import {
+  BALL_SIZE,
   CONFIG_VERSION,
   DEFAULT_BOSS_HIDE,
   DEFAULT_BOSS_MINIMIZE,
   DEFAULT_SEARCH_TEMPLATE,
+  HIDE_DELAY_MS,
   LEGACY_PORTRAIT_SIZES,
   OPACITY_MAX,
   OPACITY_MIN,
@@ -34,15 +36,12 @@ export function defaultConfig(): AppConfig {
       showInTaskbar: false
     },
     stealth: {
-      autoHideTop: false,
-      autoHideBody: true,
-      autoHideBottom: false,
-      hideDelayMs: 400,
-      revealStripHeight: 6,
-      muteMediaOnHide: true,
+      autoCollapse: true,
+      hideDelayMs: HIDE_DELAY_MS,
+      muteMediaOnCollapse: true,
       contentProtection: false,
-      hitTestStrategy: 'auto',
-      fadeStrategy: 'windowOpacity'
+      ballCorner: 'bottom-right',
+      ballSize: BALL_SIZE
     },
     hotkeys: {
       bossMinimize: DEFAULT_BOSS_MINIMIZE,
@@ -99,8 +98,11 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
     width: Math.round(clamp(w.lastNormalSize?.width ?? d.window.width, 200, 4000)),
     height: Math.round(clamp(w.lastNormalSize?.height ?? d.window.height, 200, 4000))
   }
-  s.hideDelayMs = Math.round(clamp(s.hideDelayMs, 0, 5000))
-  s.revealStripHeight = Math.round(clamp(s.revealStripHeight, 2, 20))
+  s.hideDelayMs = Math.round(clamp(s.hideDelayMs, 200, 5000))
+  s.ballSize = Math.round(clamp(s.ballSize, 36, 96))
+  if (!['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(s.ballCorner)) {
+    s.ballCorner = d.stealth.ballCorner
+  }
   b.defaultZoom = clamp(b.defaultZoom, 0.25, 5)
   if (typeof b.searchTemplate !== 'string' || !b.searchTemplate.includes('%s')) {
     b.searchTemplate = d.browser.searchTemplate

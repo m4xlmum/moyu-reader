@@ -1,41 +1,41 @@
 /**
- * 摸鱼窗口的编排者：拥有窗口、视图树、状态机与版面。
+ * 摸鱼窗口的编排者：拥有窗口、视图树与状态机。
  *
- * 窗口状态只有这里能改。所有窗口级属性的实际写入都委托给 WindowSurface，
- * 本模块只负责「何时进入哪个状态」以及视图的显隐与尺寸。
+ * 隐藏策略只有两条路：
+ *   - 展开：完整界面，顶栏 + 正文 + 底栏
+ *   - 收起：整个窗口缩小成一颗悬浮球
+ *
+ * 「收起」是真的把窗口缩到 52×52，而不是把内容藏起来留一块空壳。
+ * 这样屏幕上不会存在「看不见却仍占着一大块」的区域，
+ * 原先那套靠裁剪命中区域实现的点击穿透因此不再需要。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { BaseWindow, WebContentsView, screen } from 'electron'
-import { SIZE_PRESETS, type SizePreset } from '@shared/constants'
-import type { Rect, WindowMode, WindowRuntime, ZoneState } from '@shared/types'
+import { BALL_SIZE, SIZE_PRESETS, TOP_BAR_H, BOTTOM_BAR_H, type SizePreset } from '@shared/constants'
+import type { BallCorner, Rect, WindowMode, WindowRuntime } from '@shared/types'
 import type { ConfigStore } from './configStore'
-import { computeLayout, type Layout } from './geometry'
-import { HitTester } from './mousePassthrough'
+import { ballBoundsFor, computeLayout, type Layout } from './geometry'
 import { log } from './logger'
-import { OpacityAnimator } from './transparencyService'
 import { WindowLeaveWatcher } from './windowLeaveWatcher'
-import { WindowRegistry } from './windowRegistry'
 import { WindowSurface } from './windowSurface'
 
 /** 合法状态迁移表。未列出的迁移会被拒绝并记录，避免状态机被悄悄改坏。 */
 const LEGAL_TRANSITIONS: Record<WindowMode, WindowMode[]> = {
-  normal: ['bodyHidden', 'trayHidden', 'minimized', 'quitting'],
-  bodyHidden: ['normal', 'trayHidden', 'minimized', 'quitting'],
-  minimized: ['normal', 'trayHidden', 'quitting'],
-  trayHidden: ['normal', 'minimized', 'quitting'],
+  expanded: ['collapsed', 'trayHidden', 'minimized', 'quitting'],
+  collapsed: ['expanded', 'trayHidden', 'minimized', 'quitting'],
+  minimized: ['expanded', 'collapsed', 'trayHidden', 'quitting'],
+  trayHidden: ['expanded', 'collapsed', 'minimized', 'quitting'],
   quitting: []
 }
 
 export interface ControllerDeps {
   config: ConfigStore
-  registry: WindowRegistry
+  registry: import('./windowRegistry').WindowRegistry
   preloadPath: string
-  /** 渲染进程入口地址；开发期是 devServer 的 URL */
   rendererUrl: string
-  /** 主体可见性变化时通知外部（用于同步标签页视图） */
-  onBodyVisibilityChange: (visible: boolean) => void
-  /** 状态变化时通知外部（用于广播 WindowRuntime） */
+  /** 收起或展开时通知外部（用于同步标签页视图的显隐与静音） */
+  onVisibilityChange: (visible: boolean) => void
   onStateChange: () => void
 }
 
@@ -43,13 +43,18 @@ export class WindowController {
   private win: BaseWindow | null = null
   private chrome: WebContentsView | null = null
   private surface: WindowSurface | null = null
-  private hitTester: HitTester | null = null
   private watcher: WindowLeaveWatcher | null = null
-  private animator: OpacityAnimator | null = null
 
-  private mode: WindowMode = 'normal'
-  private zones: ZoneState = { top: 'shown', body: 'shown', bottom: 'shown' }
-  private layout: Layout = computeLayout(420, 640, 6)
+  private mode: WindowMode = 'expanded'
+  /**
+   * 展开态的窗口矩形。
+   *
+   * 绝不从 win.getBounds() 反推：切换状态的过程中窗口还停在旧尺寸上，
+   * 反推会把「记住的展开尺寸」覆盖成球的尺寸，展开就再也长不回去了。
+   * 这个值只由真实的尺寸变化维护（create / resize / move / collapse 前）。
+   */
+  private expandedBounds: Rect | null = null
+  private layout: Layout = computeLayout(960, 540, TOP_BAR_H, BOTTOM_BAR_H)
 
   constructor(private readonly deps: ControllerDeps) {}
 
@@ -58,20 +63,18 @@ export class WindowController {
   create(): void {
     const cfg = this.deps.config.get()
     const w = cfg.window
-
-    const bounds = resolveInitialBounds(w)
+    const origin = resolveInitialOrigin(w)
+    const bounds: Rect = { x: origin.x, y: origin.y, width: w.width, height: w.height }
 
     const win = new BaseWindow({
       ...bounds,
-      width: w.width,
-      height: w.height,
       frame: false,
       transparent: true,
       show: false,
       alwaysOnTop: w.alwaysOnTop,
       // 透明窗口不能最大化；且 resizable:true 会让透明在某些 Windows 版本上失效。
-      // 缩放改由尺寸预设与自绘手柄承担（spike Q5 确认 resizable:false 下
-      // 程序化 setBounds 仍然生效）。
+      // 尺寸改由预设与自绘手柄承担（spike Q5 确认 resizable:false 下
+      // 程序化 setBounds 仍然生效）——收起成球正是靠它。
       resizable: false,
       maximizable: false,
       minimizable: true,
@@ -81,6 +84,7 @@ export class WindowController {
       title: '摸鱼阅读'
     })
     this.win = win
+    this.expandedBounds = bounds
 
     const chrome = new WebContentsView({
       webPreferences: {
@@ -96,44 +100,32 @@ export class WindowController {
     win.contentView.addChildView(chrome)
     this.chrome = chrome
 
-    this.hitTester = new HitTester(win, cfg.stealth.hitTestStrategy)
-    this.surface = new WindowSurface(win, this.hitTester, () => this.deps.config.get())
-    this.animator = new OpacityAnimator(cfg.window.opacity, (value) => {
-      this.surface?.apply(this.surfaceInput(value))
-    })
+    this.surface = new WindowSurface(win, () => this.deps.config.get())
 
     this.watcher = new WindowLeaveWatcher({
       getWindowId: () => this.win?.id ?? null,
-      getBounds: () => this.win?.getBounds() ?? null,
-      getLayout: () => this.layout,
-      getZones: () => this.zones,
+      getBounds: () => (this.mode === 'expanded' ? this.expandedBounds : null),
       getMode: () => this.mode,
       getConfig: () => this.deps.config.get(),
-      surface: this.surface,
       registry: this.deps.registry,
-      onInside: () => this.revealAll(),
-      onOutside: () => this.autoHideAll()
+      onCollapse: () => this.collapse()
     })
 
-    this.deps.registry.add(win, {
-      interactiveScreenRects: () => {
-        if (!this.win) return null
-        const b = this.win.getBounds()
-        // 摸鱼窗口的可交互区域由状态机与分区共同决定，
-        // 这里只声明整窗，真正的分区判定在 watcher 内进行。
-        return [{ x: b.x, y: b.y, width: b.width, height: b.height }]
-      },
-      blocksAutoHide: false
-    })
+    this.deps.registry.add(win, { blocksAutoHide: false })
 
-    win.on('resize', () => this.recomputeLayout())
+    win.on('resize', () => {
+      if (this.mode === 'expanded') this.expandedBounds = win.getBounds()
+      this.recomputeLayout()
+    })
     win.on('move', () => {
-      this.persistBounds()
-      // 跨显示器拖动会改变 DPI，layered 与 region 属性可能被系统丢弃
+      if (this.mode === 'expanded') {
+        this.expandedBounds = win.getBounds()
+        this.persistBounds()
+      }
       this.reassert()
     })
     win.on('restore', () => {
-      this.transitionTo('normal')
+      if (this.mode === 'minimized') this.transitionTo('expanded')
       this.reassert()
     })
     win.on('closed', () => {
@@ -144,8 +136,7 @@ export class WindowController {
     this.loadChrome()
 
     const { width, height } = win.getBounds()
-    this.recomputeLayout()
-    this.layout = computeLayout(width, height, cfg.stealth.revealStripHeight)
+    this.layout = computeLayout(width, height, TOP_BAR_H, BOTTOM_BAR_H)
 
     this.applySurface()
     this.watcher.start()
@@ -157,9 +148,7 @@ export class WindowController {
     chrome.webContents.loadURL(this.deps.rendererUrl).catch((err) => {
       log.error('加载界面失败', err)
     })
-    chrome.webContents.on('did-finish-load', () => {
-      this.applySurface()
-    })
+    chrome.webContents.on('did-finish-load', () => this.applySurface())
   }
 
   // ------------------------------------------------------------ 版面
@@ -184,8 +173,10 @@ export class WindowController {
     const win = this.win
     if (!win) return
     const { width, height } = win.getBounds()
-    this.layout = computeLayout(width, height, this.deps.config.get().stealth.revealStripHeight)
+    // 收起态下不重算版面：那时的 52×52 不是版面尺寸
+    if (this.mode === 'collapsed') return
 
+    this.layout = computeLayout(width, height, TOP_BAR_H, BOTTOM_BAR_H)
     this.chrome?.setBounds({ x: 0, y: 0, width, height })
     this.applySurface()
   }
@@ -196,19 +187,12 @@ export class WindowController {
     return this.mode
   }
 
-  getZones(): ZoneState {
-    return this.zones
-  }
-
   getRuntime(): WindowRuntime {
     const cfg = this.deps.config.get()
     return {
       mode: this.mode,
-      zones: this.zones,
       opacity: cfg.window.opacity,
-      suspended: false,
-      hitTestStrategy: this.hitTester?.getStrategy() ?? 'shape',
-      fadeStrategy: cfg.stealth.fadeStrategy
+      ballCorner: cfg.stealth.ballCorner
     }
   }
 
@@ -223,23 +207,110 @@ export class WindowController {
     this.mode = next
     log.info(`窗口状态：${previous} → ${next}`)
 
+    // 标签页视图只在展开态绘制。收起时它们必须让位给悬浮球，
+    // 否则球的位置会露出网页内容的一角。
+    this.deps.onVisibilityChange(next === 'expanded')
+
     this.applySurface()
-    this.watcher?.bumpEpoch()
     this.deps.onStateChange()
+  }
+
+  // ------------------------------------------------------------ 收起 / 展开
+
+  /** 收起成悬浮球。整个界面缩到屏幕角落的一颗球。 */
+  collapse(): void {
+    const win = this.win
+    if (!win || this.mode === 'collapsed') return
+    if (this.mode !== 'expanded') return
+
+    // 记下展开时的矩形，展开时原样恢复
+    this.expandedBounds = win.getBounds()
+    this.persistBounds()
+
+    const cfg = this.deps.config.get()
+    const ball = this.ballBounds()
+
+    this.transitionTo('collapsed')
+    this.surface?.apply({
+      mode: 'collapsed',
+      windowRect: ball,
+      opacity: cfg.window.opacity
+    })
+
+    this.resizeChromeToWindow()
+    this.watcher?.rearm()
+  }
+
+  /** 展开回完整界面，恢复收起前的尺寸与位置。 */
+  expand(): void {
+    const win = this.win
+    if (!win) return
+    if (this.mode === 'collapsed') this.transitionTo('expanded')
+
+    const target = this.expandedBounds ?? defaultExpandedBounds(this.deps.config.get())
+    this.surface?.apply({
+      mode: 'expanded',
+      windowRect: target,
+      opacity: this.deps.config.get().window.opacity
+    })
+
+    this.recomputeLayout()
+    this.resizeChromeToWindow()
+    // 重新开始计时，避免刚展开就被判定为「光标在外」而立刻收起
+    this.watcher?.rearm()
+
+    win.showInactive()
+    this.reassert()
+  }
+
+  /** 悬浮球当前的屏幕矩形 */
+  private ballBounds(): Rect {
+    const cfg = this.deps.config.get()
+    const cursor = screen.getCursorScreenPoint()
+    // 按球所在位置选显示器，而不是永远用主屏：多屏下球该出现在用户眼前的屏幕上
+    const display = screen.getDisplayNearestPoint(
+      this.expandedBounds
+        ? { x: this.expandedBounds.x, y: this.expandedBounds.y }
+        : cursor
+    )
+    return ballBoundsFor(cfg.stealth.ballCorner, display.workArea, cfg.stealth.ballSize)
+  }
+
+  /** 隐藏窗口时，chrome 视图要铺满当前窗口尺寸 */
+  private resizeChromeToWindow(): void {
+    const win = this.win
+    if (!win || !this.chrome) return
+    const b = win.getBounds()
+    this.chrome.setBounds({ x: 0, y: 0, width: b.width, height: b.height })
+  }
+
+  /** 换一个停靠角落，若当前正处于收起态则立即生效 */
+  setBallCorner(corner: BallCorner): void {
+    this.deps.config.set((cfg) => ({ ...cfg, stealth: { ...cfg.stealth, ballCorner: corner } }))
+    if (this.mode === 'collapsed') {
+      const ball = this.ballBounds()
+      this.surface?.apply({
+        mode: 'collapsed',
+        windowRect: ball,
+        opacity: this.deps.config.get().window.opacity
+      })
+    }
   }
 
   // ------------------------------------------------------------ 动作
 
-  /** 显示窗口。用 showInactive 避免抢走用户编辑器的焦点——那是最容易被发现的破绽。 */
+  /**
+   * 把窗口叫回来。用 showInactive 避免抢走用户编辑器的焦点——
+   * 那是最容易被发现的破绽。
+   *
+   * 从托盘或最小化恢复时，若停在收起态则一并展开：
+   * 用户按托盘「现形」想看的是完整界面，不是一颗球。
+   */
   show(): void {
     const win = this.win
     if (!win) return
-    if (this.mode === 'trayHidden' || this.mode === 'minimized') {
-      this.transitionTo('normal')
-    }
-    // 被叫出来时必须完整可见，否则用户会以为窗口坏了
-    this.revealAll()
     if (win.isMinimized()) win.restore()
+    if (this.mode !== 'expanded') this.transitionTo('expanded')
     win.showInactive()
     this.reassert()
   }
@@ -247,17 +318,19 @@ export class WindowController {
   /** 藏进托盘。先淡出再 hide()，避免出现生硬的闪断。 */
   async hideToTray(): Promise<void> {
     const win = this.win
-    if (!win) return
-    if (this.mode === 'trayHidden') return
+    if (!win || this.mode === 'trayHidden') return
 
-    const cfgOpacity = this.deps.config.get().window.opacity
-    if (cfgOpacity > 0.01) {
-      await this.animator?.fadeTo(0, 140)
+    // 从收起态直接进托盘时不做淡出：那时窗里只有一颗球，渐隐反而更扎眼
+    if (this.mode !== 'collapsed') {
+      this.surface?.apply({
+        mode: this.mode,
+        windowRect: win.getBounds(),
+        opacity: 0
+      })
+      await delay(140)
     }
     this.transitionTo('trayHidden')
     win.hide()
-    // 恢复时从 0 起淡入
-    this.animator?.set(0)
   }
 
   minimize(): void {
@@ -269,34 +342,30 @@ export class WindowController {
 
   setOpacity(value: number): void {
     this.deps.config.set((cfg) => ({ ...cfg, window: { ...cfg.window, opacity: value } }))
-    if (this.mode === 'trayHidden' || this.mode === 'minimized') return
-    this.animator?.set(value)
+    if (this.mode !== 'expanded') return
+    const win = this.win
+    if (!win) return
+    this.surface?.apply({ mode: 'expanded', windowRect: win.getBounds(), opacity: value })
     this.deps.onStateChange()
-  }
-
-  /** 设置各区域显隐（顶部菜单栏 / 主体 / 底部工具栏） */
-  applyZones(zones: ZoneState): ZoneState {
-    this.setZones(zones)
-    this.watcher?.bumpEpoch()
-    return this.zones
   }
 
   setSize(input: { preset: SizePreset } | { width: number; height: number }): void {
     const win = this.win
-    if (!win) return
+    if (!win || this.mode !== 'expanded') return
     const { width, height } = 'preset' in input ? SIZE_PRESETS[input.preset] : input
-    win.setBounds({ x: win.getBounds().x, y: win.getBounds().y, width, height })
+    const b = win.getBounds()
+    win.setBounds({ x: b.x, y: b.y, width, height })
     this.recomputeLayout()
   }
 
   setMiniMode(enabled: boolean): void {
     const win = this.win
-    if (!win) return
+    if (!win || this.mode !== 'expanded') return
     const cfg = this.deps.config.get()
     if (enabled === cfg.window.miniMode) return
 
+    const current = win.getBounds()
     if (enabled) {
-      const current = win.getBounds()
       this.deps.config.set((c) => ({
         ...c,
         window: {
@@ -309,7 +378,6 @@ export class WindowController {
       win.setBounds({ x: current.x, y: current.y, width, height })
     } else {
       const { width, height } = cfg.window.lastNormalSize
-      const current = win.getBounds()
       this.deps.config.set((c) => ({ ...c, window: { ...c.window, miniMode: false } }))
       win.setBounds({ x: current.x, y: current.y, width, height })
     }
@@ -326,7 +394,6 @@ export class WindowController {
 
   destroy(): void {
     this.watcher?.stop()
-    this.animator?.cancel()
     this.mode = 'quitting'
     try {
       this.chrome?.webContents.close()
@@ -339,58 +406,20 @@ export class WindowController {
 
   // ------------------------------------------------------------ 内部
 
-  /** 光标回到窗口内：恢复所有区域 */
-  private revealAll(): void {
-    this.setZones({ top: 'shown', body: 'shown', bottom: 'shown' })
-  }
-
-  /** 光标离开：按配置隐藏开启了自动隐藏的区域 */
-  private autoHideAll(): void {
-    const s = this.deps.config.get().stealth
-    this.setZones({
-      top: s.autoHideTop ? 'hidden' : this.zones.top,
-      body: s.autoHideBody ? 'hidden' : this.zones.body,
-      bottom: s.autoHideBottom ? 'hidden' : this.zones.bottom
-    })
-  }
-
-  /**
-   * 区域显隐的唯一入口。
-   *
-   * 主体的显隐必须同步到窗口状态机（决定命中区域）与标签页视图（决定绘制与静音），
-   * 顶栏与底栏只需重算命中区域与绘制。
-   */
-  private setZones(next: ZoneState): void {
-    const bodyChanged = next.body !== this.zones.body
-    const changed = bodyChanged || next.top !== this.zones.top || next.bottom !== this.zones.bottom
-    if (!changed) return
-
-    this.zones = next
-
-    if (bodyChanged) {
-      const visible = next.body === 'shown'
-      // 先通知视图层，再切状态机——状态机的 applySurface 会立即用上新的显隐
-      this.deps.onBodyVisibilityChange(visible)
-      if (visible && this.mode === 'bodyHidden') this.transitionTo('normal')
-      else if (!visible && this.mode === 'normal') this.transitionTo('bodyHidden')
-    }
-
-    this.applySurface()
-    this.deps.onStateChange()
-  }
-
   private applySurface(): void {
-    this.surface?.apply(this.surfaceInput(this.animator?.current ?? this.deps.config.get().window.opacity))
-  }
-
-  private surfaceInput(opacity: number) {
-    return { mode: this.mode, zones: this.zones, opacity, layout: this.layout }
+    const win = this.win
+    if (!win) return
+    const cfg = this.deps.config.get()
+    const windowRect =
+      this.mode === 'collapsed' ? this.ballBounds() : (this.expandedBounds ?? win.getBounds())
+    this.surface?.apply({ mode: this.mode, windowRect, opacity: cfg.window.opacity })
   }
 
   private persistBounds(): void {
     const win = this.win
-    if (!win || this.mode === 'quitting') return
+    if (!win || this.mode !== 'expanded') return
     const b = win.getBounds()
+    if (b.width < BALL_SIZE * 2) return
     this.deps.config.set((cfg) => ({
       ...cfg,
       window: { ...cfg.window, x: b.x, y: b.y, width: b.width, height: b.height }
@@ -398,19 +427,26 @@ export class WindowController {
   }
 }
 
-function resolveInitialBounds(w: {
-  x: number | null
-  y: number | null
-  width: number
-  height: number
-}): { x: number; y: number } {
-  if (w.x !== null && w.y !== null) {
-    return { x: w.x, y: w.y }
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function resolveInitialOrigin(w: { x: number | null; y: number | null }): { x: number; y: number } {
+  if (w.x !== null && w.y !== null) return { x: w.x, y: w.y }
+  const area = screen.getPrimaryDisplay().workArea
+  const { width, height } = SIZE_PRESETS.medium
+  return {
+    x: area.x + area.width - width - 48,
+    y: area.y + Math.round((area.height - height) / 2)
   }
-  // 默认靠屏幕右侧摆放，不遮挡文档的正文区域
+}
+
+function defaultExpandedBounds(cfg: { window: { width: number; height: number } }): Rect {
   const area = screen.getPrimaryDisplay().workArea
   return {
-    x: area.x + area.width - w.width - 48,
-    y: area.y + Math.round((area.height - w.height) / 2)
+    x: area.x + area.width - cfg.window.width - 48,
+    y: area.y + Math.round((area.height - cfg.window.height) / 2),
+    width: cfg.window.width,
+    height: cfg.window.height
   }
 }

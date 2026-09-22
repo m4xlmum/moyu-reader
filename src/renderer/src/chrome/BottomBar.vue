@@ -1,25 +1,20 @@
 <script setup lang="ts">
 /**
- * 底部工具栏：站点入口、透明度、区域开关、个人中心。
+ * 底部工具栏：站点入口、缩放、透明度、收起、个人中心。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import type { ConfigPatch } from '@shared/ipc'
-import type { AppConfig, TabState, ZoneState } from '@shared/types'
+import type { AppConfig, TabState } from '@shared/types'
 import Icon from './Icon.vue'
 import OpacitySlider from './OpacitySlider.vue'
-import ZoneToggles from './ZoneToggles.vue'
 
 const props = defineProps<{
-  zones: ZoneState
   config: AppConfig | null
   activeTab: TabState | null
 }>()
 
-const emit = defineEmits<{
-  patch: [patch: ConfigPatch]
-  applyZones: [zones: ZoneState]
-}>()
+const emit = defineEmits<{ patch: [patch: ConfigPatch] }>()
 
 type PopoverKind = 'sites' | 'history' | 'bookmarks' | 'uaZoom'
 
@@ -29,7 +24,12 @@ function openPopover(kind: PopoverKind, event: MouseEvent): void {
   const r = el.getBoundingClientRect()
   void window.moyu.ui.openPopover({
     kind,
-    anchorRect: { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+    anchorRect: {
+      x: Math.round(r.left),
+      y: Math.round(r.top),
+      width: Math.round(r.width),
+      height: Math.round(r.height)
+    }
   })
 }
 
@@ -57,6 +57,10 @@ function bookmarkCurrent(): void {
 function openSettings(): void {
   void window.moyu.ui.openSettings()
 }
+
+function collapse(): void {
+  void window.moyu.win.collapse()
+}
 </script>
 
 <template>
@@ -80,8 +84,13 @@ function openSettings(): void {
 
     <OpacitySlider :model-value="config?.window.opacity ?? 1" @update:model-value="setOpacity" />
 
-    <ZoneToggles :zones="zones" @change="(z) => emit('applyZones', z)" />
+    <div class="spacer" />
 
+    <!-- 手动收起：等鼠标移开自动收起虽然会来，但人想立刻藏起来时不该等 -->
+    <button class="tool moyu-no-drag" title="收起成悬浮球" @click="collapse">
+      <Icon name="collapse" :size="14" />
+      <span>收起</span>
+    </button>
     <button class="tool moyu-no-drag" title="个人中心" @click="openSettings">设置</button>
   </footer>
 </template>
@@ -116,11 +125,16 @@ function openSettings(): void {
   flex: 0 0 auto;
 }
 
+.spacer {
+  flex: 1 1 auto;
+}
+
 .tool {
   height: 26px;
   padding: 0 8px;
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   justify-content: center;
   border-radius: var(--moyu-radius-sm);
   color: var(--moyu-text-dim);

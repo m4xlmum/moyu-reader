@@ -21,12 +21,16 @@ export function registerDataIpc(ctx: AppContext): void {
     if (after.stealth.contentProtection !== before.stealth.contentProtection) {
       ctx.controller.setContentProtection(after.stealth.contentProtection)
     }
-    if (after.stealth.revealStripHeight !== before.stealth.revealStripHeight) {
-      ctx.controller.recomputeLayout()
+    if (after.stealth.ballCorner !== before.stealth.ballCorner) {
+      ctx.controller.setBallCorner(after.stealth.ballCorner)
     }
-    if (after.stealth.autoHideBody !== before.stealth.autoHideBody && !after.stealth.autoHideBody) {
-      // 关掉自动隐藏时，确保主体是显示的，否则用户会以为窗口坏了
-      ctx.controller.applyZones({ ...ctx.controller.getZones(), body: 'shown' })
+    if (after.window.alwaysOnTop !== before.window.alwaysOnTop) {
+      ctx.controller.reassert()
+    }
+    // 关掉自动收起时，若正停着一颗球就把界面展开，
+    // 否则用户会以为设置没生效——球还在那里
+    if (!after.stealth.autoCollapse && ctx.controller.getMode() === 'collapsed') {
+      ctx.controller.expand()
     }
 
     ctx.broadcast('config:changed', after)

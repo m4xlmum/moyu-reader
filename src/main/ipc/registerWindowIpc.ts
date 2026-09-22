@@ -6,7 +6,7 @@
 import { ipcMain } from 'electron'
 import { INVOKE, type OpenPopoverRequest } from '@shared/ipc'
 import type { SizePreset } from '@shared/constants'
-import type { ZoneState } from '@shared/types'
+import type { BallCorner } from '@shared/types'
 import type { AppContext } from '../context'
 
 export function registerWindowIpc(ctx: AppContext): void {
@@ -16,7 +16,17 @@ export function registerWindowIpc(ctx: AppContext): void {
     ctx.controller.setOpacity(input.value)
   })
 
-  ipcMain.handle(INVOKE.winApplyZones, (_e, zones: ZoneState) => ctx.controller.applyZones(zones))
+  ipcMain.handle(INVOKE.winCollapse, () => {
+    ctx.controller.collapse()
+  })
+
+  ipcMain.handle(INVOKE.winExpand, () => {
+    ctx.controller.expand()
+  })
+
+  ipcMain.handle(INVOKE.winSetBallCorner, (_e, input: { corner: BallCorner }) => {
+    ctx.controller.setBallCorner(input.corner)
+  })
 
   ipcMain.handle(INVOKE.winSetSize, (_e, input: { preset: SizePreset } | { width: number; height: number }) => {
     ctx.controller.setSize(input)

@@ -1,33 +1,47 @@
 /**
  * 窗口表面状态的唯一入口。
  *
- * 全应用只有这里可以调用 setOpacity / setShape / setIgnoreMouseEvents /
- * setSkipTaskbar / setFocusable / setHasShadow / setContentProtection。
+ * 全应用只有这里可以调用 setOpacity / setSkipTaskbar / setFocusable /
+ * setHasShadow / setContentProtection / setBounds。
  * 把这些调用收敛到一处，是为了让 transparent:true 与 setOpacity 这两条
  * Windows 合成路径不会从不同地方被反复折腾（详见 docs/spike-findings.md）。
  *
- * 调用顺序有讲究，见下面 apply() 内的注释，不要随意重排。
+ * 收起成球之后，屏幕上不再存在「看不见却仍占着一大块」的区域，
+ * 因此原先基于 setShape 的命中区域裁剪已整体移除——点击穿透不再是
+ * 靠裁剪实现的技巧，而是「窗口真的变小了」这个事实。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import type { BaseWindow } from 'electron'
 import { OPACITY_MAX, OPACITY_MIN } from '@shared/constants'
-import type { AppConfig, WindowMode, ZoneState } from '@shared/types'
-import { interactiveRects, type Layout } from './geometry'
-import { HitTester } from './mousePassthrough'
+import type { AppConfig, Rect, WindowMode } from '@shared/types'
 import { log } from './logger'
 
 export interface SurfaceInput {
   mode: WindowMode
-  zones: ZoneState
+  /** 展开态与收起态各自的窗口矩形 */
+  windowRect: Rect
+  /** 用户设定的界面透明度（仅展开态直接生效，收起态由球的 CSS 承担） */
   opacity: number
-  layout: Layout
 }
 
-/** 两种状态下窗口都不该出现在任务栏 */
+/** 藏起来或缩成球时，窗口都不该出现在任务栏 */
 function shouldSkipTaskbar(mode: WindowMode, showInTaskbar: boolean): boolean {
-  if (mode === 'trayHidden' || mode === 'minimized') return true
+  if (mode === 'trayHidden' || mode === 'minimized' || mode === 'collapsed') return true
   return !showInTaskbar
+}
+
+/**
+ * 收起态的窗口透明度恒为 1。
+ *
+ * 悬浮球自己的「半透明」由 CSS 的 alpha 承担，而不是把整个窗口调淡——
+ * 否则用户把界面设在 30% 时，球也会淡到几乎找不到，
+ * 而球是收起之后唯一能把他带回来的东西。
+ */
+export function effectiveOpacity(mode: WindowMode, configured: number): number {
+  if (mode === 'trayHidden') return 0
+  if (mode === 'collapsed') return 1
+  return clampOpacity(configured)
 }
 
 export class WindowSurface {
@@ -35,16 +49,16 @@ export class WindowSurface {
 
   constructor(
     private readonly win: BaseWindow,
-    private readonly hitTester: HitTester,
     private readonly getConfig: () => AppConfig
   ) {}
 
-  /** 依据目标状态设置全部窗口级属性。不做 show/hide/minimize 这类动作。 */
+  /** 依据目标状态设置全部窗口级属性 */
   apply(input: SurfaceInput): void {
+    const previous = this.last
     this.last = input
+
     const cfg = this.getConfig()
-    const { mode, zones, opacity, layout } = input
-    const useWindowOpacity = cfg.stealth.fadeStrategy === 'windowOpacity'
+    const { mode, windowRect, opacity } = input
 
     // 1) 阴影。透视状态下阴影会勾出窗口矩形轮廓，直接暴露窗口存在。
     this.call(() => this.win.setHasShadow(false))
@@ -65,37 +79,27 @@ export class WindowSurface {
     this.call(() => this.win.setFocusable(true))
     this.call(() => this.win.setSkipTaskbar(shouldSkipTaskbar(mode, cfg.window.showInTaskbar)))
 
-    // 5) 透明度。
-    //    走 windowOpacity 时，无极透明度直接由 setOpacity 承担——
-    //    spike 已实测它与 transparent:true 正常混合，因而不需要向网页注入 CSS。
-    //    走 css 时窗口透明度恒为 1，由渲染进程与 pageStyler 负责表现。
-    if (useWindowOpacity) {
-      const value = mode === 'trayHidden' ? 0 : clampOpacity(opacity)
-      this.call(() => this.win.setOpacity(value))
-    } else {
-      this.call(() => this.win.setOpacity(1))
+    // 5) 尺寸。收起与展开就是同一扇窗的两套矩形，切换即整个界面消失或出现。
+    if (!sameRect(previous?.windowRect ?? null, windowRect)) {
+      this.call(() =>
+        this.win.setBounds({
+          x: windowRect.x,
+          y: windowRect.y,
+          width: windowRect.width,
+          height: windowRect.height
+        })
+      )
     }
 
-    // 6) 命中区域。
-    if (mode === 'trayHidden') {
-      // 窗口即将 hide()，这里只是防住 hide 落地前那一瞬的点击被吞。
-      this.call(() => this.win.setIgnoreMouseEvents(true, { forward: true }))
-    } else {
-      const rects = interactiveRects(layout, zones)
-      this.hitTester.applyRects(rects)
-      // shape 策略下 hitTester 不管穿透开关，需显式关掉（可能被 trayHidden 打开过）
-      if (this.hitTester.getStrategy() === 'shape') {
-        this.call(() => this.win.setIgnoreMouseEvents(false, { forward: false }))
-      }
-    }
+    // 6) 透明度。
+    this.call(() => this.win.setOpacity(effectiveOpacity(mode, opacity)))
   }
 
   /**
    * 重放上一次的表面状态。
    *
    * Windows 会在最小化恢复、跨显示器拖动、DPI 变化之后静默丢弃
-   * layered / region 属性。每次 restore / show / 显示器变化后都要调用本方法，
-   * 这是唯一的修复点。
+   * layered 属性。每次 restore / show / 显示器变化后都要调用本方法。
    */
   reassert(): void {
     if (!this.last) return
@@ -103,13 +107,8 @@ export class WindowSurface {
     this.apply(this.last)
   }
 
-  /** 供轮询驱动降级路径下的穿透开关 */
-  updateCursor(localX: number, localY: number): void {
-    this.hitTester.updateCursor(localX, localY)
-  }
-
-  getHitTestStrategy(): 'shape' | 'ignoreMouse' {
-    return this.hitTester.getStrategy()
+  getLast(): SurfaceInput | null {
+    return this.last
   }
 
   private call(fn: () => void): void {
@@ -119,6 +118,11 @@ export class WindowSurface {
       log.warn('窗口表面操作失败', err)
     }
   }
+}
+
+function sameRect(a: Rect | null, b: Rect): boolean {
+  if (!a) return false
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
 }
 
 function clampOpacity(value: number): number {

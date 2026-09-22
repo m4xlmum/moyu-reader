@@ -10,7 +10,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { SIZE_PRESETS, type SizePreset } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
-import type { AppConfig, HotkeyInfo } from '@shared/types'
+import type { AppConfig, BallCorner, HotkeyInfo } from '@shared/types'
 
 type SectionKey = 'general' | 'stealth' | 'hotkey' | 'data' | 'about'
 
@@ -35,6 +35,13 @@ const SIZE_LABEL: Record<SizePreset, string> = {
   medium: '中',
   large: '大'
 }
+
+const BALL_CORNERS: Array<{ value: BallCorner; label: string }> = [
+  { value: 'top-left', label: '左上' },
+  { value: 'top-right', label: '右上' },
+  { value: 'bottom-left', label: '左下' },
+  { value: 'bottom-right', label: '右下' }
+]
 
 onMounted(async () => {
   config.value = await window.moyu.config.get()
@@ -204,56 +211,35 @@ function toggleMiniMode(event: Event): void {
         <h2>隐蔽</h2>
 
         <div class="card">
+          <p class="hint">
+            鼠标移出窗口后，整个界面会缩成屏幕角落的一颗悬浮球；点击悬浮球即可展开回原样。
+            收起时窗口是真的变小了，屏幕上不会留下任何看不见却仍在接收点击的区域。
+          </p>
+
           <div class="field">
-            <label>鼠标移出时自动隐藏</label>
-            <div class="control column">
-              <label class="inline">
-                <input
-                  type="checkbox"
-                  :checked="config.stealth.autoHideTop"
-                  @change="
-                    patch({
-                      stealth: { autoHideTop: ($event.target as HTMLInputElement).checked }
-                    })
-                  "
-                />
-                顶部菜单栏
-              </label>
-              <label class="inline">
-                <input
-                  type="checkbox"
-                  :checked="config.stealth.autoHideBody"
-                  @change="
-                    patch({
-                      stealth: { autoHideBody: ($event.target as HTMLInputElement).checked }
-                    })
-                  "
-                />
-                主体（隐藏后该区域点击穿透，事件落到后方窗口）
-              </label>
-              <label class="inline">
-                <input
-                  type="checkbox"
-                  :checked="config.stealth.autoHideBottom"
-                  @change="
-                    patch({
-                      stealth: { autoHideBottom: ($event.target as HTMLInputElement).checked }
-                    })
-                  "
-                />
-                底部工具栏
-              </label>
+            <label>鼠标移出时自动收起</label>
+            <div class="control">
+              <input
+                type="checkbox"
+                :checked="config.stealth.autoCollapse"
+                @change="
+                  patch({
+                    stealth: { autoCollapse: ($event.target as HTMLInputElement).checked }
+                  })
+                "
+              />
+              <span class="dim">关掉之后只能从底栏的「收起」手动藏起来</span>
             </div>
           </div>
 
           <div class="field">
-            <label>隐藏延迟</label>
+            <label>收起延迟</label>
             <div class="control">
               <input
                 type="number"
-                min="0"
-                max="3000"
-                step="50"
+                min="200"
+                max="5000"
+                step="100"
                 :value="config.stealth.hideDelayMs"
                 @change="
                   patch({
@@ -261,19 +247,52 @@ function toggleMiniMode(event: Event): void {
                   })
                 "
               />
-              <span class="dim">毫秒。数值越大越不容易误隐藏</span>
+              <span class="dim">毫秒。数值越大越不容易误收起</span>
             </div>
           </div>
 
           <div class="field">
-            <label>隐藏主体时暂停音视频</label>
+            <label>悬浮球停靠</label>
+            <div class="control">
+              <button
+                v-for="c in BALL_CORNERS"
+                :key="c.value"
+                :class="{ active: config.stealth.ballCorner === c.value }"
+                @click="patch({ stealth: { ballCorner: c.value } })"
+              >
+                {{ c.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>悬浮球大小</label>
+            <div class="control">
+              <input
+                type="range"
+                min="36"
+                max="96"
+                step="2"
+                :value="config.stealth.ballSize"
+                @input="
+                  patch({
+                    stealth: { ballSize: Number(($event.target as HTMLInputElement).value) }
+                  })
+                "
+              />
+              <span class="value">{{ config.stealth.ballSize }} px</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>收起时暂停音视频</label>
             <div class="control">
               <input
                 type="checkbox"
-                :checked="config.stealth.muteMediaOnHide"
+                :checked="config.stealth.muteMediaOnCollapse"
                 @change="
                   patch({
-                    stealth: { muteMediaOnHide: ($event.target as HTMLInputElement).checked }
+                    stealth: { muteMediaOnCollapse: ($event.target as HTMLInputElement).checked }
                   })
                 "
               />
@@ -294,19 +313,6 @@ function toggleMiniMode(event: Event): void {
               />
               <span class="dim">
                 开启后窗口不会出现在屏幕共享与截图中。注意：你自己截的图里也不会有它。
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="field">
-            <label>命中区域策略</label>
-            <div class="control">
-              <span class="dim">
-                当前生效的是
-                <b>shape</b>（setShape）。这是首选策略，没有轮询竞态。
-                若在你的机器上失效，会记录到日志并自动降级。
               </span>
             </div>
           </div>

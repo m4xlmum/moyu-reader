@@ -21,8 +21,7 @@ import type {
   HotkeyInfo,
   PresetSite,
   SiteRecord,
-  WindowRuntime,
-  ZoneState
+  WindowRuntime
 } from '@shared/types'
 import type { SizePreset } from '@shared/constants'
 
@@ -88,8 +87,9 @@ export const api: MoyuApi = {
 
   win: {
     setOpacity: (input) => ipcRenderer.invoke(INVOKE.winSetOpacity, input) as Promise<void>,
-    applyZones: (zones: ZoneState) =>
-      ipcRenderer.invoke(INVOKE.winApplyZones, zones) as Promise<ZoneState>,
+    collapse: () => ipcRenderer.invoke(INVOKE.winCollapse) as Promise<void>,
+    expand: () => ipcRenderer.invoke(INVOKE.winExpand) as Promise<void>,
+    setBallCorner: (input) => ipcRenderer.invoke(INVOKE.winSetBallCorner, input) as Promise<void>,
     setSize: (input: { preset: SizePreset } | { width: number; height: number }) =>
       ipcRenderer.invoke(INVOKE.winSetSize, input) as Promise<void>,
     toggleMini: (input) => ipcRenderer.invoke(INVOKE.winToggleMini, input) as Promise<void>,

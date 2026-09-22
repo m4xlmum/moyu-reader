@@ -88,8 +88,8 @@ function bootstrap(): void {
     registry,
     preloadPath,
     rendererUrl: rendererUrl('index'),
-    onBodyVisibilityChange: (visible) => {
-      tabsRef?.setBodyVisible(visible, config.get().stealth.muteMediaOnHide)
+    onVisibilityChange: (visible) => {
+      tabsRef?.setBodyVisible(visible, config.get().stealth.muteMediaOnCollapse)
     },
     onStateChange: () => {
       broadcast(BROADCAST.windowState, controller.getRuntime())

@@ -48,10 +48,7 @@ export class SettingsWindowService {
     })
     this.win = win
 
-    this.registry.add(win, {
-      interactiveScreenRects: () => null,
-      blocksAutoHide: true
-    })
+    this.registry.add(win, { blocksAutoHide: true })
 
     win.on('closed', () => {
       this.registry.remove(win.id)
