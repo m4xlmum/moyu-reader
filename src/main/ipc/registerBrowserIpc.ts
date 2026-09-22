@@ -19,6 +19,12 @@ export function registerBrowserIpc(ctx: AppContext): void {
     return { tabId }
   })
 
+  ipcMain.handle(INVOKE.tabsHome, () => {
+    const tabId = ctx.tabs.openHome()
+    ctx.controller.show()
+    return { tabId }
+  })
+
   ipcMain.handle(INVOKE.tabsClose, (_e, input: { tabId: string }) => {
     ctx.tabs.close(input.tabId)
   })

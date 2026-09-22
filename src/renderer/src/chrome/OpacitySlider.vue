@@ -86,7 +86,8 @@ function setPreset(value: number): void {
   height: 3px;
   -webkit-appearance: none;
   appearance: none;
-  background: rgba(255, 255, 255, 0.22);
+  /* 轨道必须与底栏的白色拉开：白色画在白底上等于不存在 */
+  background: var(--moyu-border);
   border-radius: 2px;
   outline: none;
   cursor: pointer;
@@ -95,11 +96,17 @@ function setPreset(value: number): void {
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 11px;
-  height: 11px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
   background: var(--moyu-accent);
   cursor: pointer;
+}
+
+/* 键盘焦点必须看得见：滑块的默认轮廓已被去掉，这里补回来 */
+.slider:focus-visible {
+  outline: 2px solid var(--moyu-accent);
+  outline-offset: 3px;
 }
 
 .value {

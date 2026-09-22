@@ -1,0 +1,127 @@
+{
+  "title": "选择视觉世界",
+  "question": "发牌结果是「机读答题卡」。保留它、换一张备选，还是重掷？",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "机读答题卡",
+      "kicker": "THE ROLL",
+      "lineage": "中国考试机读答题卡 / OMR 光标阅读机表单",
+      "thesis": "把「今天想读的东西」排成一张待填涂的答题卡：每一行都是一道你还没读完的题，涂满即已读。",
+      "palette": ["#f4f5f3", "#15171c", "#d1332e"],
+      "materials": ["OMR 答题卡纸", "黑色胶印框线", "红色登记条", "2B 铅笔涂痕"],
+      "viewport": "一整张答题卡铺满窗口：顶部红色登记条内含「姓名 / 考号」式的会话与日期字段，其下一段答题须知，再往下是编号答题格——每个站点是一行，行首是题号与一个空心或已涂满的椭圆。",
+      "risk": "容易被读成「真的考卷」而显得像玩笑；且白纸在深色桌面上反而比深色面板更显眼——必须靠透明度淡出才成立。",
+      "raised": [
+        {
+          "from": "challenger-tensegrity",
+          "raise": "把结构诚实还给它：卡上每一条印线都必须承载信息，废除一切装饰性分隔线——没有一条线是为了好看而画的。"
+        },
+        {
+          "from": "challenger-sneaker-wall",
+          "raise": "把「支配性表头块」还给它：姓名/考号/科目那一块才是整张卡的骨架，下方的每一行都必须看得出归属于它，而不是一张独立的清单。"
+        },
+        {
+          "from": "challenger-camcorder-hud",
+          "raise": "把「四角读数、中央留空」还给它：状态读数钉在卡的四角安全区内，中央区域永远留给内容本身，不被仪表占住。"
+        },
+        {
+          "from": "challenger-ikeda",
+          "raise": "把「硬性双墨纪律」还给它：只有黑与红两种墨。层级靠线宽、字重与填涂传达，绝不引入第三种颜色或灰色来区分层级。"
+        }
+      ]
+    },
+    {
+      "id": "model-pick",
+      "label": "Excel 工作表",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "电子表格工作表与单元格选中态",
+      "thesis": "站点列表本来就是一张工作表：列有表头、行有序号，一眼扫过去就是在工作。",
+      "palette": ["#f1f3f5", "#d6d9dd", "#217346", "#1f2328"],
+      "materials": ["表格网格线", "冻结表头", "活动单元格框", "名称框与编辑栏"],
+      "viewport": "冻结的表头行（序号 / 站点 / 上次阅读 / 备注），下方每一行是一个站点，当前行带粗边框的活动单元格框，顶部编辑栏显示选中项的地址。",
+      "risk": "它是这份清单里最容易被同类产品想到的方向——「看起来像在工作」这件事本身太顺理成章，代价是缺乏辨识度，熟悉而有效。"
+    },
+    {
+      "id": "challenger-boarding-pass",
+      "label": "登机牌与航班信息板",
+      "verdict": "competitive",
+      "lineage": "segmented boarding pass 与 live gate board",
+      "thesis": "把清单做成一块会重新排序的信息板：行在变，但它不消失、也不闪回，而是移动并持续点亮直到你注意到。",
+      "palette": ["#eef0f2", "#15181c", "#c8362f"],
+      "materials": ["分段式卡面", "等宽机读块", "变更高亮态"],
+      "viewport": "上段是一张分段登机牌（本站点、上次阅读时间、进度），下段是固定列宽的信息板，按时间排序，被选中的那一行移动到新位置并保持高亮。",
+      "case": "融合得干净：站点天然映射为编号条目，行身份保持的重排逻辑对「按最近阅读排序」这件事非常贴切；它在产品清晰度这一轴上站得住，输在受众认同——中国办公室用户与登机牌没有日常关系。",
+      "risk": "网格不严格时读起来像复古噱头。",
+      "hero": "https://impeccable.style/worlds/cards/vernacular-ephemera-boarding-pass-and-gate-board-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/vernacular-ephemera-boarding-pass-and-gate-board.webp"
+    },
+    {
+      "id": "challenger-drum-machine",
+      "label": "鼓机步进序列",
+      "verdict": "competitive",
+      "lineage": "早期 80 年代节奏机的 16 步序列与跑灯",
+      "thesis": "一整条不断开、不换行、只缩放的横向序列，跑灯永远告诉你「现在在哪」。",
+      "palette": ["#2b2b2e", "#d8352a", "#e08a2e", "#f2d24b", "#f5f5f7"],
+      "materials": ["丝印标签", "点亮 LED", "分段式速度读数"],
+      "viewport": "顶部一条红色分段读数显示计数，下方一整排十六个步进键代表站点，跑灯按节奏扫过，已读的键亮起、重点的键更亮。",
+      "case": "融合得动听：十六步一行永不换行、只缩放，正是窄窗口需要的；跑灯把「当前进度」做成了时间性的。它拿住了受众认同的一轴（爱音乐的人会心一笑），产品清晰度偏弱——站点不是时间序列。",
+      "risk": "把站点强行映射成节拍会显得牵强，需要克制。",
+      "hero": "https://impeccable.style/worlds/cards/signals-instruments-drum-machine-step-row-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/signals-instruments-drum-machine-step-row.webp"
+    },
+    {
+      "id": "challenger-tensegrity",
+      "label": "张拉整体立柱",
+      "verdict": "declined",
+      "lineage": "碳杆与红绳构成的动态雕塑",
+      "palette": ["#1c1c1e", "#c9302c", "#e7e5e0"],
+      "materials": ["哑光碳杆", "张力绳", "力值标注"],
+      "case": "融合失败：中国办公室用户与张拉整体雕塑没有日常关系；作为启动器也说不清「站点在哪、该点哪里」。",
+      "kept": "结构诚实——每一条可见的线都承载受力，没有装饰性线条。"
+    },
+    {
+      "id": "challenger-sneaker-wall",
+      "label": "球鞋档案墙",
+      "verdict": "declined",
+      "lineage": "堆叠的球鞋鞋盒与盒端标签",
+      "palette": ["#b4471f", "#171717", "#f3f0ea"],
+      "materials": ["瓦楞纸板", "单线剪影", "衬纸"],
+      "case": "融合失败：球鞋文化与这个受众不重叠；把站点塞进鞋盒是一次借来的造型，不解决任何真实问题。",
+      "kept": "支配性标签块——盒端那块「名称 / 配色 / 尺码」的表格统辖每一张卡，让条目有归属。"
+    },
+    {
+      "id": "challenger-camcorder-hud",
+      "label": "摄录机取景器 HUD",
+      "verdict": "declined",
+      "lineage": "摄像机取景器里的构图辅助与 OSD 读数",
+      "palette": ["#0a0a0a", "#f2f2f2", "#e0a020"],
+      "materials": ["分段式等宽字体", "斑马纹", "安全框角标"],
+      "case": "融合失败：取景器是摄像师的语汇，不是办公室用户的；而且它的表现力依赖「画面在动」，静态清单里只剩装饰。",
+      "kept": "四角读数、中央留空——仪表钉在安全区四角，中央永远不被占住。"
+    },
+    {
+      "id": "challenger-ikeda",
+      "label": "池田亮司式数据场",
+      "verdict": "declined",
+      "lineage": "纯黑白的条码柱与正弦晶格",
+      "palette": ["#000000", "#ffffff"],
+      "materials": ["发丝级竖条", "等宽数字", "整帧反相"],
+      "case": "融合失败：它是一场关于数据密度的表演，而启动器需要的是「让我快点找到我要的那个站点」；密度在这里是障碍不是表达。",
+      "kept": "硬性双墨纪律——只允许黑与白，拒绝用灰色逃逸，全部靠线与密度承担。"
+    }
+  ],
+  "reroll": {
+    "registers": ["safer", "bolder"]
+  },
+  "canon": true,
+  "canonCard": {
+    "label": "品类标准做法",
+    "thesis": "同类产品普遍交付的那个样子，以完全的工艺水准执行。",
+    "palette": ["#ffffff", "#111827", "#2563eb"],
+    "materials": ["干净的网格", "圆角磁贴", "站点图标"],
+    "viewport": "居中的搜索框，下方是等距圆角磁贴网格，悬停微微上浮。",
+    "risk": "按设计就与竞品无法区分——这正是选择它的代价。"
+  },
+  "steer": true
+}

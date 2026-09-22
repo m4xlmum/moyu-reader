@@ -44,6 +44,14 @@ export class WindowLeaveWatcher {
   private suspended = 0
   /** 上一次报告的状态，避免每 50ms 重复触发同一侧回调 */
   private lastInside: boolean | null = null
+  /**
+   * 是否已「武装」。
+   *
+   * 首次运行时光标多半不在窗口上，若一上来就按「光标在外」处理，
+   * 用户刚打开应用就会看到正文在几百毫秒后凭空消失，像是坏了。
+   * 因此先要求光标进过窗口一次，之后隐藏行为才生效。
+   */
+  private armed = false
 
   constructor(private readonly deps: WatcherDeps) {}
 
@@ -112,11 +120,15 @@ export class WindowLeaveWatcher {
 
     if (insideSelf || insideOther) {
       this.outsideSince = null
+      // 光标进过窗口，隐藏行为自此生效
+      this.armed = true
       this.report(true)
       return
     }
 
     // 光标在窗口之外
+    if (!this.armed) return
+
     const epochAtEntry = this.epoch
     if (this.outsideSince === null) {
       this.outsideSince = Date.now()

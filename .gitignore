@@ -34,3 +34,6 @@ logs/
 # spike 的运行产物（脚本本身保留，便于在其它机器上复核）
 spike/report.json
 spike/*.png
+
+# 评审截图：是过程证据，不是产物，体积也大
+.impeccable/review/

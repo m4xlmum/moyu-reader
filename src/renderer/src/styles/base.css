@@ -45,6 +45,13 @@ button {
   padding: 0;
 }
 
+/* chrome 上原本没有任何键盘焦点样式，Tab 走一圈看不到落点。
+   统一在这里给一道跟随强调色的轮廓。 */
+:focus-visible {
+  outline: 2px solid var(--moyu-accent);
+  outline-offset: 1px;
+}
+
 button:disabled {
   opacity: 0.4;
   cursor: default;
@@ -65,15 +72,21 @@ input {
   -webkit-app-region: no-drag;
 }
 
-/* 隐藏滚动条，避免在窄窗口里占位 */
+/* 滚动条也属于这套配色。
+   这里曾经写的是深色主题的白，在浅色工具栏上几乎看不见；
+   后来换成了一组硬编码的中性墨，但它并不属于本套令牌，现已改回令牌。 */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--moyu-border);
   border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--moyu-text-faint);
 }
 
 ::-webkit-scrollbar-track {

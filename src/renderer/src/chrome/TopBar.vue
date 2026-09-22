@@ -8,8 +8,10 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed, nextTick, ref, watch } from 'vue'
+import { HOME_URL } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
 import type { AppConfig, TabState } from '@shared/types'
+import Icon from './Icon.vue'
 
 const props = defineProps<{
   tabs: TabState[]
@@ -23,11 +25,16 @@ const emit = defineEmits<{ patch: [patch: ConfigPatch] }>()
 const addressInput = ref('')
 const editing = ref(false)
 
-/** 未编辑时地址栏跟随当前标签页；编辑时不抢用户的输入 */
+/**
+ * 未编辑时地址栏跟随当前标签页；编辑时不抢用户的输入。
+ * 首页是自家页面，它的 file:// 真实路径不该出现在界面上——
+ * 那既不好看，也暴露了本机目录结构。首页一律显示为空白。
+ */
 watch(
   () => props.activeTab?.url,
   (url) => {
-    if (!editing.value) addressInput.value = url ?? ''
+    if (editing.value) return
+    addressInput.value = !url || url === HOME_URL ? '' : url
   },
   { immediate: true }
 )
@@ -104,19 +111,24 @@ function winHide(): void {
 function winClose(): void {
   void window.moyu.win.close()
 }
+
+function goHome(): void {
+  void window.moyu.tabs.home()
+}
 </script>
 
 <template>
   <header class="topbar moyu-drag">
     <!-- 导航 -->
     <div class="group moyu-no-drag">
+      <button class="icon" title="回到起始页" @click="goHome"><Icon name="home" /></button>
       <button class="icon" title="后退" :disabled="!activeTab?.canGoBack" @click="navBack">
-        ←
+        <Icon name="back" />
       </button>
       <button class="icon" title="前进" :disabled="!activeTab?.canGoForward" @click="navForward">
-        →
+        <Icon name="forward" />
       </button>
-      <button class="icon" title="刷新" @click="navReload">⟳</button>
+      <button class="icon" title="刷新" @click="navReload"><Icon name="reload" /></button>
     </div>
 
     <!-- 地址栏 -->
@@ -143,11 +155,15 @@ function winClose(): void {
         @mousedown.middle="closeTab(tab.id, $event)"
       >
         <span class="tab-title">{{ tab.title || '新标签页' }}</span>
-        <span class="tab-close" title="关闭标签页" @click="closeTab(tab.id, $event)">✕</span>
+        <span class="tab-close" title="关闭标签页" @click="closeTab(tab.id, $event)">
+          <Icon name="close" :size="11" />
+        </span>
       </button>
     </div>
 
-    <button class="icon moyu-no-drag" title="新建标签页" @click="newTab">＋</button>
+    <button class="icon moyu-no-drag" title="新建标签页" @click="newTab">
+      <Icon name="plus" />
+    </button>
 
     <!-- 窗口操作 -->
     <div class="group moyu-no-drag">
@@ -175,9 +191,15 @@ function winClose(): void {
       >
         迷你
       </button>
-      <button class="icon" title="最小化（老板键 1）" @click="winMinimize">—</button>
-      <button class="icon" title="藏进托盘（老板键 2）" @click="winHide">⤓</button>
-      <button class="icon danger" title="关闭（藏进托盘，不退出）" @click="winClose">✕</button>
+      <button class="icon" title="最小化（老板键 1）" @click="winMinimize">
+        <Icon name="minimize" />
+      </button>
+      <button class="icon" title="藏进托盘（老板键 2）" @click="winHide">
+        <Icon name="tray" />
+      </button>
+      <button class="icon danger" title="关闭（藏进托盘，不退出）" @click="winClose">
+        <Icon name="close" />
+      </button>
     </div>
   </header>
 </template>
@@ -189,9 +211,9 @@ function winClose(): void {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 6px;
+  padding: 0 8px;
   background: var(--moyu-surface);
-  border-bottom: 1px solid var(--moyu-border);
+  border-bottom: 1px solid var(--moyu-hairline);
 }
 
 .group {
@@ -201,41 +223,69 @@ function winClose(): void {
 }
 
 .icon {
-  height: 22px;
-  min-width: 22px;
-  padding: 0 5px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--moyu-radius-sm);
   color: var(--moyu-text-dim);
   white-space: nowrap;
+  transition: background 120ms ease-out, color 120ms ease-out;
 }
 
 .icon:hover:not(:disabled) {
   background: var(--moyu-surface-hover);
-  color: var(--moyu-text);
+  color: var(--moyu-ink);
+}
+
+.icon:disabled {
+  color: var(--moyu-text-faint);
 }
 
 .icon.on {
   color: var(--moyu-accent);
+  background: var(--moyu-accent-soft);
 }
 
 .icon.danger:hover {
-  color: var(--moyu-danger);
+  color: #ffffff;
+  background: var(--moyu-danger);
 }
 
+/* 地址栏做成浏览器的地址框：浅底圆角，而不是一条下划线 */
 .address {
   flex: 1 1 auto;
   min-width: 50px;
-  height: 22px;
-  padding: 0 8px;
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid var(--moyu-border);
-  border-radius: var(--moyu-radius-sm);
-  color: var(--moyu-text);
+  height: 26px;
+  padding: 0 12px;
+  background: var(--moyu-surface-hover);
+  border: 1px solid transparent;
+  border-radius: var(--moyu-radius);
+  color: var(--moyu-ink);
   outline: none;
+  transition: background 120ms ease-out, border-color 120ms ease-out;
+}
+
+.address::placeholder {
+  color: var(--moyu-text-faint);
+}
+
+.address:hover {
+  background: var(--moyu-surface-active);
 }
 
 .address:focus {
+  background: var(--moyu-surface);
   border-color: var(--moyu-accent);
+  box-shadow: 0 0 0 2px var(--moyu-accent-soft);
+}
+
+/* 焦点不能只靠颜色：低透明度下背景与描边的变化不足以定位 */
+.address:focus-visible {
+  outline: 2px solid var(--moyu-accent);
+  outline-offset: 1px;
 }
 
 .tabs {
@@ -250,18 +300,23 @@ function winClose(): void {
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 22px;
-  max-width: 110px;
-  padding: 0 4px 0 7px;
+  height: 26px;
+  max-width: 130px;
+  padding: 0 4px 0 9px;
   border-radius: var(--moyu-radius-sm);
   color: var(--moyu-text-dim);
-  background: rgba(0, 0, 0, 0.2);
   flex: 0 0 auto;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.tab:hover {
+  background: var(--moyu-surface-hover);
+  color: var(--moyu-ink);
 }
 
 .tab.active {
   background: var(--moyu-surface-active);
-  color: var(--moyu-text);
+  color: var(--moyu-ink);
 }
 
 .tab-title {
@@ -271,16 +326,24 @@ function winClose(): void {
 }
 
 .tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--moyu-radius-sm);
   opacity: 0;
-  font-size: 10px;
+  color: var(--moyu-text-dim);
 }
 
-.tab:hover .tab-close {
-  opacity: 0.7;
+.tab:hover .tab-close,
+.tab.active .tab-close {
+  opacity: 0.75;
 }
 
 .tab-close:hover {
   opacity: 1;
+  background: var(--moyu-surface-active);
   color: var(--moyu-danger);
 }
 </style>

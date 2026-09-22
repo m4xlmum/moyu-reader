@@ -9,6 +9,7 @@ import {
   DEFAULT_BOSS_HIDE,
   DEFAULT_BOSS_MINIMIZE,
   DEFAULT_SEARCH_TEMPLATE,
+  LEGACY_PORTRAIT_SIZES,
   OPACITY_MAX,
   OPACITY_MIN,
   PERSIST_DEBOUNCE_MS
@@ -24,9 +25,9 @@ export function defaultConfig(): AppConfig {
     window: {
       x: null,
       y: null,
-      width: 420,
-      height: 640,
-      lastNormalSize: { width: 420, height: 640 },
+      width: 960,
+      height: 540,
+      lastNormalSize: { width: 960, height: 540 },
       miniMode: false,
       opacity: 1,
       alwaysOnTop: true,
@@ -73,6 +74,23 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   const h = { ...d.hotkeys, ...(input.hotkeys ?? {}) }
   const b = { ...d.browser, ...(input.browser ?? {}) }
   const ls = { ...d.lastSession, ...(input.lastSession ?? {}) }
+
+  // 迁移：1 版的竖屏尺寸与新的 16:9 横屏版面不兼容。
+  // 只重置「从未调过尺寸」的配置（即恰好等于某个旧预设），
+  // 用户自己改过的大小保持不动。
+  if ((input.version ?? 1) < CONFIG_VERSION) {
+    const untouched = LEGACY_PORTRAIT_SIZES.some(
+      (s2) => s2.width === w.width && s2.height === w.height
+    )
+    if (untouched) {
+      w.width = d.window.width
+      w.height = d.window.height
+      w.lastNormalSize = { ...d.window.lastNormalSize }
+      // 位置也一并重算：横屏更宽，沿用旧坐标可能贴出屏幕外
+      w.x = null
+      w.y = null
+    }
+  }
 
   w.opacity = clamp(w.opacity, OPACITY_MIN, OPACITY_MAX)
   w.width = Math.round(clamp(w.width, 200, 4000))

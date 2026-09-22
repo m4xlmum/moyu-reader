@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-22T19:30:00+08:00",
+  "title": "Design System: 摸鱼阅读 (moyu-reader)",
+  "extensions": {
+    "colorMeta": {
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["oklch(15.0% 0.000 89.9)", "oklch(26.4% 0.000 89.9)", "oklch(37.9% 0.000 89.9)", "oklch(49.3% 0.000 89.9)", "oklch(60.7% 0.000 89.9)", "oklch(72.1% 0.000 89.9)", "oklch(83.6% 0.000 89.9)", "oklch(95.0% 0.000 89.9)"]
+      },
+      "ground-hover": {
+        "role": "neutral",
+        "displayName": "Hover Gray",
+        "canonical": "#f3f4f6",
+        "tonalRamp": ["oklch(15.0% 0.003 264.5)", "oklch(26.4% 0.003 264.5)", "oklch(37.9% 0.003 264.5)", "oklch(49.3% 0.003 264.5)", "oklch(60.7% 0.003 264.5)", "oklch(72.1% 0.003 264.5)", "oklch(83.6% 0.003 264.5)", "oklch(95.0% 0.003 264.5)"]
+      },
+      "ground-active": {
+        "role": "neutral",
+        "displayName": "Active Gray",
+        "canonical": "#e8eaee",
+        "tonalRamp": ["oklch(15.0% 0.006 264.5)", "oklch(26.4% 0.006 264.5)", "oklch(37.9% 0.006 264.5)", "oklch(49.3% 0.006 264.5)", "oklch(60.7% 0.006 264.5)", "oklch(72.1% 0.006 264.5)", "oklch(83.6% 0.006 264.5)", "oklch(95.0% 0.006 264.5)"]
+      },
+      "tile": {
+        "role": "neutral",
+        "displayName": "Tile Gray",
+        "canonical": "#f1f3f5",
+        "tonalRamp": ["oklch(15.0% 0.003 247.9)", "oklch(26.4% 0.003 247.9)", "oklch(37.9% 0.003 247.9)", "oklch(49.3% 0.003 247.9)", "oklch(60.7% 0.003 247.9)", "oklch(72.1% 0.003 247.9)", "oklch(83.6% 0.003 247.9)", "oklch(95.0% 0.003 247.9)"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#111827",
+        "tonalRamp": ["oklch(15.0% 0.032 264.7)", "oklch(26.4% 0.032 264.7)", "oklch(37.9% 0.032 264.7)", "oklch(49.3% 0.032 264.7)", "oklch(60.7% 0.032 264.7)", "oklch(72.1% 0.032 264.7)", "oklch(83.6% 0.032 264.7)", "oklch(95.0% 0.032 264.7)"]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Ink Secondary",
+        "canonical": "#5b6472",
+        "tonalRamp": ["oklch(15.0% 0.025 259.2)", "oklch(26.4% 0.025 259.2)", "oklch(37.9% 0.025 259.2)", "oklch(49.3% 0.025 259.2)", "oklch(60.7% 0.025 259.2)", "oklch(72.1% 0.025 259.2)", "oklch(83.6% 0.025 259.2)", "oklch(95.0% 0.025 259.2)"]
+      },
+      "ink-tertiary": {
+        "role": "neutral",
+        "displayName": "Ink Tertiary",
+        "canonical": "#6f7683",
+        "tonalRamp": ["oklch(15.0% 0.022 262.9)", "oklch(26.4% 0.022 262.9)", "oklch(37.9% 0.022 262.9)", "oklch(49.3% 0.022 262.9)", "oklch(60.7% 0.022 262.9)", "oklch(72.1% 0.022 262.9)", "oklch(83.6% 0.022 262.9)", "oklch(95.0% 0.022 262.9)"]
+      },
+      "divider": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e5e7eb",
+        "tonalRamp": ["oklch(15.0% 0.006 264.5)", "oklch(26.4% 0.006 264.5)", "oklch(37.9% 0.006 264.5)", "oklch(49.3% 0.006 264.5)", "oklch(60.7% 0.006 264.5)", "oklch(72.1% 0.006 264.5)", "oklch(83.6% 0.006 264.5)", "oklch(95.0% 0.006 264.5)"]
+      },
+      "divider-strong": {
+        "role": "neutral",
+        "displayName": "Hairline Strong",
+        "canonical": "#d1d5db",
+        "tonalRamp": ["oklch(15.0% 0.009 258.3)", "oklch(26.4% 0.009 258.3)", "oklch(37.9% 0.009 258.3)", "oklch(49.3% 0.009 258.3)", "oklch(60.7% 0.009 258.3)", "oklch(72.1% 0.009 258.3)", "oklch(83.6% 0.009 258.3)", "oklch(95.0% 0.009 258.3)"]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Focus Blue",
+        "canonical": "#2563eb",
+        "tonalRamp": ["oklch(15.0% 0.215 262.9)", "oklch(26.4% 0.215 262.9)", "oklch(37.9% 0.215 262.9)", "oklch(49.3% 0.215 262.9)", "oklch(60.7% 0.215 262.9)", "oklch(72.1% 0.215 262.9)", "oklch(83.6% 0.215 262.9)", "oklch(95.0% 0.215 262.9)"]
+      },
+      "accent-hover": {
+        "role": "primary",
+        "displayName": "Focus Blue Deep",
+        "canonical": "#1d4ed8",
+        "tonalRamp": ["oklch(15.0% 0.217 264.4)", "oklch(26.4% 0.217 264.4)", "oklch(37.9% 0.217 264.4)", "oklch(49.3% 0.217 264.4)", "oklch(60.7% 0.217 264.4)", "oklch(72.1% 0.217 264.4)", "oklch(83.6% 0.217 264.4)", "oklch(95.0% 0.217 264.4)"]
+      },
+      "accent-soft": {
+        "role": "primary",
+        "displayName": "Focus Blue Wash",
+        "canonical": "rgba(37, 99, 235, 0.1)",
+        "tonalRamp": ["oklch(15.0% 0.215 262.9)", "oklch(26.4% 0.215 262.9)", "oklch(37.9% 0.215 262.9)", "oklch(49.3% 0.215 262.9)", "oklch(60.7% 0.215 262.9)", "oklch(72.1% 0.215 262.9)", "oklch(83.6% 0.215 262.9)", "oklch(95.0% 0.215 262.9)"]
+      },
+      "danger": {
+        "role": "danger",
+        "displayName": "Danger Red",
+        "canonical": "#b91c1c",
+        "tonalRamp": ["oklch(15.0% 0.190 27.5)", "oklch(26.4% 0.190 27.5)", "oklch(37.9% 0.190 27.5)", "oklch(49.3% 0.190 27.5)", "oklch(60.7% 0.190 27.5)", "oklch(72.1% 0.190 27.5)", "oklch(83.6% 0.190 27.5)", "oklch(95.0% 0.190 27.5)"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "The wordmark 摸鱼阅读 only — the page's single brand moment." },
+      "title": { "displayName": "Title", "purpose": "Search-field input text; the largest reading size in the page body." },
+      "body": { "displayName": "Body", "purpose": "The page's base size (home.css sets 13px on html/body)." },
+      "label": { "displayName": "Label", "purpose": "The chrome's base size (base.css sets 12px) plus tile labels and the footnote." }
+    },
+    "shadows": [
+      { "name": "search-hover", "value": "0 1px 4px rgba(17, 24, 39, 0.1)", "purpose": "Start-page search field on hover." },
+      { "name": "search-focus", "value": "0 1px 6px rgba(17, 24, 39, 0.16)", "purpose": "Focused search field, paired with a transparent border and the 2px accent outline." },
+      { "name": "current-tile-ring", "value": "inset 0 0 0 1.5px #2563eb", "purpose": "Inset accent ring on the favicon well of the currently-open site." },
+      { "name": "address-focus-ring", "value": "0 0 0 2px rgba(37, 99, 235, 0.1)", "purpose": "Soft halo on the chrome address field on focus." },
+      { "name": "focus-outline", "value": "outline: 2px solid #2563eb; outline-offset: 2px (page) / 1px (chrome)", "purpose": "The keyboard focus indicator everywhere." }
+    ],
+    "motion": [
+      { "name": "state-transition", "value": "120ms ease-out", "purpose": "Default background/color transition for every control state change." },
+      { "name": "field-transition", "value": "140ms ease-out", "purpose": "Search field border-color and box-shadow." },
+      { "name": "window-fade", "value": "200ms", "purpose": "Window opacity fade (FADE_MS), driven by the main process, stepped every 16ms." },
+      { "name": "hide-delay", "value": "400ms", "purpose": "Grace period before the body auto-hides (HIDE_DELAY_MS); hide is slow, reveal is fast." }
+    ],
+    "breakpoints": [
+      { "name": "compact-height", "value": "400px", "purpose": "@media (max-height: 400px): mini-mode compaction — smaller wordmark, shorter search field, tighter grid, no footnote." },
+      { "name": "mini", "value": "480x270" },
+      { "name": "small", "value": "800x450" },
+      { "name": "medium", "value": "960x540" },
+      { "name": "large", "value": "1280x720" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "The start page's signature control: a 46px pill search box, white on a hairline-strong border.",
+      "html": "<form class=\"ds-search\" role=\"search\"><svg class=\"ds-search-icon\" viewBox=\"0 0 24 24\" width=\"17\" height=\"17\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"6.5\"></circle><path d=\"M16 16l4 4\"></path></svg><input class=\"ds-search-input\" type=\"text\" placeholder=\"输入网址，或输入关键词搜索\" spellcheck=\"false\"></form>",
+      "css": ".ds-search { display:flex; align-items:center; gap:12px; width:100%; height:46px; padding:0 20px; border:1px solid var(--divider-strong,#d1d5db); border-radius:var(--radius-pill,999px); background:var(--ground,#fff); color:var(--text-secondary,#5b6472); transition:box-shadow 140ms ease-out,border-color 140ms ease-out; } .ds-search:hover { box-shadow:0 1px 4px rgba(17,24,39,.1); } .ds-search:focus-within { border-color:transparent; box-shadow:0 1px 6px rgba(17,24,39,.16); outline:2px solid var(--accent,#2563eb); outline-offset:2px; } .ds-search-icon { flex:0 0 auto; } .ds-search-input { flex:1 1 auto; min-width:0; height:100%; border:none; outline:none; background:transparent; font-size:14px; color:var(--text,#111827); } .ds-search-input::placeholder { color:var(--text-tertiary,#6f7683); }"
+    },
+    {
+      "name": "Site Tile",
+      "kind": "custom",
+      "refersTo": "site-tile",
+      "description": "An 84px grid cell: a circular favicon well over a 12px label. Hover fills it; the current tile gets an accent ring.",
+      "html": "<button class=\"ds-tile\"><span class=\"ds-tile-favicon\"><span class=\"ds-tile-initial\">微</span></span><span class=\"ds-tile-label\">微信读书</span></button>",
+      "css": ".ds-tile { display:flex; flex-direction:column; align-items:center; gap:8px; width:84px; padding:10px 4px; border:none; background:transparent; border-radius:var(--radius,8px); transition:background 120ms ease-out; } .ds-tile:hover { background:var(--ground-hover,#f3f4f6); } .ds-tile:active { background:var(--ground-active,#e8eaee); } .ds-tile-favicon { width:40px; height:40px; display:grid; place-items:center; border-radius:var(--radius-pill,999px); background:var(--tile,#f1f3f5); overflow:hidden; } .ds-tile-initial { font-size:16px; color:var(--text-secondary,#5b6472); } .ds-tile-label { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--text-secondary,#5b6472); } .ds-tile:hover .ds-tile-label, .ds-tile.is-current .ds-tile-label { color:var(--text,#111827); } .ds-tile.is-current .ds-tile-favicon { background:var(--accent-soft,rgba(37,99,235,.1)); box-shadow:inset 0 0 0 1.5px var(--accent,#2563eb); } .ds-tile.is-current .ds-tile-initial { color:var(--accent,#2563eb); }"
+    },
+    {
+      "name": "Toolbar Icon Button",
+      "kind": "button",
+      "refersTo": "icon-button",
+      "description": "A 26px chrome control: quiet ink-secondary at rest, hover-gray fill on hover, accent wash when toggled on.",
+      "html": "<button class=\"ds-iconbtn\" title=\"回到起始页\" aria-label=\"回到起始页\"><svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 11.5 12 4.5l8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z\"></path></svg></button>",
+      "css": ".ds-iconbtn { height:26px; min-width:26px; padding:0 6px; display:inline-flex; align-items:center; justify-content:center; border:none; background:transparent; border-radius:var(--moyu-radius-sm,4px); color:var(--moyu-text-dim,#5b6472); white-space:nowrap; transition:background 120ms ease-out,color 120ms ease-out; } .ds-iconbtn:hover:not(:disabled) { background:var(--moyu-surface-hover,#f3f4f6); color:var(--moyu-ink,#111827); } .ds-iconbtn:focus-visible { outline:2px solid var(--moyu-accent,#2563eb); outline-offset:1px; } .ds-iconbtn:disabled { color:var(--moyu-text-faint,#6f7683); opacity:.4; } .ds-iconbtn.is-on { color:var(--moyu-accent,#2563eb); background:var(--moyu-accent-soft,rgba(37,99,235,.1)); }"
+    },
+    {
+      "name": "Toolbar Text Button",
+      "kind": "button",
+      "refersTo": "text-button",
+      "description": "The chrome's labelled tools (站点 / 历史 / 书签 / 收藏 / 设置), same box as the icon button with 8px padding.",
+      "html": "<button class=\"ds-textbtn\">站点</button>",
+      "css": ".ds-textbtn { height:26px; padding:0 8px; display:inline-flex; align-items:center; justify-content:center; border:none; background:transparent; border-radius:var(--moyu-radius-sm,4px); color:var(--moyu-text-dim,#5b6472); white-space:nowrap; transition:background 120ms ease-out,color 120ms ease-out; } .ds-textbtn:hover { background:var(--moyu-surface-hover,#f3f4f6); color:var(--moyu-ink,#111827); } .ds-textbtn:focus-visible { outline:2px solid var(--moyu-accent,#2563eb); outline-offset:1px; }"
+    },
+    {
+      "name": "Address Input",
+      "kind": "input",
+      "refersTo": "address-input",
+      "description": "The chrome address bar: a 26px rounded field that turns white with an accent border and soft ring on focus.",
+      "html": "<input class=\"ds-address\" type=\"text\" placeholder=\"输入网址或搜索\" spellcheck=\"false\">",
+      "css": ".ds-address { height:26px; padding:0 12px; border:1px solid transparent; border-radius:var(--moyu-radius,6px); background:var(--moyu-surface-hover,#f3f4f6); color:var(--moyu-ink,#111827); outline:none; transition:background 120ms ease-out,border-color 120ms ease-out; } .ds-address::placeholder { color:var(--moyu-text-faint,#6f7683); } .ds-address:hover { background:var(--moyu-surface-active,#e8eaee); } .ds-address:focus { background:var(--moyu-surface,#fff); border-color:var(--moyu-accent,#2563eb); box-shadow:0 0 0 2px var(--moyu-accent-soft,rgba(37,99,235,.1)); } .ds-address:focus-visible { outline:2px solid var(--moyu-accent,#2563eb); outline-offset:1px; }"
+    },
+    {
+      "name": "Tab Chip",
+      "kind": "chip",
+      "refersTo": "tab-chip",
+      "description": "A 26px tab with a close glyph revealed on hover/active; the close hover goes danger-red.",
+      "html": "<button class=\"ds-tab is-active\"><span class=\"ds-tab-title\">起始页</span><span class=\"ds-tab-close\"><svg viewBox=\"0 0 24 24\" width=\"11\" height=\"11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 6l12 12M18 6L6 18\"></path></svg></span></button>",
+      "css": ".ds-tab { display:inline-flex; align-items:center; gap:4px; height:26px; max-width:130px; padding:0 4px 0 9px; border:none; background:transparent; border-radius:var(--moyu-radius-sm,4px); color:var(--moyu-text-dim,#5b6472); transition:background 120ms ease-out,color 120ms ease-out; } .ds-tab:hover { background:var(--moyu-surface-hover,#f3f4f6); color:var(--moyu-ink,#111827); } .ds-tab.is-active { background:var(--moyu-surface-active,#e8eaee); color:var(--moyu-ink,#111827); } .ds-tab-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ds-tab-close { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:var(--moyu-radius-sm,4px); opacity:0; color:var(--moyu-text-dim,#5b6472); } .ds-tab:hover .ds-tab-close, .ds-tab.is-active .ds-tab-close { opacity:.75; } .ds-tab-close:hover { opacity:1; background:var(--moyu-surface-active,#e8eaee); color:var(--moyu-danger,#b91c1c); }"
+    },
+    {
+      "name": "Segmented Item",
+      "kind": "chip",
+      "refersTo": "segmented-item",
+      "description": "Small chips for opacity presets (清晰/淡化/轻隐/几近无形) and zone toggles (顶部/主体/底部); the selected one takes active-gray with accent text.",
+      "html": "<div class=\"ds-seg\"><button class=\"ds-seg-item is-active\">清晰</button><button class=\"ds-seg-item\">淡化</button><button class=\"ds-seg-item\">轻隐</button></div>",
+      "css": ".ds-seg { display:inline-flex; gap:2px; } .ds-seg-item { padding:2px 6px; border:none; background:transparent; border-radius:var(--moyu-radius-sm,4px); color:var(--moyu-text-faint,#6f7683); white-space:nowrap; transition:background 120ms ease-out,color 120ms ease-out; } .ds-seg-item:hover { background:var(--moyu-surface-hover,#f3f4f6); color:var(--moyu-text,#111827); } .ds-seg-item.is-active { background:var(--moyu-surface-active,#e8eaee); color:var(--moyu-accent,#2563eb); } .ds-seg-item.is-off { color:var(--moyu-text-faint,#6f7683); text-decoration:line-through; }"
+    },
+    {
+      "name": "Opacity Slider",
+      "kind": "input",
+      "refersTo": "opacity-slider",
+      "description": "A 96x3px slider; the track is deliberately gray (not white) so it reads on the white bar, and the thumb is a 12px Focus Blue dot.",
+      "html": "<input class=\"ds-slider\" type=\"range\" min=\"5\" max=\"100\" value=\"100\" aria-label=\"透明度\">",
+      "css": ".ds-slider { width:96px; height:3px; -webkit-appearance:none; appearance:none; background:var(--moyu-border,#d1d5db); border-radius:2px; outline:none; cursor:pointer; } .ds-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:12px; height:12px; border-radius:50%; background:var(--moyu-accent,#2563eb); cursor:pointer; } .ds-slider:focus-visible { outline:2px solid var(--moyu-accent,#2563eb); outline-offset:3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Native New Tab",
+    "overview": "This is a surface that should look like it came with the browser — not like a product someone designed. The commitment, chosen by the user, is canon: the category standard, executed impeccably, without irony or smuggled quirk. The named craft reference is the Chrome / Edge 新标签页 (browser new-tab page): a neutral ground, restrained dividers, a single accent, generous whitespace, an interface that steps back behind the content. Convention is the point, not a compromise — the page is meant to be unremarkable so that it survives being glanced at. At 25–45% opacity beside a Word window, nothing here should identify it as a reading tool (PRODUCT: concealment over beauty; familiarity over novelty).\n\nDensity is airy and single-column. A wordmark, one search field, one \"continue last\" line, a wrapped grid of site tiles, a footnote. The window is a 16:9 frame with two thin toolbars (38px top, 44px bottom) and a fully transparent middle; the chrome was re-skinned to the same palette as the page and recedes to content. The one doctrine: the canon is the commitment — execute the category standard at full fidelity, with no ironic twists and no ornamental deviation.\n\nProvenance note. This world replaced an earlier draft in a different metaphor (a Chinese OMR answer-sheet: cool card stock, registration red, numbered ovals, a 黑体/宋体 split). That draft was abandoned when the user chose canon and is not part of this system. The ordinary look is deliberate, not defaulted-into.",
+    "keyCharacteristics": [
+      "White ground, cool near-black ink ramp, two hairline grays, exactly one blue accent.",
+      "No gradients, no glass/blur, no decorative motion, no second accent, no third hue.",
+      "System CJK type stack (Microsoft YaHei / PingFang SC / Segoe UI / system-ui); no display face, no webfont.",
+      "Flat by default; depth appears only as a response to state (hover, focus, current).",
+      "Two surfaces — page (home.css) and chrome (tokens.css) — share one palette and font by construction; they differ only in density (13px page vs 12px chrome base)."
+    ],
+    "rules": [
+      { "name": "The One Accent Rule", "body": "Exactly one chromatic accent exists. #2563eb is used on ≤10% of any given screen and only for focus, current state, and primary action. A second accent or a third hue is the fastest way to stop looking like the browser.", "section": "colors" },
+      { "name": "The Neutral Ground Rule", "body": "The page is white and stays white. No tinted canvas, no gradient, no tonal shift to signal depth — the accent is the only color event.", "section": "colors" },
+      { "name": "The OS-Stack Rule", "body": "Type is the operating system's. Never ship a display face or a webfont; the page must look like it was rendered by the browser's own engine, because it was.", "section": "typography" },
+      { "name": "The One-Column Rule", "body": "One centered column, one grid, no long vertical scroll. Height is the scarce axis in a 16:9 stealth window; content grows sideways, never downward.", "section": "layout" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. A shadow is always a response to state (hover, focus), never a standing decoration.", "section": "elevation" },
+      { "name": "The No-Glass Rule", "body": "No backdrop-filter, no blur, no translucency on any painted layer. The window is transparent by construction; an opaque or frosted layer would break the product.", "section": "elevation" },
+      { "name": "The Hairline Rule", "body": "All separation is a 1px line or a tonal fill. The only strokes thicker than a hairline are focus rings, and those exist for accessibility under low opacity, not for looks.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do keep the ground white and the accent singular: #2563eb for focus/current/primary only, on ≤10% of the screen (The One Accent Rule).",
+      "Do use the OS CJK stack and only the sizes in the ramp: 12 / 13 / 14 / 30px (The OS-Stack Rule).",
+      "Do express every state as a background or outline change at 120ms (fields 140ms) ease-out, in response to hover or focus (The Flat-By-Default Rule).",
+      "Do keep the page and the chrome on one palette — they alias identical values by construction. When you touch one, touch the other.",
+      "Do keep the chrome's middle fully transparent with pointer-events: none so the mouse reaches the page or the desktop.",
+      "Do keep text at 12px or larger and give key controls a shape or position cue, not a color cue, so they stay distinguishable at 25–45% window opacity."
+    ],
+    "donts": [
+      "Don't add a second accent or a third hue; the one blue is the whole system (The One Accent Rule).",
+      "Don't use gradients, glass, backdrop-filter, or blur — the last is mechanically wrong on a transparent window (The No-Glass Rule).",
+      "Don't add decorative motion; state changes are the only transitions, and they do not move anything.",
+      "Don't use a display face, a webfont, or glyph/Unicode characters as icons; use the authored 24px / 1.6-stroke SVG set.",
+      "Don't smuggle in quirk or irony — toolbars made to look like something else, ornamental asymmetry, or a \"designed\" flourish. The canon is the commitment.",
+      "Don't reintroduce the abandoned OMR answer-sheet world (card stock, registration red, question numbers and ovals, a 黑体/宋体 split); it was replaced by canon and is out of this system."
+    ]
+  }
+}

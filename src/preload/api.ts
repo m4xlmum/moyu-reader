@@ -65,6 +65,7 @@ export const api: MoyuApi = {
 
   tabs: {
     create: (input) => ipcRenderer.invoke(INVOKE.tabsCreate, input) as Promise<{ tabId: string }>,
+    home: () => ipcRenderer.invoke(INVOKE.tabsHome) as Promise<{ tabId: string }>,
     close: (input) => ipcRenderer.invoke(INVOKE.tabsClose, input) as Promise<void>,
     activate: (input) => ipcRenderer.invoke(INVOKE.tabsActivate, input) as Promise<void>,
     reorder: (input) => ipcRenderer.invoke(INVOKE.tabsReorder, input) as Promise<void>,

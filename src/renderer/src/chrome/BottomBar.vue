@@ -6,6 +6,7 @@
  */
 import type { ConfigPatch } from '@shared/ipc'
 import type { AppConfig, TabState, ZoneState } from '@shared/types'
+import Icon from './Icon.vue'
 import OpacitySlider from './OpacitySlider.vue'
 import ZoneToggles from './ZoneToggles.vue'
 
@@ -70,11 +71,11 @@ function openSettings(): void {
     </div>
 
     <div class="group moyu-no-drag">
-      <button class="tool" title="缩小" @click="zoom('out')">－</button>
+      <button class="tool" title="缩小" @click="zoom('out')"><Icon name="minus" :size="13" /></button>
       <button class="tool" title="重置缩放" @click="zoom('reset')">
         {{ Math.round((activeTab?.zoom ?? 1) * 100) }}%
       </button>
-      <button class="tool" title="放大" @click="zoom('in')">＋</button>
+      <button class="tool" title="放大" @click="zoom('in')"><Icon name="plus" :size="13" /></button>
     </div>
 
     <OpacitySlider :model-value="config?.window.opacity ?? 1" @update:model-value="setOpacity" />
@@ -91,12 +92,21 @@ function openSettings(): void {
   height: var(--moyu-bottom-h);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 6px;
+  gap: 10px;
+  padding: 0 8px;
   background: var(--moyu-surface);
-  border-top: 1px solid var(--moyu-border);
+  border-top: 1px solid var(--moyu-hairline);
+  /* 窗口收窄时工具会横向溢出，但工具栏里冒出一条滚动条是不能接受的：
+     横向滚动保留，滚动条隐藏 */
   overflow-x: auto;
   overflow-y: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.bottombar::-webkit-scrollbar {
+  height: 0;
+  display: none;
 }
 
 .group {
@@ -107,15 +117,19 @@ function openSettings(): void {
 }
 
 .tool {
-  height: 22px;
-  padding: 0 6px;
+  height: 26px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--moyu-radius-sm);
   color: var(--moyu-text-dim);
   white-space: nowrap;
+  transition: background 120ms ease-out, color 120ms ease-out;
 }
 
 .tool:hover {
   background: var(--moyu-surface-hover);
-  color: var(--moyu-text);
+  color: var(--moyu-ink);
 }
 </style>

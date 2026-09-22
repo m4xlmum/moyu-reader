@@ -37,6 +37,7 @@ export const INVOKE = {
   bookmarksUpdate: 'bookmarks:update',
 
   tabsCreate: 'tabs:create',
+  tabsHome: 'tabs:home',
   tabsClose: 'tabs:close',
   tabsActivate: 'tabs:activate',
   tabsReorder: 'tabs:reorder',
@@ -128,6 +129,8 @@ export interface MoyuApi {
   }
   tabs: {
     create(input?: { url?: string; activate?: boolean }): Promise<{ tabId: string }>
+    /** 打开首页：已有则切过去，否则新建 */
+    home(): Promise<{ tabId: string }>
     close(input: { tabId: string }): Promise<void>
     activate(input: { tabId: string }): Promise<void>
     reorder(input: { tabId: string; toIndex: number }): Promise<void>

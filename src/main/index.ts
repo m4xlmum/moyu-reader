@@ -103,6 +103,7 @@ function bootstrap(): void {
       if (!ses) throw new Error('会话尚未就绪，标签页只能在 app ready 之后创建')
       return ses
     },
+    getPreloadPath: () => preloadPath,
     getConfig: () => config.get(),
     onStateChange: () => {
       broadcast(BROADCAST.tabsState, { tabs: tabs.list(), activeTabId: tabs.getActiveId() })
@@ -181,15 +182,16 @@ function bootstrap(): void {
     tray.create(trayIconPath)
     registerBossKeys()
 
-    // 恢复上次的标签页
+    // 首页常驻：它是「回到起点」的落点，也是启动后的第一屏
+    tabs.openHome()
+
+    // 恢复上次的访客标签页
     const restored = config.get().lastSession.openUrls
     if (restored.length > 0) {
       for (const url of restored) tabs.create({ url, activate: false })
       const list = tabs.list()
       const index = Math.min(config.get().lastSession.activeIndex, list.length - 1)
       if (list[index]) tabs.activate(list[index].id)
-    } else {
-      tabs.create({ url: 'about:blank' })
     }
 
     controller.show()
