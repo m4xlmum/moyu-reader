@@ -393,14 +393,20 @@ export class WindowController {
   }
 
   destroy(): void {
+    // 先停轮询，再拆窗口：反过来的话定时器会在窗口销毁后继续 tick
     this.watcher?.stop()
+    if (this.mode === 'quitting') return
     this.mode = 'quitting'
     try {
       this.chrome?.webContents.close()
     } catch {
       // 退出路径，忽略
     }
-    this.win?.destroy()
+    try {
+      this.win?.destroy()
+    } catch {
+      // 窗口可能已随进程退出被系统回收
+    }
     this.win = null
   }
 

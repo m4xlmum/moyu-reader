@@ -69,6 +69,19 @@ export class WindowLeaveWatcher {
   }
 
   private tick(): void {
+    // 退出过程中窗口可能先于定时器被销毁，任何一次访问都可能抛
+    // 「Object has been destroyed」。定时器回调里抛异常会直接冒到
+    // 主进程的未捕获异常处理器上，弹出一个错误框把退出流程卡住，
+    // 因此这里整体兜住，并顺手把自己停掉。
+    try {
+      this.tickOnce()
+    } catch (err) {
+      log.warn('收起轮询中窗口已不可用，停止轮询', err)
+      this.stop()
+    }
+  }
+
+  private tickOnce(): void {
     const cfg = this.deps.getConfig()
     const mode = this.deps.getMode()
     const bounds = this.deps.getBounds()

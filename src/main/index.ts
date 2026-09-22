@@ -119,10 +119,7 @@ function bootstrap(): void {
     (): Rect | null => controller.getWindow()?.getBounds() ?? null
   )
 
-  let quitting = false
-
   function quit(): void {
-    quitting = true
     app.quit()
   }
 
@@ -205,13 +202,16 @@ function bootstrap(): void {
     controller.show()
   })
 
-  // 托盘应用：窗口全关也不退出
+  // 托盘应用：窗口全关也不退出，退出只走托盘菜单。
+  // 这里必须什么都不做——若在此处再调 app.quit()，而 app.quit() 本身就会
+  // 关闭窗口并触发本事件，就会递归调用自己，把退出的状态机搅住，
+  // 表现为所有退出钩子都跑完了、进程却一直不退。
   app.on('window-all-closed', () => {
-    if (quitting) app.quit()
+    // 有意留空
   })
 
   app.on('before-quit', () => {
-    quitting = true
+    // 关窗之后仍要把这次的会话记下来，供下次启动恢复
     config.set((cfg) => ({
       ...cfg,
       lastSession: { openUrls: tabs.getOpenUrls(), activeIndex: 0 }
@@ -223,9 +223,18 @@ function bootstrap(): void {
   })
 
   app.on('will-quit', () => {
+    // 顺序有讲究：先停掉还在轮询的定时器，再拆窗口。
+    // 反过来的话，定时器会在窗口销毁后继续 tick，撞上已销毁的对象，
+    // 异常会冒到主进程的未捕获异常处理器上，弹框把退出流程卡住。
+    controller.destroy()
     // 不注销的话，退出后这些组合键仍被本进程占用，别的程序用不了
     bossKeys.unregisterAll()
     tabs.destroyAll()
     tray.destroy()
+
+    // 收尾全部由我们自己完成，因此由我们负责终止进程，不再依赖
+    // Electron 的默认退出：实测在这台机器上 will-quit 之后主进程的事件
+    // 循环会被卡住四十多秒，进程迟迟不退，用户看到的是「点了退出但没反应」。
+    app.exit(0)
   })
 }
