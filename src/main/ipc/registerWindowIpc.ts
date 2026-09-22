@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { ipcMain } from 'electron'
-import { INVOKE, type OpenPopoverRequest } from '@shared/ipc'
+import { INVOKE, SEND, type OpenPopoverRequest } from '@shared/ipc'
 import type { SizePreset } from '@shared/constants'
 import type { BallCorner } from '@shared/types'
 import type { AppContext } from '../context'
@@ -27,6 +27,10 @@ export function registerWindowIpc(ctx: AppContext): void {
   ipcMain.handle(INVOKE.winSetBallCorner, (_e, input: { corner: BallCorner }) => {
     ctx.controller.setBallCorner(input.corner)
   })
+
+  // 拖动走单向消息：高频且不需要回执
+  ipcMain.on(SEND.dragStart, () => ctx.controller.beginDrag())
+  ipcMain.on(SEND.dragEnd, () => ctx.controller.endDrag())
 
   ipcMain.handle(INVOKE.winSetSize, (_e, input: { preset: SizePreset } | { width: number; height: number }) => {
     ctx.controller.setSize(input)

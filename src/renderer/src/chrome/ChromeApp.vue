@@ -12,7 +12,9 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed } from 'vue'
-import { BALL_MARGIN } from '@shared/constants'
+import { BALL_MARGIN, BALL_SIZE } from '@shared/constants'
+import { effectiveBallSize } from '@shared/ball'
+import type { BallCorner } from '@shared/types'
 import TopBar from './TopBar.vue'
 import BottomBar from './BottomBar.vue'
 import Ball from './Ball.vue'
@@ -25,8 +27,8 @@ const { tabs, activeTabId, activeTab } = useTabs()
 const { state, collapse, expand } = useWindowState()
 
 const collapsed = computed(() => state.value?.mode === 'collapsed')
-const ballSize = computed(() => config.value?.stealth.ballSize ?? 52)
-const ballCorner = computed(() => config.value?.stealth.ballCorner ?? 'bottom-right')
+const ballSize = computed(() => config.value?.stealth.ballSize ?? BALL_SIZE)
+const ballCorner = computed<BallCorner>(() => config.value?.stealth.ballCorner ?? 'bottom-right')
 
 /** 同一个球，点一下收起或展开 */
 function toggle(): void {
@@ -41,7 +43,9 @@ function toggle(): void {
  * 两条工具栏都留：球停在上边或下边是可配的，两边都留比按状态切换简单得多，
  * 代价只是另一条栏空出一小段。
  */
-const gutter = computed(() => `${ballSize.value + BALL_MARGIN * 2}px`)
+const gutter = computed(
+  () => `${effectiveBallSize(ballSize.value, ballCorner.value) + BALL_MARGIN * 2}px`
+)
 const gutterSide = computed(() => (ballCorner.value.endsWith('right') ? 'right' : 'left'))
 </script>
 

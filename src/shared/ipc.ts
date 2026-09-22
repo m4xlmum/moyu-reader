@@ -81,6 +81,17 @@ export const BROADCAST = {
   windowState: 'window:state'
 } as const
 
+/**
+ * 渲染进程 → 主进程的单向消息。
+ *
+ * 用于不需要回执的事件。拖动是高频动作，走 invoke/handle 的往返会引入延迟，
+ * 而拖动的定位完全由主进程计算，本就不需要返回值。
+ */
+export const SEND = {
+  dragStart: 'window:dragStart',
+  dragEnd: 'window:dragEnd'
+} as const
+
 export type InvokeChannel = (typeof INVOKE)[keyof typeof INVOKE]
 export type BroadcastChannel = (typeof BROADCAST)[keyof typeof BROADCAST]
 
@@ -156,6 +167,13 @@ export interface MoyuApi {
     collapse(): Promise<void>
     /** 从悬浮球展开回完整界面 */
     expand(): Promise<void>
+    /**
+     * 开始拖动窗口。定位由主进程计算——它读得到全局光标位置，
+     * 因此即使指针短暂移出窗口也不会丢失跟踪。
+     */
+    dragStart(): void
+    /** 结束拖动 */
+    dragEnd(): void
     setBallCorner(input: { corner: BallCorner }): Promise<void>
     setSize(input: { preset: string } | { width: number; height: number }): Promise<void>
     toggleMini(input: { enabled: boolean }): Promise<void>

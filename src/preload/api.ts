@@ -7,7 +7,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { ipcRenderer } from 'electron'
-import { BROADCAST, INVOKE } from '@shared/ipc'
+import { BROADCAST, INVOKE, SEND } from '@shared/ipc'
 import type {
   ConfigPatch,
   MoyuApi,
@@ -89,6 +89,13 @@ export const api: MoyuApi = {
     setOpacity: (input) => ipcRenderer.invoke(INVOKE.winSetOpacity, input) as Promise<void>,
     collapse: () => ipcRenderer.invoke(INVOKE.winCollapse) as Promise<void>,
     expand: () => ipcRenderer.invoke(INVOKE.winExpand) as Promise<void>,
+    // 拖动走单向消息：定位由主进程算，不需要回执，也不该有往返延迟
+    dragStart: () => {
+      ipcRenderer.send(SEND.dragStart)
+    },
+    dragEnd: () => {
+      ipcRenderer.send(SEND.dragEnd)
+    },
     setBallCorner: (input) => ipcRenderer.invoke(INVOKE.winSetBallCorner, input) as Promise<void>,
     setSize: (input: { preset: SizePreset } | { width: number; height: number }) =>
       ipcRenderer.invoke(INVOKE.winSetSize, input) as Promise<void>,

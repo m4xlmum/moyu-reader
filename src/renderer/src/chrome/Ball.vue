@@ -14,10 +14,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed } from 'vue'
-import { BALL_MARGIN } from '@shared/constants'
+import { ballOffsetInWindow, effectiveBallSize } from '@shared/ball'
 import type { BallCorner } from '@shared/types'
 
 const props = defineProps<{
+  /** 用户配置的直径；实际生效值会按工具栏高度收窄 */
   size: number
   corner: BallCorner
   collapsed: boolean
@@ -25,23 +26,58 @@ const props = defineProps<{
 
 const emit = defineEmits<{ toggle: [] }>()
 
-/** 展开时贴角，收起时铺满窗口 */
+/** 实际生效的直径：主进程算收起尺寸时用的是同一个函数 */
+const ballSize = computed(() => effectiveBallSize(props.size, props.corner))
+
+/** 位移小于这个距离就当作点击，而不是拖动 */
+const CLICK_SLOP = 5
+
+/**
+ * 按下时的屏幕坐标。
+ *
+ * 必须用屏幕坐标而不是页面坐标：拖动时窗口跟着光标走，光标在页面里
+ * 几乎不动，用页面坐标算位移会恒为零，点击与拖动就分不开了。
+ */
+let pressAt: { x: number; y: number } | null = null
+let dragging = false
+
+function onPointerDown(event: PointerEvent): void {
+  if (event.button !== 0) return
+  pressAt = { x: event.screenX, y: event.screenY }
+  dragging = true
+  // 捕获指针：窗口移动过程中指针短暂离开球面也能继续收到事件
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  window.moyu.win.dragStart()
+}
+
+function onPointerUp(event: PointerEvent): void {
+  if (!dragging) return
+  dragging = false
+  window.moyu.win.dragEnd()
+
+  const start = pressAt
+  pressAt = null
+  if (!start) return
+
+  const moved = Math.hypot(event.screenX - start.x, event.screenY - start.y)
+  // 没怎么动就是一次点击，切换收起 / 展开
+  if (moved < CLICK_SLOP) emit('toggle')
+}
+
+function onPointerCancel(): void {
+  if (!dragging) return
+  dragging = false
+  pressAt = null
+  window.moyu.win.dragEnd()
+}
+
+/** 展开时贴在工具栏内的那个角，收起时铺满窗口 */
 const positionStyle = computed(() => {
   if (props.collapsed) {
     return { inset: '0px' }
   }
-  const m = `${BALL_MARGIN}px`
-  switch (props.corner) {
-    case 'top-left':
-      return { top: m, left: m }
-    case 'top-right':
-      return { top: m, right: m }
-    case 'bottom-left':
-      return { bottom: m, left: m }
-    case 'bottom-right':
-    default:
-      return { bottom: m, right: m }
-  }
+  const off = ballOffsetInWindow(props.corner, window.innerWidth, window.innerHeight, ballSize.value)
+  return { left: `${off.x}px`, top: `${off.y}px` }
 })
 </script>
 
@@ -49,14 +85,16 @@ const positionStyle = computed(() => {
   <button
     class="ball"
     :class="{ docked: !collapsed, collapsed }"
-    :style="[{ width: `${size}px`, height: `${size}px` }, positionStyle]"
-    :title="collapsed ? '展开摸鱼阅读' : '收起成悬浮球'"
+    :style="[{ width: `${ballSize}px`, height: `${ballSize}px` }, positionStyle]"
+    :title="collapsed ? '展开摸鱼阅读' : '收起成悬浮球（拖动可移动窗口）'"
     :aria-label="collapsed ? '展开摸鱼阅读' : '收起成悬浮球'"
-    @click="emit('toggle')"
+    @pointerdown="onPointerDown"
+    @pointerup="onPointerUp"
+    @pointercancel="onPointerCancel"
   >
     <svg
-      :width="size * 0.46"
-      :height="size * 0.46"
+      :width="ballSize * 0.46"
+      :height="ballSize * 0.46"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -86,7 +124,13 @@ const positionStyle = computed(() => {
     transform 140ms ease-out,
     box-shadow 140ms ease-out;
   -webkit-app-region: no-drag;
+  /* 拖动是自己实现的，所以光标形状也要自己给 */
+  cursor: grab;
   z-index: 10;
+}
+
+.ball:active {
+  cursor: grabbing;
 }
 
 .ball.docked {

@@ -12,10 +12,18 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { BaseWindow, WebContentsView, screen } from 'electron'
-import { BALL_SIZE, SIZE_PRESETS, TOP_BAR_H, BOTTOM_BAR_H, type SizePreset } from '@shared/constants'
+import {
+  BALL_MARGIN,
+  DRAG_TICK_MS,
+  SIZE_PRESETS,
+  TOP_BAR_H,
+  BOTTOM_BAR_H,
+  type SizePreset
+} from '@shared/constants'
+import { ballDockRect, effectiveBallSize } from '@shared/ball'
 import type { BallCorner, Rect, WindowMode, WindowRuntime } from '@shared/types'
 import type { ConfigStore } from './configStore'
-import { ballDockRect, computeLayout, type Layout } from './geometry'
+import { computeLayout, type Layout } from './geometry'
 import { log } from './logger'
 import { WindowLeaveWatcher } from './windowLeaveWatcher'
 import { WindowSurface } from './windowSurface'
@@ -55,6 +63,10 @@ export class WindowController {
    */
   private expandedBounds: Rect | null = null
   private layout: Layout = computeLayout(960, 540, TOP_BAR_H, BOTTOM_BAR_H)
+
+  /** 拖动中的锚点：按下那一刻的光标位置与窗口位置 */
+  private dragAnchor: { cursorX: number; cursorY: number; winX: number; winY: number } | null = null
+  private dragTimer: NodeJS.Timeout | null = null
 
   constructor(private readonly deps: ControllerDeps) {}
 
@@ -118,9 +130,11 @@ export class WindowController {
       this.recomputeLayout()
     })
     win.on('move', () => {
-      if (this.mode === 'expanded') {
+      // 展开态的移动（拖标题栏、系统移动）也要记下来；
+      // 拖动悬浮球时由 tickDrag 直接 setPosition，结束时统一 sync
+      if (this.mode === 'expanded' && !this.dragAnchor) {
         this.expandedBounds = win.getBounds()
-        this.persistBounds()
+        this.persistExpandedBounds()
       }
       this.reassert()
     })
@@ -225,7 +239,7 @@ export class WindowController {
 
     // 记下展开时的矩形，展开时原样恢复
     this.expandedBounds = win.getBounds()
-    this.persistBounds()
+    this.persistExpandedBounds()
 
     const cfg = this.deps.config.get()
     const ball = this.ballBounds()
@@ -277,7 +291,8 @@ export class WindowController {
       width: SIZE_PRESETS.medium.width,
       height: SIZE_PRESETS.medium.height
     }
-    return ballDockRect(cfg.stealth.ballCorner, base, cfg.stealth.ballSize)
+    const size = effectiveBallSize(cfg.stealth.ballSize, cfg.stealth.ballCorner)
+    return ballDockRect(cfg.stealth.ballCorner, base, size)
   }
 
   /** 隐藏窗口时，chrome 视图要铺满当前窗口尺寸 */
@@ -398,8 +413,13 @@ export class WindowController {
   }
 
   destroy(): void {
-    // 先停轮询，再拆窗口：反过来的话定时器会在窗口销毁后继续 tick
+    // 先停轮询与拖动跟踪，再拆窗口：反过来的话定时器会在窗口销毁后继续 tick
     this.watcher?.stop()
+    if (this.dragTimer) {
+      clearInterval(this.dragTimer)
+      this.dragTimer = null
+    }
+    this.dragAnchor = null
     if (this.mode === 'quitting') return
     this.mode = 'quitting'
     try {
@@ -415,6 +435,107 @@ export class WindowController {
     this.win = null
   }
 
+  // ------------------------------------------------------------ 拖动
+
+  /**
+   * 拖动窗口。
+   *
+   * 不用 `-webkit-app-region: drag`：那个原生拖动会吞掉点击，而悬浮球正是靠
+   * 点击来切换收起与展开的，两者不能共存。
+   *
+   * 因此自己实现，并且**由主进程驱动**：主进程读得到全局光标位置，
+   * 每 16ms 把窗口挪到「光标位移」对应的位置上。窗口跟着光标走，
+   * 光标就一直停在球上，松开事件也就不会丢失——这是渲染进程自己
+   * 跟踪 mousemove 做不到的（指针一旦离开窗口，渲染进程就收不到事件了，
+   * 窗口会僵在原地，拖动当场断掉）。
+   */
+  beginDrag(): void {
+    const win = this.win
+    if (!win || this.dragAnchor) return
+    const cursor = screen.getCursorScreenPoint()
+    const b = win.getBounds()
+    this.dragAnchor = { cursorX: cursor.x, cursorY: cursor.y, winX: b.x, winY: b.y }
+    this.dragTimer = setInterval(() => this.tickDrag(), DRAG_TICK_MS)
+  }
+
+  endDrag(): void {
+    if (this.dragTimer) {
+      clearInterval(this.dragTimer)
+      this.dragTimer = null
+    }
+    if (!this.dragAnchor) return
+    this.dragAnchor = null
+    this.syncBoundsMemory()
+  }
+
+  private tickDrag(): void {
+    const win = this.win
+    const anchor = this.dragAnchor
+    if (!win || !anchor) return
+
+    const cursor = screen.getCursorScreenPoint()
+    const x = anchor.winX + (cursor.x - anchor.cursorX)
+    const y = anchor.winY + (cursor.y - anchor.cursorY)
+
+    const b = win.getBounds()
+    if (b.x === x && b.y === y) return
+
+    // 拖动期间光标在球上（窗口跟着它走），但仍要清掉「离开计时」，
+    // 免得自动收起在一个拖动刚结束时被触发
+    this.watcher?.rearm()
+
+    try {
+      win.setPosition(x, y)
+    } catch {
+      // 窗口可能在拖动途中被销毁，忽略
+    }
+  }
+
+  /**
+   * 把当前窗口位置记进「展开态矩形」并落盘。
+   *
+   * 收起态下窗口就是一颗球，它的矩形不能直接当作展开尺寸，
+   * 需要反推出「球停在原处时，展开的窗口该在哪」，再记下来。
+   */
+  private syncBoundsMemory(): void {
+    const win = this.win
+    if (!win) return
+    const b = win.getBounds()
+
+    if (this.mode === 'expanded') {
+      this.expandedBounds = b
+    } else {
+      const cfg = this.deps.config.get()
+      const { width, height } = cfg.window
+      const corner = cfg.stealth.ballCorner
+      const size = effectiveBallSize(cfg.stealth.ballSize, corner)
+      const offX = corner.endsWith('right') ? width - size - BALL_MARGIN : BALL_MARGIN
+      const bar = corner.startsWith('bottom') ? BOTTOM_BAR_H : TOP_BAR_H
+      const offY = corner.startsWith('bottom')
+        ? height - bar + Math.round((bar - size) / 2)
+        : Math.round((bar - size) / 2)
+      this.expandedBounds = { x: b.x - offX, y: b.y - offY, width, height }
+    }
+
+    this.persistExpandedBounds()
+  }
+
+  /** 把展开态矩形落盘 */
+  private persistExpandedBounds(): void {
+    const target = this.expandedBounds
+    if (!target) return
+    this.deps.config.set((cfg) => ({
+      ...cfg,
+      window: {
+        ...cfg.window,
+        x: target.x,
+        y: target.y,
+        width: target.width,
+        height: target.height
+      }
+    }))
+  }
+
   // ------------------------------------------------------------ 内部
 
   private applySurface(): void {
@@ -424,17 +545,6 @@ export class WindowController {
     const windowRect =
       this.mode === 'collapsed' ? this.ballBounds() : (this.expandedBounds ?? win.getBounds())
     this.surface?.apply({ mode: this.mode, windowRect, opacity: cfg.window.opacity })
-  }
-
-  private persistBounds(): void {
-    const win = this.win
-    if (!win || this.mode !== 'expanded') return
-    const b = win.getBounds()
-    if (b.width < BALL_SIZE * 2) return
-    this.deps.config.set((cfg) => ({
-      ...cfg,
-      window: { ...cfg.window, x: b.x, y: b.y, width: b.width, height: b.height }
-    }))
   }
 }
 

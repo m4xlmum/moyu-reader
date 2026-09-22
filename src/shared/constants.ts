@@ -17,8 +17,13 @@ export const BOTTOM_BAR_H = 44
  */
 export const ASPECT_RATIO = 16 / 9
 
-/** 悬浮球直径（DIP）。收起后整个界面就是这么大一颗球 */
-export const BALL_SIZE = 52
+/**
+ * 悬浮球直径的默认值（DIP）。
+ *
+ * 上限受工具栏高度约束（球必须完全落在栏内，否则会被正文区的视图盖住），
+ * 具体由 @shared/ball.ts 的 effectiveBallSize 裁定。
+ */
+export const BALL_SIZE = 40
 /**
  * 悬浮球距窗口边缘的留白。
  *
@@ -30,6 +35,8 @@ export const BALL_MARGIN = 10
 
 /** 主进程鼠标位置轮询间隔（毫秒） */
 export const POLL_MS = 50
+/** 拖动窗口时跟踪光标的间隔（毫秒）。比普通轮询快得多，拖动才跟手 */
+export const DRAG_TICK_MS = 16
 /** 光标离开后多久才收起成球（毫秒）。收起慢、展开靠点击，避免误触 */
 export const HIDE_DELAY_MS = 700
 /** 淡入淡出时长（毫秒） */
