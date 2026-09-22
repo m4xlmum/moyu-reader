@@ -212,7 +212,7 @@ function toggleMiniMode(event: Event): void {
 
         <div class="card">
           <p class="hint">
-            鼠标移出窗口后，整个界面会缩成屏幕角落的一颗悬浮球；点击悬浮球即可展开回原样。
+            窗口角上那颗球是收起开关：点一下整个界面缩进球里，再点一下展开。
             收起时窗口是真的变小了，屏幕上不会留下任何看不见却仍在接收点击的区域。
           </p>
 
@@ -228,12 +228,12 @@ function toggleMiniMode(event: Event): void {
                   })
                 "
               />
-              <span class="dim">关掉之后只能从底栏的「收起」手动藏起来</span>
+              <span class="dim">默认关闭。开启后鼠标移开一段时间也会自动收起</span>
             </div>
           </div>
 
-          <div class="field">
-            <label>收起延迟</label>
+          <div class="field" v-if="config.stealth.autoCollapse">
+            <label>自动收起延迟</label>
             <div class="control">
               <input
                 type="number"
@@ -252,7 +252,7 @@ function toggleMiniMode(event: Event): void {
           </div>
 
           <div class="field">
-            <label>悬浮球停靠</label>
+            <label>悬浮球停靠位置</label>
             <div class="control">
               <button
                 v-for="c in BALL_CORNERS"
@@ -262,6 +262,7 @@ function toggleMiniMode(event: Event): void {
               >
                 {{ c.label }}
               </button>
+              <span class="dim">指窗口的哪个角</span>
             </div>
           </div>
 

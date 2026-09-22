@@ -211,7 +211,8 @@ function goHome(): void {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 0 8px;
+  /* 右侧留出悬浮球的槽位，避免球压住窗口按钮 */
+  padding: 0 calc(8px + var(--ball-gutter-right, 0px)) 0 calc(8px + var(--ball-gutter-left, 0px));
   background: var(--moyu-surface);
   border-bottom: 1px solid var(--moyu-hairline);
 }

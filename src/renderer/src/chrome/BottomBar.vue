@@ -57,10 +57,6 @@ function bookmarkCurrent(): void {
 function openSettings(): void {
   void window.moyu.ui.openSettings()
 }
-
-function collapse(): void {
-  void window.moyu.win.collapse()
-}
 </script>
 
 <template>
@@ -86,11 +82,6 @@ function collapse(): void {
 
     <div class="spacer" />
 
-    <!-- 手动收起：等鼠标移开自动收起虽然会来，但人想立刻藏起来时不该等 -->
-    <button class="tool moyu-no-drag" title="收起成悬浮球" @click="collapse">
-      <Icon name="collapse" :size="14" />
-      <span>收起</span>
-    </button>
     <button class="tool moyu-no-drag" title="个人中心" @click="openSettings">设置</button>
   </footer>
 </template>
@@ -102,7 +93,7 @@ function collapse(): void {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 8px;
+  padding: 0 calc(8px + var(--ball-gutter-right, 0px)) 0 calc(8px + var(--ball-gutter-left, 0px));
   background: var(--moyu-surface);
   border-top: 1px solid var(--moyu-hairline);
   /* 窗口收窄时工具会横向溢出，但工具栏里冒出一条滚动条是不能接受的：

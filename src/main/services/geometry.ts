@@ -37,15 +37,24 @@ export function computeLayout(
 }
 
 /**
- * 悬浮球在指定屏幕角落的位置。
+ * 悬浮球停靠在窗口某角时，它在**屏幕**上的矩形。
  *
- * 用工作区（workArea）而不是整块屏幕：贴着任务栏的球会被任务栏盖住一半。
+ * 球是窗口内部的元素，不是屏幕角落的挂件。因此收起只是把窗口缩到
+ * 这个矩形上——球在屏幕上的位置一个像素都不动，用户眼看它留在原处缩小。
+ *
+ * 渲染进程用同一套边距（BALL_MARGIN）把球画在窗口的同一个角上，
+ * 两边的结果必须一致，收起的瞬间才看不出跳动。
  */
-export function ballBoundsFor(corner: BallCorner, workArea: Rect, size = BALL_SIZE): Rect {
-  const left = workArea.x + BALL_MARGIN
-  const top = workArea.y + BALL_MARGIN
-  const right = workArea.x + workArea.width - size - BALL_MARGIN
-  const bottom = workArea.y + workArea.height - size - BALL_MARGIN
+export function ballDockRect(
+  corner: BallCorner,
+  windowBounds: Rect,
+  size = BALL_SIZE,
+  margin = BALL_MARGIN
+): Rect {
+  const left = windowBounds.x + margin
+  const top = windowBounds.y + margin
+  const right = windowBounds.x + windowBounds.width - size - margin
+  const bottom = windowBounds.y + windowBounds.height - size - margin
 
   switch (corner) {
     case 'top-left':

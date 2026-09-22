@@ -15,7 +15,7 @@ import { BaseWindow, WebContentsView, screen } from 'electron'
 import { BALL_SIZE, SIZE_PRESETS, TOP_BAR_H, BOTTOM_BAR_H, type SizePreset } from '@shared/constants'
 import type { BallCorner, Rect, WindowMode, WindowRuntime } from '@shared/types'
 import type { ConfigStore } from './configStore'
-import { ballBoundsFor, computeLayout, type Layout } from './geometry'
+import { ballDockRect, computeLayout, type Layout } from './geometry'
 import { log } from './logger'
 import { WindowLeaveWatcher } from './windowLeaveWatcher'
 import { WindowSurface } from './windowSurface'
@@ -135,10 +135,10 @@ export class WindowController {
 
     this.loadChrome()
 
-    const { width, height } = win.getBounds()
-    this.layout = computeLayout(width, height, TOP_BAR_H, BOTTOM_BAR_H)
-
-    this.applySurface()
+    // 必须显式撑开 chrome 视图。WebContentsView 默认是 0×0，
+    // 不设置的话顶栏、底栏与悬浮球全都不会绘制——
+    // 而标签页是另一层视图，所以「网页能显示」会掩盖这个问题。
+    this.recomputeLayout()
     this.watcher.start()
   }
 
@@ -263,17 +263,21 @@ export class WindowController {
     this.reassert()
   }
 
-  /** 悬浮球当前的屏幕矩形 */
+  /**
+   * 悬浮球当前的屏幕矩形。
+   *
+   * 由「展开态的窗口矩形 + 停靠角」推出来，而不是另外挑一个屏幕角落：
+   * 球本来就画在窗口的那个角上，收起只是把窗口缩到它身上。
+   */
   private ballBounds(): Rect {
     const cfg = this.deps.config.get()
-    const cursor = screen.getCursorScreenPoint()
-    // 按球所在位置选显示器，而不是永远用主屏：多屏下球该出现在用户眼前的屏幕上
-    const display = screen.getDisplayNearestPoint(
-      this.expandedBounds
-        ? { x: this.expandedBounds.x, y: this.expandedBounds.y }
-        : cursor
-    )
-    return ballBoundsFor(cfg.stealth.ballCorner, display.workArea, cfg.stealth.ballSize)
+    const base = this.expandedBounds ?? this.win?.getBounds() ?? {
+      x: 0,
+      y: 0,
+      width: SIZE_PRESETS.medium.width,
+      height: SIZE_PRESETS.medium.height
+    }
+    return ballDockRect(cfg.stealth.ballCorner, base, cfg.stealth.ballSize)
   }
 
   /** 隐藏窗口时，chrome 视图要铺满当前窗口尺寸 */
@@ -284,7 +288,7 @@ export class WindowController {
     this.chrome.setBounds({ x: 0, y: 0, width: b.width, height: b.height })
   }
 
-  /** 换一个停靠角落，若当前正处于收起态则立即生效 */
+  /** 换一个停靠角。若当前正处于收起态，窗口要跟着挪到新的球位上。 */
   setBallCorner(corner: BallCorner): void {
     this.deps.config.set((cfg) => ({ ...cfg, stealth: { ...cfg.stealth, ballCorner: corner } }))
     if (this.mode === 'collapsed') {
@@ -295,6 +299,7 @@ export class WindowController {
         opacity: this.deps.config.get().window.opacity
       })
     }
+    this.deps.onStateChange()
   }
 
   // ------------------------------------------------------------ 动作

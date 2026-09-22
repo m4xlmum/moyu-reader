@@ -36,7 +36,9 @@ export function defaultConfig(): AppConfig {
       showInTaskbar: false
     },
     stealth: {
-      autoCollapse: true,
+      // 默认关闭：收起与否由用户点悬浮球决定，不自动发生。
+      // 自动收起会让界面在用户没打算藏的时候忽然缩成一颗球，反而更容易被注意到。
+      autoCollapse: false,
       hideDelayMs: HIDE_DELAY_MS,
       muteMediaOnCollapse: true,
       contentProtection: false,
@@ -89,6 +91,12 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
       w.x = null
       w.y = null
     }
+  }
+
+  // 迁移到 4：悬浮球改为窗口内的常驻元素，交互也改成手动开关。
+  // 旧配置里 autoCollapse 默认是开的，沿用会让人以为「界面自己会跑掉」。
+  if ((input.version ?? 1) < 4) {
+    s.autoCollapse = false
   }
 
   w.opacity = clamp(w.opacity, OPACITY_MIN, OPACITY_MAX)

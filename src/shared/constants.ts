@@ -19,8 +19,14 @@ export const ASPECT_RATIO = 16 / 9
 
 /** 悬浮球直径（DIP）。收起后整个界面就是这么大一颗球 */
 export const BALL_SIZE = 52
-/** 悬浮球距屏幕边缘的留白 */
-export const BALL_MARGIN = 18
+/**
+ * 悬浮球距窗口边缘的留白。
+ *
+ * 球是窗口**内部**的一个元素，停靠在窗口的某一角。
+ * 收起时窗口缩到球的屏幕矩形上，因此球在屏幕上的位置不发生移动——
+ * 它就停在用户刚才看到的地方。渲染进程的 CSS 用同一个常量。
+ */
+export const BALL_MARGIN = 10
 
 /** 主进程鼠标位置轮询间隔（毫秒） */
 export const POLL_MS = 50
@@ -54,8 +60,9 @@ export const DEFAULT_BOSS_HIDE = 'Alt+X'
  *
  * 2：窗口由竖屏改为 16:9 横屏，旧的竖屏尺寸不再适用。
  * 3：隐藏策略改为收起成悬浮球，旧的按区域隐藏设置整体作废。
+ * 4：悬浮球改为窗口内的常驻元素，且自动收起默认关闭。
  */
-export const CONFIG_VERSION = 3
+export const CONFIG_VERSION = 4
 
 /** 1 版时代的竖屏尺寸；命中这些值说明是「没改过尺寸」的旧配置，迁移时重置 */
 export const LEGACY_PORTRAIT_SIZES: ReadonlyArray<{ width: number; height: number }> = [
