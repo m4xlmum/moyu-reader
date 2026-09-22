@@ -1,0 +1,31 @@
+/**
+ * 设计令牌。
+ *
+ * 注意：不做毛玻璃。backdrop-filter 无法模糊透明窗口背后的桌面
+ * （它只能模糊窗口自身的内容），栏位必须是纯色或带 alpha 的纯色。
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+:root {
+  --moyu-top-h: 36px;
+  --moyu-bottom-h: 40px;
+  --moyu-strip-h: 6px;
+
+  --moyu-radius: 8px;
+  --moyu-radius-sm: 5px;
+
+  /* 栏位底色带 alpha：窗口本身是透明的，底色透明度决定透视程度 */
+  --moyu-surface: rgba(28, 30, 34, 0.92);
+  --moyu-surface-hover: rgba(52, 56, 64, 0.95);
+  --moyu-surface-active: rgba(76, 82, 94, 0.95);
+  --moyu-border: rgba(255, 255, 255, 0.1);
+
+  --moyu-text: #e8eaed;
+  --moyu-text-dim: #9aa0a6;
+  --moyu-text-faint: #6b7076;
+
+  --moyu-accent: #6ea8fe;
+  --moyu-danger: #f28b82;
+
+  --moyu-font: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', system-ui, sans-serif;
+}

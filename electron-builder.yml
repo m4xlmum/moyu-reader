@@ -1,0 +1,45 @@
+# 打包配置。
+#
+# productName 用中文是为了显示好看，但可执行文件名与产物名保持 ASCII：
+# 中文文件名在部分工具链与杀软扫描下会出问题，而用户Data目录名已由
+# 主进程的 app.setName('moyu-reader') 单独保证，不受此处影响。
+
+appId: com.m4xlmum.moyu-reader
+productName: 摸鱼阅读
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - out/**
+  - package.json
+
+# 托盘图标不打包进 asar，主进程以普通文件路径读取
+extraResources:
+  - from: resources/tray.ico
+    to: tray.ico
+
+win:
+  executableName: moyu-reader
+  icon: build/icon.ico
+  artifactName: moyu-reader-${version}-${arch}.${ext}
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: zip
+      arch: [x64]
+
+nsis:
+  # 不用一键安装：用户能自己选目录，也更容易信任
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 摸鱼阅读
+  installerLanguages: [zh_CN]
+  # 2052 = 简体中文
+  language: '2052'
+  # 卸载时保留用户数据（书签、站点、登录态），重装后不至于全丢
+  deleteAppDataOnUninstall: false

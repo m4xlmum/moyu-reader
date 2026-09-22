@@ -1,0 +1,40 @@
+/*
+ * 个人中心的样式。这是一个普通的不透明窗口，不需要任何透明相关的处理。
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --border: #e3e5e8;
+  --text: #1f2328;
+  --text-dim: #5c6370;
+  --accent: #2f6fd0;
+  --danger: #c0392b;
+  --moyu-font: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--moyu-font);
+  font-size: 13px;
+}
+
+#app {
+  height: 100%;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}

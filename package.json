@@ -1,0 +1,33 @@
+{
+  "name": "moyu-reader",
+  "version": "0.1.0",
+  "description": "摸鱼阅读 - 可调透明度、置顶、一键隐藏的桌面阅读器",
+  "license": "GPL-2.0-or-later",
+  "author": "m4xlmum",
+  "private": true,
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "npm run typecheck && electron-vite build",
+    "build:win": "npm run build && electron-builder --win --config electron-builder.yml",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web"
+  },
+  "dependencies": {
+    "@electron-toolkit/preload": "3.0.2",
+    "@electron-toolkit/utils": "4.0.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/tsconfig": "2.0.0",
+    "@vitejs/plugin-vue": "6.0.9",
+    "electron": "44.4.3",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "typescript": "5.9.3",
+    "vite": "7.3.6",
+    "vue": "3.5.43",
+    "vue-tsc": "3.3.11"
+  }
+}
