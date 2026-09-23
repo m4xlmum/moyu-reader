@@ -136,6 +136,11 @@ export class WindowController {
     })
     this.win = win
     this.expandedBounds = bounds
+    // id 必须在这里记下来：'closed' 事件是在窗口已经销毁之后才触发的，
+    // 那时再读 win.id 会抛「Object has been destroyed」（实测见 spike/destroyed.js）。
+    // 这个异常从 app.quit() 的关窗路径一路冒到主进程的未捕获异常处理器上，
+    // 表现就是退出时弹出的那个错误框。
+    const winId = win.id
 
     const chrome = new WebContentsView({
       webPreferences: {
@@ -184,7 +189,17 @@ export class WindowController {
       this.reassert()
     })
     win.on('closed', () => {
-      this.deps.registry.remove(win.id)
+      this.deps.registry.remove(winId)
+      // 窗口已经没了，剩下两样还在按时碰它的东西必须停下来：
+      // 收起轮询每 50ms 读一次窗口 id，拖动定时器每 16ms 读一次矩形。
+      // 它们各自的 try/catch 能让异常不冒出去，但会一路刷日志，
+      // 而且是「对着一个不存在的窗口工作」——没有意义。
+      this.watcher?.stop()
+      if (this.dragTimer) {
+        clearInterval(this.dragTimer)
+        this.dragTimer = null
+      }
+      this.dragAnchor = null
       this.win = null
     })
 

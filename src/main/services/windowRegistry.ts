@@ -11,6 +11,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import type { BaseWindow } from 'electron'
+import type { Rect } from '@shared/types'
 import { pointInRect } from './geometry'
 
 interface Entry {
@@ -37,8 +38,8 @@ export class WindowRegistry {
   cursorInAnyWindow(x: number, y: number, excludeId: number): boolean {
     for (const [id, entry] of this.entries) {
       if (id === excludeId) continue
-      if (!isReallyVisible(entry.win)) continue
-      if (pointInRect(x, y, entry.win.getBounds())) return true
+      const bounds = visibleBounds(entry.win)
+      if (bounds && pointInRect(x, y, bounds)) return true
     }
     return false
   }
@@ -48,7 +49,7 @@ export class WindowRegistry {
     for (const [id, entry] of this.entries) {
       if (id === excludeId) continue
       if (!entry.blocksAutoHide) continue
-      if (isReallyVisible(entry.win)) return true
+      if (visibleBounds(entry.win)) return true
     }
     return false
   }
@@ -58,10 +59,19 @@ export class WindowRegistry {
   }
 }
 
-function isReallyVisible(win: BaseWindow): boolean {
+/**
+ * 窗口可见时的矩形，否则 null。
+ *
+ * 必须兜住异常：窗口销毁之后 isVisible() 与 getBounds() 都会抛
+ * 「Object has been destroyed」。这条路径由 50ms 的收起轮询驱动，
+ * 抛出去虽然被轮询自己接住，但会连带把轮询停掉——自动收起就此失效，
+ * 而原因只是某个窗口刚被关掉。
+ */
+function visibleBounds(win: BaseWindow): Rect | null {
   try {
-    return win.isVisible() && !win.isMinimized()
+    if (!win.isVisible() || win.isMinimized()) return null
+    return win.getBounds()
   } catch {
-    return false
+    return null
   }
 }

@@ -93,6 +93,10 @@ export class PopoverWindowService {
     })
     this.win = win
     this.currentKind = req.kind
+    // 与 WindowController 同理：'closed' 触发时窗口已销毁，那时读 win.id 会抛
+    // 「Object has been destroyed」。这里每次点开面板、点别处关掉都会走一遍，
+    // 异常会冒到主进程的未捕获异常处理器上弹框，因此 id 提前记下。
+    const winId = win.id
 
     // 面板打开期间必须挂起自动收起，否则用户一移开光标界面就缩成球，
     // 面板会孤零零飘在桌面上。
@@ -100,7 +104,7 @@ export class PopoverWindowService {
 
     win.on('blur', () => this.close())
     win.on('closed', () => {
-      this.registry.remove(win.id)
+      this.registry.remove(winId)
       if (this.win === win) this.win = null
       this.currentKind = null
     })

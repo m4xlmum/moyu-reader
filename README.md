@@ -128,6 +128,15 @@ npx electron spike/minsize.js
 `setBounds` 再读回实际矩形。悬浮球直径的下限就是这么量出来的。
 
 ```bash
+npx electron spike/destroyed.js
+```
+
+探「窗口销毁之后还能碰什么」：`'closed'` 事件是在窗口已经销毁之后才触发的，
+此时 `win.id` 与 `win.getBounds()` 都会抛 `Object has been destroyed`。退出时
+弹的那个主进程错误框就是从这里来的，脚本里另附一段走完整 `app.quit()` 的
+正确写法作对照。
+
+```bash
 npx electron spike/preview.js --no-topbar
 ```
 
@@ -152,7 +161,7 @@ JSON 里的 `rightButtons` 是顶栏右侧那排按钮的顺序与坐标，`rail
 
 ## 架构要点
 
-有三处实现与直觉相反，都是被真机验证倒逼出来的，改动前请先读
+有四处实现与直觉相反，都是被真机验证倒逼出来的，改动前请先读
 [docs/spike-findings.md](docs/spike-findings.md)：
 
 1. **每个 `WebContentsView` 都必须调用 `setBackgroundColor('#00000000')`。**
@@ -166,6 +175,11 @@ JSON 里的 `rightButtons` 是顶栏右侧那排按钮的顺序与坐标，`rail
 3. **所有窗口级 surface 属性只能经 `windowSurface.ts` 一处设置。**
    `transparent: true` 与 `setOpacity` 在 Windows 上是两条不同的合成路径，
    从多处反复折腾它们会出问题。调用顺序在 `apply()` 里有注释说明，不要重排。
+
+4. **`'closed'` 是在窗口销毁之后才触发的**，那时除了 `win.isDestroyed()`，
+   读任何属性都会抛 `Object has been destroyed`——`win.id` 也是属性。
+   所以 id 要在**建窗口时**记下来，清理代码里只用记下的值。主进程未捕获
+   异常会弹出 Electron 的错误框，退出时那个框正是这么来的（`spike/destroyed.js`）。
 
 > 早期版本用 `setShape` 裁剪窗口的命中区域来实现「隐藏区域点击穿透」。
 > 改为收起成球之后这套机制已整体移除：窗口真的缩小了，就不需要再靠裁剪
