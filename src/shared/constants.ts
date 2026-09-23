@@ -6,8 +6,23 @@
 
 /** 顶部菜单栏高度（DIP） */
 export const TOP_BAR_H = 38
-/** 底部工具栏高度（DIP） */
-export const BOTTOM_BAR_H = 44
+
+/**
+ * 地址栏展开时占用的高度（DIP）。
+ *
+ * 地址栏默认折叠。横屏下纵向空间最紧张，而起始页本身就是一个搜索入口，
+ * 常驻一行地址栏是白占地方。折叠时这一行高度归零，正文直接顶到顶栏下沿。
+ */
+export const ADDRESS_H = 34
+
+/**
+ * 右侧功能栏宽度（DIP）。
+ *
+ * 站点、历史、书签、缩放、透明度、设置这些原本摊在底栏的功能都收在这条竖栏里。
+ * 底栏要横跨整个窗口宽度，而竖栏只吃掉 48px：在 960 宽的窗口里是 5%，
+ * 而 44px 高的底栏在 540 高的窗口里要占掉 8%。横屏下后者才是更贵的那条。
+ */
+export const RAIL_W = 48
 
 /**
  * 窗口保持 16:9 横屏比例。
@@ -33,6 +48,22 @@ export const BALL_SIZE = 40
  */
 export const BALL_MARGIN = 10
 
+/**
+ * 悬浮球可停靠的位置。
+ *
+ * 只有这三处。球画在 chrome 层，而那层位于标签页视图**之下**，
+ * 因此停靠位必须落在真正有 chrome 绘制的地方：顶栏的两端，与右侧栏的底部。
+ * 窗口左下角在版面改造后已属于正文区，球停在那里会被网页盖住半个，
+ * 于是这个选项被取消，旧配置由 configStore 迁移到左上。
+ *
+ * 这里既是取值清单也是类型来源：configStore 的校验与设置界面的选项
+ * 都取自这一份，不会有第二处需要同步。
+ */
+export const BALL_CORNERS = ['top-left', 'top-right', 'bottom-right'] as const
+
+/** 悬浮球停靠位置 */
+export type BallCorner = (typeof BALL_CORNERS)[number]
+
 /** 主进程鼠标位置轮询间隔（毫秒） */
 export const POLL_MS = 50
 /** 拖动窗口时跟踪光标的间隔（毫秒）。比普通轮询快得多，拖动才跟手 */
@@ -43,6 +74,14 @@ export const HIDE_DELAY_MS = 700
 export const FADE_MS = 200
 /** 淡入淡出的计时器步长（毫秒） */
 export const FADE_TICK_MS = 16
+/**
+ * 窗口停止移动多久后才落盘位置、重放表面状态（毫秒）。
+ *
+ * 顶栏是 `-webkit-app-region: drag`，用系统拖动窗口时每帧都会发一次 move，
+ * 约 8ms 一次。若每次都写配置并重放整套窗口属性，就是持续闪烁加持续落盘。
+ * 位置本身立即记在内存里，只有这两件有副作用的事要等它停下来。
+ */
+export const MOVE_SETTLE_MS = 200
 
 /** 透明度下限。0 会让窗口不可见却仍可交互，形成自我锁定，故不允许 */
 export const OPACITY_MIN = 0.05
@@ -68,8 +107,9 @@ export const DEFAULT_BOSS_HIDE = 'Alt+X'
  * 2：窗口由竖屏改为 16:9 横屏，旧的竖屏尺寸不再适用。
  * 3：隐藏策略改为收起成悬浮球，旧的按区域隐藏设置整体作废。
  * 4：悬浮球改为窗口内的常驻元素，且自动收起默认关闭。
+ * 5：底栏取消，功能移入右侧栏，悬浮球不再有「左下」这个停靠位。
  */
-export const CONFIG_VERSION = 4
+export const CONFIG_VERSION = 5
 
 /** 1 版时代的竖屏尺寸；命中这些值说明是「没改过尺寸」的旧配置，迁移时重置 */
 export const LEGACY_PORTRAIT_SIZES: ReadonlyArray<{ width: number; height: number }> = [

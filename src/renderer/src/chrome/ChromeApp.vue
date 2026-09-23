@@ -3,7 +3,7 @@
  * chrome 层根组件。
  *
  * 两种形态共用这一层，差别只在界面部分是否绘制：
- *   - 展开：顶栏 + 正文（留空，由标签页视图覆盖） + 底栏 + 角上的悬浮球
+ *   - 展开：顶栏 + 地址栏（默认折叠）+ 正文（留空，由标签页视图覆盖）+ 右侧栏 + 悬浮球
  *   - 收起：只有悬浮球，铺满整扇窗
  *
  * 正文之所以完全透明且不画东西，是因为标签页视图叠在它上方；
@@ -12,11 +12,12 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed } from 'vue'
-import { BALL_MARGIN, BALL_SIZE } from '@shared/constants'
+import { ADDRESS_H, BALL_MARGIN, BALL_SIZE, RAIL_W, TOP_BAR_H } from '@shared/constants'
 import { effectiveBallSize } from '@shared/ball'
 import type { BallCorner } from '@shared/types'
 import TopBar from './TopBar.vue'
-import BottomBar from './BottomBar.vue'
+import AddressBar from './AddressBar.vue'
+import Rail from './Rail.vue'
 import Ball from './Ball.vue'
 import { useConfig } from '../composables/useConfig'
 import { useTabs } from '../composables/useTabs'
@@ -27,6 +28,7 @@ const { tabs, activeTabId, activeTab } = useTabs()
 const { state, collapse, expand } = useWindowState()
 
 const collapsed = computed(() => state.value?.mode === 'collapsed')
+const addressOpen = computed(() => state.value?.addressOpen ?? false)
 const ballSize = computed(() => config.value?.stealth.ballSize ?? BALL_SIZE)
 const ballCorner = computed<BallCorner>(() => config.value?.stealth.ballCorner ?? 'bottom-right')
 
@@ -37,34 +39,55 @@ function toggle(): void {
 }
 
 /**
- * 球的停靠侧要给它留出槽位。
+ * 各区域尺寸由主进程的常量下发，不写死在 CSS 里。
  *
- * 球是浮在界面之上的，不预留空间就会压住那一侧的按钮（例如右下角的「设置」）。
- * 两条工具栏都留：球停在上边或下边是可配的，两边都留比按状态切换简单得多，
- * 代价只是另一条栏空出一小段。
+ * 正文的宽度与高度都是主进程按这些值算出来、直接设在标签页视图上的；
+ * 这里若另写一份，两边迟早会差几个像素，网页就会被栏压住一条。
+ */
+const geometryVars = {
+  '--moyu-top-h': `${TOP_BAR_H}px`,
+  '--moyu-address-h': `${ADDRESS_H}px`,
+  '--moyu-rail-w': `${RAIL_W}px`
+}
+
+/**
+ * 球的槽位。
+ *
+ * 球浮在界面之上，不预留空间就会压住它停靠的那条栏里的控件。
+ * 只给球实际所在的那条栏留：三条栏各给一份的话，
+ * 顶栏会平白空出一截，右下角那颗球还会在顶栏留下一个永远用不上的缺口。
  */
 const gutter = computed(
   () => `${effectiveBallSize(ballSize.value, ballCorner.value) + BALL_MARGIN * 2}px`
 )
-const gutterSide = computed(() => (ballCorner.value.endsWith('right') ? 'right' : 'left'))
+const ballVars = computed(() => ({
+  '--ball-gutter-left': ballCorner.value === 'top-left' ? gutter.value : '0px',
+  '--ball-gutter-right': ballCorner.value === 'top-right' ? gutter.value : '0px',
+  '--ball-gutter-bottom': ballCorner.value === 'bottom-right' ? gutter.value : '0px'
+}))
 </script>
 
 <template>
-  <div class="root" :style="{ '--ball-gutter': gutter, [`--ball-gutter-${gutterSide}`]: gutter }">
-    <div v-if="!collapsed" class="chrome">
+  <div class="root" :style="[geometryVars, ballVars]">
+    <template v-if="!collapsed">
       <TopBar
         :tabs="tabs"
         :active-tab-id="activeTabId"
         :active-tab="activeTab"
-        :config="config"
-        @patch="patch"
+        :address-open="addressOpen"
       />
 
-      <!-- 中间留空：这一块由标签页视图覆盖 -->
-      <div class="spacer" />
+      <div class="middle">
+        <div class="main-col">
+          <AddressBar v-if="addressOpen" :active-tab-id="activeTabId" :active-tab="activeTab" />
 
-      <BottomBar :config="config" :active-tab="activeTab" @patch="patch" />
-    </div>
+          <!-- 中间留空：这一块由标签页视图覆盖 -->
+          <div class="spacer" />
+        </div>
+
+        <Rail :config="config" :active-tab="activeTab" @patch="patch" />
+      </div>
+    </template>
 
     <!-- 悬浮球常驻：展开时贴在窗口的角上，收起时就是整扇窗 -->
     <Ball :size="ballSize" :corner="ballCorner" :collapsed="collapsed" @toggle="toggle" />
@@ -76,15 +99,23 @@ const gutterSide = computed(() => (ballCorner.value.endsWith('right') ? 'right' 
   position: relative;
   width: 100%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
   background: transparent;
 }
 
-.chrome {
+.middle {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+}
+
+.main-col {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  width: 100%;
-  height: 100%;
-  background: transparent;
 }
 
 .spacer {

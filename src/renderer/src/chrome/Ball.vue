@@ -9,7 +9,9 @@
  * 两种形态下球在屏幕上的矩形完全一致，因此收起与展开看起来就是
  * 界面在球的位置上缩进去、再长出来，球本身一动不动。
  *
- * 平时 55% 不透明，鼠标移上去恢复不透明并微微放大——既找得到，又不抢眼。
+ * 平时 55% 不透明，鼠标移上去变清晰——既找得到，又不抢眼。
+ * 反馈只用透明度、阴影这类不改变占位的属性：任何缩放都会让球在收起态
+ * 顶出窗口边界，被切出四个方角。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -155,5 +157,21 @@ const positionStyle = computed(() => {
   opacity: 1;
   outline: 2px solid var(--moyu-accent);
   outline-offset: 2px;
+}
+
+/*
+ * 收起态：窗口正好是球的尺寸，球紧贴着窗口的四条边。
+ * 阴影与向外的焦点环都会画到球外面去，而那里已经没有窗口了——
+ * 结果是四个角上留下四块灰影，看着像窗口没切干净。
+ * 因此这一态下不画任何超出球面的东西，反馈只靠透明度。
+ */
+.ball.collapsed,
+.ball.collapsed:hover,
+.ball.collapsed:active {
+  box-shadow: none;
+}
+
+.ball.collapsed:focus-visible {
+  outline-offset: -4px;
 }
 </style>

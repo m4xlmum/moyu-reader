@@ -13,26 +13,39 @@ export interface Layout {
   width: number
   height: number
   topBar: Rect
+  address: Rect
   body: Rect
-  bottomBar: Rect
+  rail: Rect
 }
 
-/** 依据窗口客户区尺寸推导两条工具栏的位置 */
+/**
+ * 依据窗口客户区尺寸推导各区域。
+ *
+ * 版面是一个「顶栏 + 右侧栏」的 L 形：顶栏横跨整个宽度（窗口按钮在最右端，
+ * 与 Windows 的习惯一致），右侧栏从顶栏下沿一直垂到窗口底部。
+ * 地址栏夹在顶栏与正文之间，折叠时传 addressH = 0，正文直接顶上去。
+ */
 export function computeLayout(
   width: number,
   height: number,
   topH: number,
-  bottomH: number
+  addressH: number,
+  railW: number
 ): Layout {
-  const bodyTop = topH
-  const bodyHeight = Math.max(0, height - topH - bottomH)
+  const mainWidth = Math.max(0, width - railW)
+  const bodyTop = topH + addressH
   return {
     width,
     height,
     topBar: { x: 0, y: 0, width, height: topH },
-    body: { x: 0, y: bodyTop, width, height: bodyHeight },
-    bottomBar: { x: 0, y: height - bottomH, width, height: bottomH }
+    address: { x: 0, y: topH, width: mainWidth, height: addressH },
+    body: { x: 0, y: bodyTop, width: mainWidth, height: Math.max(0, height - bodyTop) },
+    rail: { x: mainWidth, y: topH, width: railW, height: Math.max(0, height - topH) }
   }
+}
+
+export function sameRect(a: Rect, b: Rect): boolean {
+  return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
 }
 
 export function pointInRect(px: number, py: number, r: Rect): boolean {

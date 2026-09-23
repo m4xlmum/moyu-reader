@@ -46,14 +46,23 @@ export function effectiveOpacity(mode: WindowMode, configured: number): number {
 
 export class WindowSurface {
   private last: SurfaceInput | null = null
+  /** 上一次真正推给窗口的各项标量属性，键为属性名 */
+  private applied = new Map<string, unknown>()
 
   constructor(
     private readonly win: BaseWindow,
     private readonly getConfig: () => AppConfig
   ) {}
 
-  /** 依据目标状态设置全部窗口级属性 */
-  apply(input: SurfaceInput): void {
+  /**
+   * 依据目标状态设置全部窗口级属性。
+   *
+   * `force` 为真时无视「值没变」的判断，把所有属性重新推一遍。
+   * 重放（reassert）必须走这条路：Windows 会在最小化恢复、跨显示器拖动、
+   * DPI 变化之后静默丢掉这些属性，此时 Electron 侧记的值看着没变，
+   * 但窗口上已经丢了，只有真的再设一次才能补回来。
+   */
+  apply(input: SurfaceInput, force = false): void {
     const previous = this.last
     this.last = input
 
@@ -61,25 +70,36 @@ export class WindowSurface {
     const { mode, windowRect, opacity } = input
 
     // 1) 阴影。透视状态下阴影会勾出窗口矩形轮廓，直接暴露窗口存在。
-    this.call(() => this.win.setHasShadow(false))
+    this.sync('hasShadow', false, force, (v) => this.win.setHasShadow(v))
 
     // 2) 置顶。'screen-saver' 级别会盖住全屏应用，反而显眼，故固定用 floating。
-    this.call(() => this.win.setAlwaysOnTop(cfg.window.alwaysOnTop, 'floating'))
+    this.sync('alwaysOnTop', cfg.window.alwaysOnTop, force, (v) =>
+      this.win.setAlwaysOnTop(v, 'floating')
+    )
 
     // 3) 从屏幕捕获中排除窗口（防共享屏幕时被抓到）。
-    this.call(() => this.win.setContentProtection(cfg.stealth.contentProtection))
+    this.sync('contentProtection', cfg.stealth.contentProtection, force, (v) =>
+      this.win.setContentProtection(v)
+    )
 
     // 最小化状态下，Windows 会让部分属性失效，此时不再改动其余项，
-    // 恢复时由 reassert() 统一重放。
-    if (mode === 'minimized') return
+    // 恢复时由 reassert() 统一重放。缓存同时作废，否则恢复后会
+    // 因为「值没变」而跳过这些已被系统丢掉的属性。
+    if (mode === 'minimized') {
+      this.applied.clear()
+      return
+    }
 
     // 4) focusable 必须在 skipTaskbar 之前。
     //    Windows 上 setFocusable(false) 会隐式把 skipTaskbar 置为 true，
     //    先设 skipTaskbar 会被它覆盖掉。
-    this.call(() => this.win.setFocusable(true))
-    this.call(() => this.win.setSkipTaskbar(shouldSkipTaskbar(mode, cfg.window.showInTaskbar)))
+    this.sync('focusable', true, force, (v) => this.win.setFocusable(v))
+    this.sync('skipTaskbar', shouldSkipTaskbar(mode, cfg.window.showInTaskbar), force, (v) =>
+      this.win.setSkipTaskbar(v)
+    )
 
     // 5) 尺寸。收起与展开就是同一扇窗的两套矩形，切换即整个界面消失或出现。
+    //    这一项即使 force 也要比对：重放是补属性的，不该顺手把窗口挪走。
     if (!sameRect(previous?.windowRect ?? null, windowRect)) {
       this.call(() =>
         this.win.setBounds({
@@ -92,7 +112,7 @@ export class WindowSurface {
     }
 
     // 6) 透明度。
-    this.call(() => this.win.setOpacity(effectiveOpacity(mode, opacity)))
+    this.sync('opacity', effectiveOpacity(mode, opacity), force, (v) => this.win.setOpacity(v))
   }
 
   /**
@@ -104,11 +124,24 @@ export class WindowSurface {
   reassert(): void {
     if (!this.last) return
     log.info(`重放窗口表面状态（mode=${this.last.mode}）`)
-    this.apply(this.last)
+    this.apply(this.last, true)
   }
 
   getLast(): SurfaceInput | null {
     return this.last
+  }
+
+  /**
+   * 只在值真的变了（或 force）时才调用底层 API。
+   *
+   * 这些调用都不便宜：Windows 上 setSkipTaskbar 会先隐藏再显示窗口来重建任务栏按钮，
+   * setFocusable 会改窗口样式。而 recomputeLayout 每次 resize 都会走一遍 apply，
+   * 把同一个值反复设进去既没有意义，又会带出多余的窗口事件。
+   */
+  private sync<T>(key: string, value: T, force: boolean, fn: (value: T) => void): void {
+    if (!force && Object.is(this.applied.get(key), value)) return
+    this.applied.set(key, value)
+    this.call(() => fn(value))
   }
 
   private call(fn: () => void): void {

@@ -32,6 +32,11 @@ export function registerWindowIpc(ctx: AppContext): void {
   ipcMain.on(SEND.dragStart, () => ctx.controller.beginDrag())
   ipcMain.on(SEND.dragEnd, () => ctx.controller.endDrag())
 
+  // 地址栏折叠同样走单向消息：它只是一次版面切换，状态由主进程持有并回传
+  ipcMain.on(SEND.setAddressOpen, (_e, input: { open: boolean }) => {
+    ctx.controller.setAddressOpen(input.open)
+  })
+
   ipcMain.handle(INVOKE.winSetSize, (_e, input: { preset: SizePreset } | { width: number; height: number }) => {
     ctx.controller.setSize(input)
   })

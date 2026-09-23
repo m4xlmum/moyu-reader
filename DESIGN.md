@@ -126,7 +126,7 @@ components:
 
 This is a surface that should look like it came with the browser — not like a product someone designed. The commitment, chosen by the user, is **canon: the category standard, executed impeccably, without irony or smuggled quirk**. The named craft reference is the **Chrome / Edge 新标签页 (browser new-tab page)**: a neutral ground, restrained dividers, a single accent, generous whitespace, an interface that steps back behind the content. Convention is the point, not a compromise — the page is meant to be unremarkable so that it survives being glanced at. At 25–45% opacity beside a Word window, nothing here should identify it as a reading tool (PRODUCT: concealment over beauty; familiarity over novelty).
 
-Density is airy and single-column. A wordmark, one search field, one "continue last" line, a wrapped grid of site tiles, a footnote. The window is a 16:9 frame with two thin toolbars (38px top, 44px bottom) and a fully transparent middle; the chrome was re-skinned to the same palette as the page and recedes to content. The one doctrine: **the canon is the commitment — execute the category standard at full fidelity, with no ironic twists and no ornamental deviation.**
+Density is airy and single-column. A wordmark, one search field, one "continue last" line, a wrapped grid of site tiles, a footnote. The window is a 16:9 frame with a 38px top bar and a 48px right rail around a fully transparent middle; the chrome was re-skinned to the same palette as the page and recedes to content. The one doctrine: **the canon is the commitment — execute the category standard at full fidelity, with no ironic twists and no ornamental deviation.**
 
 **Provenance note.** This world replaced an earlier draft in a different metaphor (a Chinese OMR answer-sheet: cool card stock, registration red, numbered ovals, a 黑体/宋体 split). That draft was abandoned when the user chose canon and is **not** part of this system. The ordinary look is deliberate, not defaulted-into.
 
@@ -153,7 +153,7 @@ A neutral white page lit by one cool blue. Everything that is not the accent is 
 - **Ink** (`#111827`, `--text` / `--moyu-ink` / `--moyu-text`): primary text and the darkest wordmark.
 - **Ink Secondary** (`#5b6472`, `--text-secondary` / `--moyu-text-dim`): labels, tool glyphs, tile labels at rest. Declared to meet 4.5:1, so it stays legible when window opacity drops.
 - **Ink Tertiary** (`#6f7683`, `--text-tertiary` / `--moyu-text-faint`): the least-prominent text — input placeholders, the footnote, inactive toggles, disabled glyphs.
-- **Hairline** (`#e5e7eb`, `--divider` / `--moyu-hairline`): the 1px rule under the top bar and over the bottom bar, and the search field's resting border.
+- **Hairline** (`#e5e7eb`, `--divider` / `--moyu-hairline`): the 1px rule under the top bar and to the left of the right rail, and the search field's resting border.
 - **Hairline Strong** (`#d1d5db`, `--divider-strong` / `--moyu-border`): the search field border and the opacity slider track.
 
 ### Named Rules
@@ -180,7 +180,7 @@ A neutral white page lit by one cool blue. Everything that is not the accent is 
 
 ## Layout
 
-The window is a fixed 16:9 frame (default 960×540; presets mini 480×270, small 800×450, medium 960×540, large 1280×720). It is a single flex column: a 38px top bar, a flexible transparent middle (which the page view fills, or the desktop shows through), and a 44px bottom bar. A hidden region collapses to a 6px, no-fill reveal strip at the window edge.
+The window is a fixed 16:9 frame (default 960×540; presets mini 480×270, small 800×450, medium 960×540, large 1280×720). It is a 38px top bar spanning the full width, and below it a row of two columns: the main column (a 34px address bar, collapsed by default, over the flexible transparent middle that the page view fills or the desktop shows through) and a 48px right rail. The rail carries 手机 / 置顶 / 迷你 / 站点 / 历史 / 书签 / 收藏 / 缩放 / 透明度, with 设置 pinned at its foot — the tools that used to sit in a bottom bar. The rail is the cheaper of the two edges to spend: 48px of a 960px width is 5%, where a 44px bar cost 8% of a 540px height.
 
 The page itself is one centered column: `max-width: 760px`, 24px side padding, `padding-top: 6%`. Order is wordmark → search → "continue last" line → tile grid → footnote. Width is comfortable and height is scarce, so the layout is horizontal-first and never long-scrolls; the tile grid itself is the only scrolling region.
 
@@ -225,7 +225,7 @@ Every control is quiet at rest and answers on hover/focus with a background or o
 - **Icon button (chrome):** 26px square-ish, 0 6px padding, glyph drawn in `currentColor` from the authored icon set. At rest ink-secondary; on hover it takes the hover-gray fill and ink; in the `on` state it takes the Focus Blue Wash fill and Focus Blue text. The close glyph is the lone danger exception (red fill on hover).
 - **Text button (chrome, 站点 / 历史 / 书签 / 收藏 / 设置):** same box, 0 8px padding, same rest/hover progression.
 - **Hover / Focus:** background `120ms ease-out`; keyboard focus gets the shared 2px accent outline.
-- **Segmented item (透明度 presets, 区域 toggles):** a 4px-radius chip, 2px 6px padding, ink-tertiary at rest; hover fills hover-gray with ink; the active one takes active-gray with Focus Blue text. A hidden zone additionally strikes its label through — a shape cue, not a color cue, so it survives low opacity.
+- **Segmented item (缩放 / 尺寸 / 停靠位置):** a 4px-radius chip, 2px 6px padding, ink-tertiary at rest; hover fills hover-gray with ink; the active one takes active-gray with Focus Blue text.
 
 ### Chips
 - **Tab chip (chrome):** 26px tall, `max-width: 130px`, radius 4px; ink-secondary at rest, hover-gray on hover, active-gray + ink when active. Its close glyph is hidden (`opacity: 0`) until hover or active, then dims in at 0.75 and goes danger-red on its own hover.
@@ -242,8 +242,7 @@ The chrome's navigation is icon buttons (home / back / forward / reload) at the 
 
 ### Signature Components
 - **The icon set:** an authored line set, 24px viewBox, 1.6 stroke, round caps and joins, `currentColor` only (15px default, 11–17px by use). Glyph icons (Unicode characters as icons) are banned — a font decides their weight, baseline, and alignment, which varies per machine and cannot be tuned to the text scale.
-- **The opacity slider:** a 96×3px track in hairline-strong with a 12px round Focus Blue thumb, plus four text presets (清晰 / 淡化 / 轻隐 / 几近无形). Its track is intentionally gray, not white, so it stays visible on the white bar.
-- **The reveal strip:** a 6px, no-fill, draggable strip at the window edge that survives when a region is hidden; it carries a vertical-resize cursor on the top edge and reveals all regions when the (main-process) cursor poll enters it.
+- **The opacity slider:** a 72×3px track in hairline-strong with a 14px round Focus Blue thumb, lying vertically at the foot of the right rail, above 设置. Its track is intentionally gray, not white, so it stays visible on the white rail. The range is built as a 72×14 horizontal bar and rotated −90°; the rail where it sits is 16px wide, so the bar is centred with explicit negative margins — `place-items: center` on a grid and `inset: 0; margin: auto` both resolve to "overflow to the right" for a box wider than its cell, and the rotation then carries the whole control out of the visible column.
 
 ## Do's and Don'ts
 

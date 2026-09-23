@@ -91,6 +91,10 @@ function bootstrap(): void {
     onVisibilityChange: (visible) => {
       tabsRef?.setBodyVisible(visible, config.get().stealth.muteMediaOnCollapse)
     },
+    // 正文区是原生视图，版面一变就得显式重摆——它不跟着 CSS 走
+    onLayoutChange: () => {
+      tabsRef?.layoutAll()
+    },
     onStateChange: () => {
       broadcast(BROADCAST.windowState, controller.getRuntime())
     }

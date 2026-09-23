@@ -1,59 +1,46 @@
 <script setup lang="ts">
 /**
- * 顶部菜单栏：前进后退、地址栏、标签页、窗口操作。
+ * 顶部菜单栏：导航、地址栏开关、标签页、窗口操作。
+ *
+ * 地址栏本身不在这里——它默认折叠，展开时是顶栏下方独立的一行。
+ * 这里只留一个开关，兼作「当前在哪」的一眼可见处。
  *
  * 整条可拖动（-webkit-app-region: drag），其中的控件需标记 no-drag，
  * 否则点击会被当成拖动窗口起手。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { HOME_URL } from '@shared/constants'
-import type { ConfigPatch } from '@shared/ipc'
-import type { AppConfig, TabState } from '@shared/types'
+import type { TabState } from '@shared/types'
 import Icon from './Icon.vue'
 
 const props = defineProps<{
   tabs: TabState[]
   activeTabId: string | null
   activeTab: TabState | null
-  config: AppConfig | null
+  /** 地址栏当前是否展开，来自主进程回传的窗口状态 */
+  addressOpen: boolean
 }>()
 
-const emit = defineEmits<{ patch: [patch: ConfigPatch] }>()
-
-const addressInput = ref('')
-const editing = ref(false)
-
 /**
- * 未编辑时地址栏跟随当前标签页；编辑时不抢用户的输入。
+ * 当前页的域名，显示在地址栏开关上。
+ *
  * 首页是自家页面，它的 file:// 真实路径不该出现在界面上——
- * 那既不好看，也暴露了本机目录结构。首页一律显示为空白。
+ * 那既不好看，也暴露了本机目录结构。
  */
-watch(
-  () => props.activeTab?.url,
-  (url) => {
-    if (editing.value) return
-    addressInput.value = !url || url === HOME_URL ? '' : url
-  },
-  { immediate: true }
-)
-
-const uaMode = computed(() => props.activeTab?.uaMode ?? 'desktop')
-
-function submitAddress(): void {
-  const tabId = props.activeTabId
-  if (!tabId) return
-  const value = addressInput.value.trim()
-  if (!value) return
-  editing.value = false
-  void window.moyu.nav.goto({ tabId, input: value })
-}
+const siteLabel = computed(() => {
+  const url = props.activeTab?.url
+  if (!url || url === HOME_URL) return '起始页'
+  try {
+    return new URL(url).host || url
+  } catch {
+    return url
+  }
+})
 
 async function newTab(): Promise<void> {
   await window.moyu.tabs.create({ activate: true })
-  await nextTick()
-  editing.value = true
 }
 
 function closeTab(tabId: string, event: MouseEvent): void {
@@ -61,23 +48,16 @@ function closeTab(tabId: string, event: MouseEvent): void {
   void window.moyu.tabs.close({ tabId })
 }
 
-function toggleUa(): void {
-  const tabId = props.activeTabId
-  if (!tabId) return
-  const next = uaMode.value === 'mobile' ? 'desktop' : 'mobile'
-  void window.moyu.page.setUa({ tabId, mode: next })
-}
-
-function togglePin(): void {
-  const cfg = props.config
-  if (!cfg) return
-  emit('patch', { window: { alwaysOnTop: !cfg.window.alwaysOnTop } })
-}
-
-function toggleMini(): void {
-  const cfg = props.config
-  if (!cfg) return
-  void window.moyu.win.toggleMini({ enabled: !cfg.window.miniMode })
+/**
+ * 切换地址栏。
+ *
+ * 用 mousedown.prevent 而不是 click：地址栏输入框一旦失焦就会自行收起，
+ * 而按在按钮上会让它失焦——那样「点开关」会先收起再展开，等于没反应。
+ * 挡掉 mousedown 的默认行为，焦点就不会移走，收起只由这次点击决定。
+ */
+function toggleAddress(event: MouseEvent): void {
+  event.preventDefault()
+  window.moyu.win.setAddressOpen({ open: !props.addressOpen })
 }
 
 // 模板里的 window 指向组件实例而非全局对象，因此全局调用都要包一层方法
@@ -131,17 +111,16 @@ function goHome(): void {
       <button class="icon" title="刷新" @click="navReload"><Icon name="reload" /></button>
     </div>
 
-    <!-- 地址栏 -->
-    <input
-      v-model="addressInput"
-      class="address moyu-no-drag"
-      type="text"
-      placeholder="输入网址或搜索"
-      spellcheck="false"
-      @focus="editing = true"
-      @blur="editing = false"
-      @keydown.enter="submitAddress"
-    />
+    <!-- 地址栏开关。地址栏默认折叠，这里是唤出它的入口 -->
+    <button
+      class="address-toggle moyu-no-drag"
+      :class="{ on: addressOpen }"
+      :title="addressOpen ? '收起地址栏' : '展开地址栏'"
+      @mousedown="toggleAddress"
+    >
+      <Icon name="search" :size="14" />
+      <span class="site">{{ siteLabel }}</span>
+    </button>
 
     <!-- 标签页 -->
     <div v-if="tabs.length > 1" class="tabs moyu-no-drag">
@@ -165,32 +144,10 @@ function goHome(): void {
       <Icon name="plus" />
     </button>
 
+    <div class="spacer" />
+
     <!-- 窗口操作 -->
     <div class="group moyu-no-drag">
-      <button
-        class="icon"
-        :class="{ on: uaMode === 'mobile' }"
-        title="切换手机/电脑模式"
-        @click="toggleUa"
-      >
-        手机
-      </button>
-      <button
-        class="icon"
-        :class="{ on: config?.window.alwaysOnTop }"
-        title="置顶"
-        @click="togglePin"
-      >
-        置顶
-      </button>
-      <button
-        class="icon"
-        :class="{ on: config?.window.miniMode }"
-        title="迷你模式"
-        @click="toggleMini"
-      >
-        迷你
-      </button>
       <button class="icon" title="最小化（老板键 1）" @click="winMinimize">
         <Icon name="minimize" />
       </button>
@@ -211,7 +168,7 @@ function goHome(): void {
   display: flex;
   align-items: center;
   gap: 4px;
-  /* 右侧留出悬浮球的槽位，避免球压住窗口按钮 */
+  /* 球停在顶栏两端时给它留出槽位，避免压住导航或窗口按钮 */
   padding: 0 calc(8px + var(--ball-gutter-right, 0px)) 0 calc(8px + var(--ball-gutter-left, 0px));
   background: var(--moyu-surface);
   border-bottom: 1px solid var(--moyu-hairline);
@@ -221,6 +178,10 @@ function goHome(): void {
   display: flex;
   align-items: center;
   gap: 1px;
+}
+
+.spacer {
+  flex: 1 1 auto;
 }
 
 .icon {
@@ -245,48 +206,41 @@ function goHome(): void {
   color: var(--moyu-text-faint);
 }
 
-.icon.on {
-  color: var(--moyu-accent);
-  background: var(--moyu-accent-soft);
-}
-
 .icon.danger:hover {
   color: #ffffff;
   background: var(--moyu-danger);
 }
 
-/* 地址栏做成浏览器的地址框：浅底圆角，而不是一条下划线 */
-.address {
-  flex: 1 1 auto;
-  min-width: 50px;
+/* 地址栏开关做得像浏览器的站点标识：一个图标加当前域名 */
+.address-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   height: 26px;
+  min-width: 120px;
+  max-width: 260px;
   padding: 0 12px;
+  border-radius: 13px;
   background: var(--moyu-surface-hover);
-  border: 1px solid transparent;
-  border-radius: var(--moyu-radius);
-  color: var(--moyu-ink);
-  outline: none;
-  transition: background 120ms ease-out, border-color 120ms ease-out;
+  color: var(--moyu-text-dim);
+  transition: background 120ms ease-out, color 120ms ease-out;
 }
 
-.address::placeholder {
-  color: var(--moyu-text-faint);
-}
-
-.address:hover {
+.address-toggle:hover {
   background: var(--moyu-surface-active);
+  color: var(--moyu-ink);
 }
 
-.address:focus {
-  background: var(--moyu-surface);
-  border-color: var(--moyu-accent);
-  box-shadow: 0 0 0 2px var(--moyu-accent-soft);
+.address-toggle.on {
+  color: var(--moyu-accent);
+  background: var(--moyu-accent-soft);
 }
 
-/* 焦点不能只靠颜色：低透明度下背景与描边的变化不足以定位 */
-.address:focus-visible {
-  outline: 2px solid var(--moyu-accent);
-  outline-offset: 1px;
+.site {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tabs {

@@ -3,9 +3,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import type { SizePreset } from './constants'
+import type { BallCorner, SizePreset } from './constants'
 
-export type { SizePreset }
+export type { BallCorner, SizePreset }
 
 // ---------------------------------------------------------------- 配置
 
@@ -119,7 +119,7 @@ export interface HistoryEntry {
  * 因此不需要再靠裁剪命中区域来实现点击穿透。
  */
 export type WindowMode =
-  /** 完整界面：顶栏 + 正文 + 底栏 */
+  /** 完整界面：顶栏 + 地址栏 + 正文 + 右侧功能栏 */
   | 'expanded'
   /** 缩成悬浮球 */
   | 'collapsed'
@@ -129,9 +129,6 @@ export type WindowMode =
   | 'minimized'
   /** 正在退出 */
   | 'quitting'
-
-/** 悬浮球停靠的屏幕角落 */
-export type BallCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
 
 export interface TabState {
   id: string
@@ -151,6 +148,14 @@ export interface WindowRuntime {
   mode: WindowMode
   opacity: number
   ballCorner: BallCorner
+  /**
+   * 地址栏是否展开。
+   *
+   * 状态由主进程持有，而不是渲染进程自己记：地址栏一展开正文就要往下让一行，
+   * 而正文是原生视图。若让渲染进程先改再通知主进程，两者在时序上必然错开，
+   * 网页就会有一瞬间压在地址栏上。
+   */
+  addressOpen: boolean
 }
 
 export interface Rect {

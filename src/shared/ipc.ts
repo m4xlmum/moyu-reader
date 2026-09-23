@@ -89,7 +89,9 @@ export const BROADCAST = {
  */
 export const SEND = {
   dragStart: 'window:dragStart',
-  dragEnd: 'window:dragEnd'
+  dragEnd: 'window:dragEnd',
+  /** 展开或折叠地址栏。主进程据此重排版面，再回传最终状态 */
+  setAddressOpen: 'window:setAddressOpen'
 } as const
 
 export type InvokeChannel = (typeof INVOKE)[keyof typeof INVOKE]
@@ -174,6 +176,13 @@ export interface MoyuApi {
     dragStart(): void
     /** 结束拖动 */
     dragEnd(): void
+    /**
+     * 展开或折叠地址栏。
+     *
+     * 它是版面的一部分：展开时正文要让出一行，所以状态由主进程持有，
+     * 渲染进程只发出意图，界面按回传的状态绘制。因此没有回执。
+     */
+    setAddressOpen(input: { open: boolean }): void
     setBallCorner(input: { corner: BallCorner }): Promise<void>
     setSize(input: { preset: string } | { width: number; height: number }): Promise<void>
     toggleMini(input: { enabled: boolean }): Promise<void>

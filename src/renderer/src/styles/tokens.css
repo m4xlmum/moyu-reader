@@ -1,5 +1,5 @@
 /*
- * 窗口 chrome（顶栏与底栏）的设计令牌。
+ * 窗口 chrome（顶栏、地址栏、右侧功能栏）的设计令牌。
  *
  * 与首页同属一套：中性的浅色界面，克制的分隔线，一个强调色。
  * 参照浏览器自身的工具栏——工具栏退到内容之后，不做视觉主张。
@@ -7,13 +7,13 @@
  * 注意：不做毛玻璃。backdrop-filter 无法模糊透明窗口背后的桌面
  * （它只能模糊窗口自身的内容），在这里效果是错的。
  *
+ * 各区域的**尺寸**不在这里：顶栏高、地址栏高、右侧栏宽是主进程排版用的常量
+ * （@shared/constants），由 ChromeApp 下发成 CSS 变量。写死在这里就成了第二份
+ * 真相，两边迟早差上几个像素，正文就会被栏压住一条。
+ *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 :root {
-  --moyu-top-h: 38px;
-  --moyu-bottom-h: 44px;
-  --moyu-strip-h: 6px;
-
   --moyu-radius: 6px;
   --moyu-radius-sm: 4px;
 

@@ -2,10 +2,10 @@
  * 摸鱼窗口的编排者：拥有窗口、视图树与状态机。
  *
  * 隐藏策略只有两条路：
- *   - 展开：完整界面，顶栏 + 正文 + 底栏
+ *   - 展开：完整界面，顶栏 + 地址栏 + 正文 + 右侧功能栏
  *   - 收起：整个窗口缩小成一颗悬浮球
  *
- * 「收起」是真的把窗口缩到 52×52，而不是把内容藏起来留一块空壳。
+ * 「收起」是真的把窗口缩到一颗球的尺寸，而不是把内容藏起来留一块空壳。
  * 这样屏幕上不会存在「看不见却仍占着一大块」的区域，
  * 原先那套靠裁剪命中区域实现的点击穿透因此不再需要。
  *
@@ -13,17 +13,18 @@
  */
 import { BaseWindow, WebContentsView, screen } from 'electron'
 import {
-  BALL_MARGIN,
+  ADDRESS_H,
   DRAG_TICK_MS,
+  MOVE_SETTLE_MS,
+  RAIL_W,
   SIZE_PRESETS,
   TOP_BAR_H,
-  BOTTOM_BAR_H,
   type SizePreset
 } from '@shared/constants'
-import { ballDockRect, effectiveBallSize } from '@shared/ball'
+import { ballDockRect, ballOffsetInWindow, effectiveBallSize } from '@shared/ball'
 import type { BallCorner, Rect, WindowMode, WindowRuntime } from '@shared/types'
 import type { ConfigStore } from './configStore'
-import { computeLayout, type Layout } from './geometry'
+import { computeLayout, sameRect, type Layout } from './geometry'
 import { log } from './logger'
 import { WindowLeaveWatcher } from './windowLeaveWatcher'
 import { WindowSurface } from './windowSurface'
@@ -44,6 +45,13 @@ export interface ControllerDeps {
   rendererUrl: string
   /** 收起或展开时通知外部（用于同步标签页视图的显隐与静音） */
   onVisibilityChange: (visible: boolean) => void
+  /**
+   * 正文区矩形变化时通知外部，由外部重新摆放标签页视图。
+   *
+   * 标签页是原生视图，不跟着 CSS 走，版面一变就必须显式重摆；
+   * 漏掉的话网页会停在旧位置上（换尺寸预设时表现为网页没跟着长）。
+   */
+  onLayoutChange: () => void
   onStateChange: () => void
 }
 
@@ -62,11 +70,21 @@ export class WindowController {
    * 这个值只由真实的尺寸变化维护（create / resize / move / collapse 前）。
    */
   private expandedBounds: Rect | null = null
-  private layout: Layout = computeLayout(960, 540, TOP_BAR_H, BOTTOM_BAR_H)
+  /**
+   * 地址栏是否展开。
+   *
+   * 由主进程持有而不是渲染进程自己记：地址栏一展开，正文就要往下让一行，
+   * 而正文是原生视图。让渲染进程先改再通知主进程，两者在时序上必然错开，
+   * 网页就会有一瞬间压在地址栏上。
+   */
+  private addressOpen = false
+  private layout: Layout = computeLayout(960, 540, TOP_BAR_H, 0, RAIL_W)
 
   /** 拖动中的锚点：按下那一刻的光标位置与窗口位置 */
   private dragAnchor: { cursorX: number; cursorY: number; winX: number; winY: number } | null = null
   private dragTimer: NodeJS.Timeout | null = null
+  /** 窗口移动停止的判定计时器，见 scheduleMoveSettle() */
+  private moveSettleTimer: NodeJS.Timeout | null = null
 
   constructor(private readonly deps: ControllerDeps) {}
 
@@ -135,11 +153,10 @@ export class WindowController {
       // 每 16ms 来一遍就是持续闪烁。拖动只需移动位置，属性一个都不用碰。
       if (this.dragAnchor) return
 
-      if (this.mode === 'expanded') {
-        this.expandedBounds = win.getBounds()
-        this.persistExpandedBounds()
-      }
-      this.reassert()
+      // 顶栏是系统拖动区，用鼠标拖窗口时每帧都会到这里来（约 8ms 一次）。
+      // 位置要立刻记住，但落盘与重放都得等窗口停下来，见 scheduleMoveSettle()。
+      if (this.mode === 'expanded') this.expandedBounds = win.getBounds()
+      this.scheduleMoveSettle()
     })
     win.on('restore', () => {
       if (this.mode === 'minimized') this.transitionTo('expanded')
@@ -153,7 +170,7 @@ export class WindowController {
     this.loadChrome()
 
     // 必须显式撑开 chrome 视图。WebContentsView 默认是 0×0，
-    // 不设置的话顶栏、底栏与悬浮球全都不会绘制——
+    // 不设置的话顶栏、地址栏、右侧栏与悬浮球全都不会绘制——
     // 而标签页是另一层视图，所以「网页能显示」会掩盖这个问题。
     this.recomputeLayout()
     this.watcher.start()
@@ -190,12 +207,22 @@ export class WindowController {
     const win = this.win
     if (!win) return
     const { width, height } = win.getBounds()
-    // 收起态下不重算版面：那时的 52×52 不是版面尺寸
+    // 收起态下不重算版面：那时的尺寸是球的尺寸，不是版面尺寸
     if (this.mode === 'collapsed') return
 
-    this.layout = computeLayout(width, height, TOP_BAR_H, BOTTOM_BAR_H)
+    const previous = this.layout
+    this.layout = computeLayout(
+      width,
+      height,
+      TOP_BAR_H,
+      this.addressOpen ? ADDRESS_H : 0,
+      RAIL_W
+    )
     this.chrome?.setBounds({ x: 0, y: 0, width, height })
     this.applySurface()
+
+    // 正文让位必须落到标签页视图上，那一层是原生视图，不跟着 CSS 走
+    if (!sameRect(previous.body, this.layout.body)) this.deps.onLayoutChange()
   }
 
   // ------------------------------------------------------------ 状态
@@ -209,8 +236,22 @@ export class WindowController {
     return {
       mode: this.mode,
       opacity: cfg.window.opacity,
-      ballCorner: cfg.stealth.ballCorner
+      ballCorner: cfg.stealth.ballCorner,
+      addressOpen: this.addressOpen
     }
+  }
+
+  /**
+   * 展开或折叠地址栏。
+   *
+   * 状态只在这里改，改完立刻重排版面并广播——渲染进程按广播的结果绘制，
+   * 于是地址栏出现与正文让位是同一时刻发生的，不会露出网页压在地址栏上的一帧。
+   */
+  setAddressOpen(open: boolean): void {
+    if (this.addressOpen === open) return
+    this.addressOpen = open
+    this.recomputeLayout()
+    this.deps.onStateChange()
   }
 
   transitionTo(next: WindowMode): void {
@@ -243,6 +284,10 @@ export class WindowController {
     // 记下展开时的矩形，展开时原样恢复
     this.expandedBounds = win.getBounds()
     this.persistExpandedBounds()
+
+    // 收起时把地址栏放回去：再展开应回到默认的折叠形态，
+    // 而不是带着半开的一行地址栏回来
+    this.addressOpen = false
 
     const cfg = this.deps.config.get()
     const ball = this.ballBounds()
@@ -411,6 +456,26 @@ export class WindowController {
     this.surface?.reassert()
   }
 
+  /**
+   * 窗口移动停下来之后再落盘位置、重放表面状态。
+   *
+   * 用系统拖动区拖窗口时，move 每帧来一次。落盘是写文件，重放是五次窗口级
+   * Win32 调用（其中 setSkipTaskbar 在 Windows 上要隐藏再显示窗口），
+   * 逐帧做既闪烁又白白写盘。因此这里只重置计时器，等窗口停稳后合并成一次。
+   *
+   * 重放本身仍然要留下来：窗口挪到另一块显示器或 DPI 不同的屏幕上之后，
+   * Windows 会丢掉这些分层属性，正是这种时候需要补一次。
+   */
+  private scheduleMoveSettle(): void {
+    if (this.moveSettleTimer) clearTimeout(this.moveSettleTimer)
+    this.moveSettleTimer = setTimeout(() => {
+      this.moveSettleTimer = null
+      // 收起态下窗口就是一颗球，它的矩形不是展开尺寸，不能往配置里写
+      if (this.mode === 'expanded') this.persistExpandedBounds()
+      this.reassert()
+    }, MOVE_SETTLE_MS)
+  }
+
   setContentProtection(enabled: boolean): void {
     this.win?.setContentProtection(enabled)
   }
@@ -421,6 +486,10 @@ export class WindowController {
     if (this.dragTimer) {
       clearInterval(this.dragTimer)
       this.dragTimer = null
+    }
+    if (this.moveSettleTimer) {
+      clearTimeout(this.moveSettleTimer)
+      this.moveSettleTimer = null
     }
     this.dragAnchor = null
     if (this.mode === 'quitting') return
@@ -499,6 +568,7 @@ export class WindowController {
    *
    * 收起态下窗口就是一颗球，它的矩形不能直接当作展开尺寸，
    * 需要反推出「球停在原处时，展开的窗口该在哪」，再记下来。
+   * 反推用的是与摆放球同一个函数，两边不会各自漂移。
    */
   private syncBoundsMemory(): void {
     const win = this.win
@@ -512,12 +582,8 @@ export class WindowController {
       const { width, height } = cfg.window
       const corner = cfg.stealth.ballCorner
       const size = effectiveBallSize(cfg.stealth.ballSize, corner)
-      const offX = corner.endsWith('right') ? width - size - BALL_MARGIN : BALL_MARGIN
-      const bar = corner.startsWith('bottom') ? BOTTOM_BAR_H : TOP_BAR_H
-      const offY = corner.startsWith('bottom')
-        ? height - bar + Math.round((bar - size) / 2)
-        : Math.round((bar - size) / 2)
-      this.expandedBounds = { x: b.x - offX, y: b.y - offY, width, height }
+      const off = ballOffsetInWindow(corner, width, height, size)
+      this.expandedBounds = { x: b.x - off.x, y: b.y - off.y, width, height }
     }
 
     this.persistExpandedBounds()

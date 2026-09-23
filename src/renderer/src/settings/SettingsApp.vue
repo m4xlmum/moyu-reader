@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed, onMounted, ref } from 'vue'
-import { SIZE_PRESETS, type SizePreset } from '@shared/constants'
+import { BALL_CORNERS, SIZE_PRESETS, type SizePreset } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
 import type { AppConfig, BallCorner, HotkeyInfo } from '@shared/types'
 
@@ -36,12 +36,14 @@ const SIZE_LABEL: Record<SizePreset, string> = {
   large: '大'
 }
 
-const BALL_CORNERS: Array<{ value: BallCorner; label: string }> = [
-  { value: 'top-left', label: '左上' },
-  { value: 'top-right', label: '右上' },
-  { value: 'bottom-left', label: '左下' },
-  { value: 'bottom-right', label: '右下' }
-]
+const BALL_CORNER_LABEL: Record<BallCorner, string> = {
+  'top-left': '左上',
+  'top-right': '右上',
+  'bottom-right': '右下'
+}
+
+/** 取值清单来自 @shared/constants，与主进程校验用的是同一份 */
+const ballCorners = BALL_CORNERS.map((value) => ({ value, label: BALL_CORNER_LABEL[value] }))
 
 onMounted(async () => {
   config.value = await window.moyu.config.get()
@@ -255,14 +257,14 @@ function toggleMiniMode(event: Event): void {
             <label>悬浮球停靠位置</label>
             <div class="control">
               <button
-                v-for="c in BALL_CORNERS"
+                v-for="c in ballCorners"
                 :key="c.value"
                 :class="{ active: config.stealth.ballCorner === c.value }"
                 @click="patch({ stealth: { ballCorner: c.value } })"
               >
                 {{ c.label }}
               </button>
-              <span class="dim">指窗口的哪个角</span>
+              <span class="dim">指窗口的哪个角。球画在工具栏一层，只能停在有工具栏的地方</span>
             </div>
           </div>
 

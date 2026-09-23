@@ -96,6 +96,10 @@ export const api: MoyuApi = {
     dragEnd: () => {
       ipcRenderer.send(SEND.dragEnd)
     },
+    // 地址栏折叠同样走单向消息：它是版面切换，状态由主进程持有并回传
+    setAddressOpen: (input) => {
+      ipcRenderer.send(SEND.setAddressOpen, input)
+    },
     setBallCorner: (input) => ipcRenderer.invoke(INVOKE.winSetBallCorner, input) as Promise<void>,
     setSize: (input: { preset: SizePreset } | { width: number; height: number }) =>
       ipcRenderer.invoke(INVOKE.winSetSize, input) as Promise<void>,

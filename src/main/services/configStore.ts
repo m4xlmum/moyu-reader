@@ -5,6 +5,7 @@
  */
 import path from 'node:path'
 import {
+  BALL_CORNERS,
   BALL_SIZE,
   CONFIG_VERSION,
   DEFAULT_BOSS_HIDE,
@@ -99,6 +100,13 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
     s.autoCollapse = false
   }
 
+  // 迁移到 5：底栏取消，功能移入右侧栏，窗口左下角不再是 chrome 区域。
+  // 球停在那里会被正文视图盖住半个，所以这个停靠位取消，旧配置挪到左上。
+  // 类型上早已没有 'bottom-left'，但落盘的配置里可能有，因此按字符串比较。
+  if ((s.ballCorner as string) === 'bottom-left') {
+    s.ballCorner = 'top-left'
+  }
+
   w.opacity = clamp(w.opacity, OPACITY_MIN, OPACITY_MAX)
   w.width = Math.round(clamp(w.width, 200, 4000))
   w.height = Math.round(clamp(w.height, 200, 4000))
@@ -108,7 +116,7 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   }
   s.hideDelayMs = Math.round(clamp(s.hideDelayMs, 200, 5000))
   s.ballSize = Math.round(clamp(s.ballSize, 36, 96))
-  if (!['top-left', 'top-right', 'bottom-left', 'bottom-right'].includes(s.ballCorner)) {
+  if (!(BALL_CORNERS as readonly string[]).includes(s.ballCorner)) {
     s.ballCorner = d.stealth.ballCorner
   }
   b.defaultZoom = clamp(b.defaultZoom, 0.25, 5)
