@@ -7,12 +7,12 @@
 /**
  * 自家页面用的伪协议。
  *
- * 起始页与个人中心对外都只以 moyu:// 示人，真实的 file:// 路径既不显示，
+ * 起始页与系统设置对外都只以 moyu:// 示人，真实的 file:// 路径既不显示，
  * 也不该显示——那会暴露本机目录结构。
  */
 const OWN_SCHEME = 'moyu://'
 
-/** 这个地址是不是自家页面（起始页、个人中心） */
+/** 这个地址是不是自家页面（起始页、系统设置） */
 export function isOwnUrl(url: string | null | undefined): boolean {
   return typeof url === 'string' && url.startsWith(OWN_SCHEME)
 }

@@ -136,7 +136,7 @@ export class TabManager {
       webPreferences: {
         // 访客页面不注入任何 preload，是纯网页。
         // 一切注入都走主进程的 insertCSS / executeJavaScript。
-        // 只有自家页面（首页、个人中心）带 preload，且 preload 内部还会再校验来源。
+        // 只有自家页面（首页、系统设置）带 preload，且 preload 内部还会再校验来源。
         preload: isOwnPage(kind) ? this.deps.getPreloadPath() : undefined,
         session: this.deps.getSession(),
         contextIsolation: true,
@@ -200,7 +200,7 @@ export class TabManager {
   }
 
   /**
-   * 打开个人中心。
+   * 打开系统设置。
    *
    * 与首页同一条路：它是窗口内的一页，而不是一扇独立窗口。独立窗口会出现在
    * 任务栏与 Alt+Tab 里，等于把「我在摸鱼」写在脸上——那正是它原来的样子。
@@ -301,7 +301,7 @@ export class TabManager {
   // ------------------------------------------------------------ 广播
 
   /**
-   * 把广播发给自家页面（首页、个人中心）。
+   * 把广播发给自家页面（首页、系统设置）。
    *
    * 只按 kind 挑选，而不是撒给全部 webContents：访客页面没有 preload，
    * 收不到也没人听，而自家页面需要跟着配置变化重绘——起始页换主题
@@ -433,6 +433,24 @@ export class TabManager {
 
   // ------------------------------------------------------------ 事件
 
+  /**
+   * 给标签页注入网页样式。
+   *
+   * **自家页面必须跳过。** 注入的「背景透明」是 user origin 的 !important，
+   * 在层叠顺序里压过作者样式表（含作者的 !important），而起始页与系统设置的
+   * 底色正是写在 `html, body` 上的——于是自家页面的底板被一起抹掉，
+   * 透明窗口里就露出桌面：打开系统设置时背景全透明就是这么来的。
+   * 实测见 `spike/ownpage-bg.js`（注入前后各读一次 getComputedStyle）。
+   *
+   * 隐藏滚动条同理：自家页面 `overflow: hidden`，本来就不滚。
+   */
+  private applyPageStyles(entry: TabEntry): void {
+    if (entry.kind !== 'guest') return
+    void injectPageStyles(entry.view.webContents, {
+      hideScrollbars: this.deps.getConfig().browser.hideScrollbars
+    })
+  }
+
   private wireEvents(entry: TabEntry): void {
     const wc = entry.view.webContents
 
@@ -457,7 +475,7 @@ export class TabManager {
       // 地址栏就会显示出本机的目录结构。
       entry.url = entry.kind === 'guest' ? url : OWN_PAGE[entry.kind].url
       // 页面文档已重建，样式必须重新注入
-      void injectPageStyles(wc, { hideScrollbars: this.deps.getConfig().browser.hideScrollbars })
+      this.applyPageStyles(entry)
       // UA 会随导航重置，需按本标签页的模式重新应用。
       // 桌面模式用的是空字符串（表示「用 Electron 默认值」），
       // 把空串交给 setUserAgent 会清掉 UA，因此只在手机模式下设置。
@@ -493,7 +511,7 @@ export class TabManager {
       refresh()
     })
     wc.on('did-finish-load', () => {
-      void injectPageStyles(wc, { hideScrollbars: this.deps.getConfig().browser.hideScrollbars })
+      this.applyPageStyles(entry)
       refresh()
     })
 

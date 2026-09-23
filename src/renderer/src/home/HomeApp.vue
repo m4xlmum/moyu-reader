@@ -42,12 +42,12 @@ onMounted(async () => {
   applyTheme(config.value.ui.homeTheme)
   offConfig = window.moyu.config.onChanged((next) => {
     config.value = next
-    // 主题也可能是在个人中心里改的，那条路上只有这条广播会通知到这里
+    // 主题也可能是在系统设置里改的，那条路上只有这条广播会通知到这里
     applyTheme(next.ui.homeTheme)
   })
 
   const applyTabs = (payload: { tabs: TabState[]; activeTabId: string | null }): void => {
-    // 只剩访客页参与「当前站点」的判定：起始页与个人中心是自家页面，没有域名可亮
+    // 只剩访客页参与「当前站点」的判定：起始页与系统设置是自家页面，没有域名可亮
     const guests = payload.tabs.filter((t) => t.url && !isOwnUrl(t.url))
     const active = guests.find((t) => t.id === payload.activeTabId)
     currentDomain.value = domainOf((active ?? guests[guests.length - 1])?.url)

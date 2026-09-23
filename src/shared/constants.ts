@@ -101,7 +101,7 @@ export const DEFAULT_BOSS_HIDE = 'Alt+X'
  * 5：底栏取消，功能移入右侧栏，悬浮球不再有「左下」这个停靠位。
  * 6：悬浮球移入顶栏并成为其中的一个按钮，停靠位置与大小不再可调；
  *    顶栏与右侧栏改为可各自隐藏（ui.topBarOpen / ui.railOpen）。
- * 7：右侧栏去掉迷你与收藏；个人中心由独立窗口改为窗口内的一页（ui.homeTheme 同时加入）。
+ * 7：右侧栏去掉迷你与收藏；系统设置由独立窗口改为窗口内的一页（ui.homeTheme 同时加入）。
  */
 export const CONFIG_VERSION = 7
 
@@ -130,13 +130,13 @@ export const HOME_URL = 'moyu://home'
 export const HOME_TITLE = '起始页'
 
 /**
- * 个人中心在标签条上的伪地址。
+ * 系统设置在标签条上的伪地址。
  *
  * 与首页同属「自家页面」：带 preload、能读写配置，但它不再是一扇独立窗口——
  * 那扇窗口会出现在任务栏与 Alt+Tab 里，等于把「我在摸鱼」写在脸上。
  */
 export const SETTINGS_URL = 'moyu://settings'
-export const SETTINGS_TITLE = '个人中心'
+export const SETTINGS_TITLE = '系统设置'
 
 /**
  * 起始页主题。

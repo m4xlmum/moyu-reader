@@ -1,5 +1,12 @@
 /*
- * 个人中心的样式。这是一个普通的不透明窗口，不需要任何透明相关的处理。
+ * 系统设置的样式。
+ *
+ * 它是窗口内的一页，住在透明窗口里的一个 WebContentsView 中，所以**必须自己画底板**：
+ * 底色写在 html/body 上，`.layout` 上再画一遍。后者不是冗余——主进程给网页注入的
+ * 「背景透明」是 user origin 的 !important，压得过作者样式表，html/body 那一层挡不住
+ * （见 tabManager.applyPageStyles 与 spike/ownpage-bg.js）。起始页的 `.start` 也是这么做的。
+ *
+ * 注意这一页与起始页共用一套排版惯例，但**不共享主题**：主题是起始页的东西。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */

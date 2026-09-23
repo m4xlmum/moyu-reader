@@ -85,7 +85,7 @@ export class TrayService {
   private buildMenu(): Menu {
     return Menu.buildFromTemplate([
       { label: '现形', click: () => this.deps.onReveal() },
-      { label: '个人中心', click: () => this.deps.onOpenSettings() },
+      { label: '系统设置', click: () => this.deps.onOpenSettings() },
       { type: 'separator' },
       {
         label: '退出',

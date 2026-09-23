@@ -37,7 +37,7 @@ export function popupBallMenu(deps: BallMenuDeps): void {
     },
     { type: 'separator' },
     { label: '藏进托盘', click: () => deps.hideToTray() },
-    { label: '个人中心', click: () => deps.openSettings() },
+    { label: '系统设置', click: () => deps.openSettings() },
     { type: 'separator' },
     { label: '退出摸鱼阅读', click: () => deps.quit() }
   ])

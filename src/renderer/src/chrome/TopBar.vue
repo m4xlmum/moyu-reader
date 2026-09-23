@@ -35,7 +35,7 @@ const emit = defineEmits<{ toggleBall: []; ballMenu: [] }>()
 /**
  * 当前页的域名，显示在地址栏开关上。
  *
- * 自家页面（起始页、个人中心）显示自己的标题：它们没有域名，
+ * 自家页面（起始页、系统设置）显示自己的标题：它们没有域名，
  * 而真实的 file:// 路径既不好看，也暴露了本机目录结构。
  */
 const siteLabel = computed(() => {

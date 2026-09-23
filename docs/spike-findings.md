@@ -18,6 +18,7 @@
 | Q6 | `minimize()` → `restore()` | 透明度保持 | 仍需 reassert 以应对 DPI 切换 |
 | Q7 | `setShape` / `setOpacity` / `setIgnoreMouseEvents` / `setFocusable` / `setSkipTaskbar` / `setContentProtection` / `contentView.addChildView` / `view.setVisible` | 全部可用 | 无 API 缺失 |
 | Q8 | 在 `'closed'` 事件里读 `win.id` / `win.getBounds()` | **抛 `Object has been destroyed`** | 窗口销毁后才触发 `'closed'`，此时只有 `win.isDestroyed()` 还能读；id 要在建窗口时就记下来。见 `spike/destroyed.js` |
+| Q9 | 往自家页面（起始页 / 系统设置）注入「背景透明」 | **写在 `html, body` 上的底色被抹掉**，透明窗口里露出桌面 | 注入的是 user origin，层叠顺序里压过作者样式表（`!important` 也压得过）。底板因此要另画一层（起始页 `.start`、系统设置 `.layout`），且自家页面根本不该被注入网页样式。见 `spike/ownpage-bg.js` |
 
 ## 对原设计的两处修正
 

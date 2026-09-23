@@ -77,7 +77,7 @@ function bootstrap(): void {
     if (chrome && !chrome.webContents.isDestroyed()) {
       chrome.webContents.send(channel, payload)
     }
-    // 自家页面（首页、个人中心）也是渲染进程，只是住在标签页那一层视图里，
+    // 自家页面（首页、系统设置）也是渲染进程，只是住在标签页那一层视图里，
     // 不在上面两个集合中。起始页换主题靠的就是这条配置广播。
     tabsRef?.broadcastToOwnPages(channel, payload)
   }
@@ -125,7 +125,7 @@ function bootstrap(): void {
   )
 
   /**
-   * 打开个人中心。
+   * 打开系统设置。
    *
    * 它是窗口内的一页（与起始页同一种标签页），不是一扇独立窗口——
    * 独立窗口会出现在任务栏与 Alt+Tab 里，等于把「我在摸鱼」写在脸上。

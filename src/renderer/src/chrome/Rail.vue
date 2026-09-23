@@ -110,8 +110,9 @@ function openSettings(): void {
       <OpacitySlider :model-value="config?.window.opacity ?? 1" @update:model-value="setOpacity" />
     </div>
 
-    <!-- 设置固定在栏底：它是最常走的一个出口，不该被滚出视野 -->
-    <button class="item foot moyu-no-drag" title="设置" @click="openSettings">设置</button>
+    <!-- 设置固定在栏底：它是最常走的一个出口，不该被滚出视野。
+         按钮上是简称——栏宽 48px 放不下「系统设置」，全名给 tooltip -->
+    <button class="item foot moyu-no-drag" title="系统设置" @click="openSettings">设置</button>
   </aside>
 </template>
 

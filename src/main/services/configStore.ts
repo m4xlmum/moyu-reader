@@ -129,7 +129,7 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
 
   // 迁移到 5：底栏取消，功能移入右侧栏，窗口左下角不再是 chrome 区域。
   // 迁移到 6：悬浮球进了顶栏，停靠位置与大小都不再是配置项。
-  // 迁移到 7：右侧栏去掉迷你与收藏，个人中心改在窗口内打开；
+  // 迁移到 7：右侧栏去掉迷你与收藏，系统设置改在窗口内打开；
   //           window.miniMode / lastNormalSize 由上面的逐字段取值丢掉。
 
   w.opacity = clamp(w.opacity, OPACITY_MIN, OPACITY_MAX)

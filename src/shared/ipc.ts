@@ -223,7 +223,7 @@ export interface MoyuApi {
     openPopover(req: OpenPopoverRequest): Promise<void>
     closePopover(): Promise<void>
     /**
-     * 打开个人中心。
+     * 打开系统设置。
      *
      * 它和起始页一样是窗口内的一页，不开独立窗口：独立窗口会出现在任务栏
      * 与 Alt+Tab 里，等于把「我在摸鱼」写在脸上。已有这一页就切过去，
