@@ -128,7 +128,12 @@ function bootstrap(): void {
   }
 
   const tray = new TrayService({
-    onReveal: () => controller.show(),
+    // 单击图标是在「现形」与「收回托盘」之间切换，判据由窗口控制器持有
+    onClickIcon: () => controller.toggleFromTray(),
+    // 双击的第二次点击不切换，只补一次「提到最前」
+    onRepeatedClick: () => controller.raiseFromTray(),
+    // 菜单里的「现形」意图明确，只把它提到最前，不切换
+    onReveal: () => controller.showForeground(),
     onOpenSettings: () => settings.open(),
     onQuit: () => quit()
   })
@@ -199,7 +204,13 @@ function bootstrap(): void {
 
     // explorer.exe 重启会带走托盘图标，而 Electron 没有任务栏重建事件。
     // 在每次显示窗口时重建一次，成本很低；托盘没了用户可能再也找不回窗口。
-    controller.getWindow()?.on('show', () => tray.rebuild(trayIconPath))
+    //
+    // 重建挪到下一个事件循环：这条路径经常是从托盘自己的 click 处理器里走过来的
+    // （点图标 → 现形 → show 事件），在托盘事件的分发过程中把 Tray 对象销毁掉
+    // 会动到当时还在执行的那段原生回调。
+    controller.getWindow()?.on('show', () => {
+      setImmediate(() => tray.rebuild(trayIconPath))
+    })
   })
 
   app.on('second-instance', () => {

@@ -368,18 +368,84 @@ export class WindowController {
   // ------------------------------------------------------------ 动作
 
   /**
-   * 把窗口叫回来。用 showInactive 避免抢走用户编辑器的焦点——
-   * 那是最容易被发现的破绽。
+   * 把窗口叫回来，但不抢焦点。
    *
-   * 从托盘或最小化恢复时，若停在收起态则一并展开：
-   * 用户按托盘「现形」想看的是完整界面，不是一颗球。
+   * 自动唤回（第二个实例、老板键）走这条路：用 showInactive 避免抢走用户
+   * 编辑器的焦点——那是最容易被发现的破绽。
    */
   show(): void {
+    this.reveal(false)
+  }
+
+  /**
+   * 用户主动把窗口叫到最前（单击托盘图标、托盘菜单「现形」）。
+   *
+   * 与 show() 只差一件事：它**激活**窗口。用户自己点了托盘就是要看窗口，
+   * 不激活的话（showInactive 不会改变窗口在 z 序里的位置）窗口会停在别的
+   * 窗口后面，他看到的是「点了没反应」——那就成了坏掉的功能，而不是隐蔽的功能。
+   */
+  showForeground(): void {
+    this.reveal(true)
+  }
+
+  /**
+   * 单击托盘图标：露在外面就收回托盘，藏在托盘里就把它叫到最前。
+   */
+  toggleFromTray(): void {
+    if (this.isOnScreen()) {
+      void this.hideToTray()
+      return
+    }
+    this.showForeground()
+  }
+
+  /**
+   * 双击里的第二次点击：不切换显隐，只把窗口再提到最前一次。
+   *
+   * 用双击的人，第一次点击唤出了窗口，第二次点击是落在任务栏上的：
+   * 那一下会把任务栏变成前台窗口，刚提到最前的窗口又退到后面。
+   * 这一次正好用来把它重新提到前面，双击的结果才和单击一致。
+   */
+  raiseFromTray(): void {
+    const win = this.win
+    if (!win || !this.isOnScreen()) return
+    win.moveTop()
+    win.focus()
+  }
+
+  /**
+   * 窗口此刻是否露在外面（收起成球也算露在外面）。
+   *
+   * 最小化算作「没露出」：那时点托盘应当把它叫回来，而不是再藏一次，
+   * 否则用户会觉得第二次点击没反应。
+   */
+  isOnScreen(): boolean {
+    const win = this.win
+    if (!win || this.mode === 'trayHidden') return false
+    if (this.mode === 'minimized' || win.isMinimized()) return false
+    return win.isVisible()
+  }
+
+  private reveal(activate: boolean): void {
     const win = this.win
     if (!win) return
     if (win.isMinimized()) win.restore()
+    // 若停在收起态则一并展开：用户要的是完整界面，不是一颗球
     if (this.mode !== 'expanded') this.transitionTo('expanded')
-    win.showInactive()
+
+    // 从收起态或托盘回来时，版面与 chrome 视图都还停在球的尺寸上，必须重算。
+    // 不能指望 setBounds 触发的 resize 兜底——那是巧合，不是保证。
+    this.recomputeLayout()
+
+    if (activate) {
+      win.show()
+      // show() 的激活依赖 Windows 的前台权限，权限被拒时窗口只出现、不置顶；
+      // moveTop 只改 z 序、不走前台权限那条路，正好把这一档补上。
+      win.moveTop()
+      win.focus()
+    } else {
+      win.showInactive()
+    }
     this.reassert()
   }
 
