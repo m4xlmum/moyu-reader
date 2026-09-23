@@ -7,7 +7,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { HOME_THEMES, SIZE_PRESETS, type SizePreset } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
 import type { AppConfig, HotkeyInfo } from '@shared/types'
@@ -41,9 +41,20 @@ const themeHint = computed(
   () => HOME_THEMES.find((t) => t.id === config.value?.ui.homeTheme)?.hint ?? ''
 )
 
+let offConfig: (() => void) | null = null
+
 onMounted(async () => {
   config.value = await window.moyu.config.get()
   hotkeys.value = await window.moyu.hotkey.list()
+  // 起始页也能换主题，那一边改完只有这条广播会通知到这里。
+  // 本页自己发的 patch 也会回广播一次，值相同，不冲突。
+  offConfig = window.moyu.config.onChanged((next) => {
+    config.value = next
+  })
+})
+
+onUnmounted(() => {
+  offConfig?.()
 })
 
 async function patch(input: ConfigPatch): Promise<void> {
