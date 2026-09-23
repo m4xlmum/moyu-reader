@@ -41,7 +41,7 @@ const TABS = [
 }))
 
 const config = {
-  version: 7,
+  version: 8,
   window: {
     x: null,
     y: null,
@@ -131,8 +131,31 @@ const noop = () => () => {}
 const ok = () => Promise.resolve()
 const list = () => Promise.resolve([])
 
+/**
+ * 配置桥要真的会改、真的会广播。
+ *
+ * 换主题这一步走的是「界面 → patch → 广播 → 重新渲染」这条路，
+ * 假桥要是只把 patch 当空操作吞掉，就永远只能看到启动时那一套主题，
+ * 「主题决定形态」这件事根本没被验证到。因此这里存下来并通知订阅者。
+ */
+const configListeners = new Set()
+
+function patchConfig(input) {
+  Object.assign(config, input)
+  if (input.ui) config.ui = { ...config.ui, ...input.ui }
+  for (const listener of configListeners) listener(config)
+  return Promise.resolve(config)
+}
+
 contextBridge.exposeInMainWorld('moyu', {
-  config: { get: () => Promise.resolve(config), patch: () => Promise.resolve(config), onChanged: noop },
+  config: {
+    get: () => Promise.resolve(config),
+    patch: patchConfig,
+    onChanged: (listener) => {
+      configListeners.add(listener)
+      return () => configListeners.delete(listener)
+    }
+  },
   sites: { list: () => Promise.resolve(SITES), add: list, update: list, remove: list, reorder: list, presets: list },
   history: { list: () => Promise.resolve(HISTORY), clear: ok },
   bookmarks: { list: () => Promise.resolve(BOOKMARKS), remove: list, update: list },

@@ -102,8 +102,9 @@ export const DEFAULT_BOSS_HIDE = 'Alt+X'
  * 6：悬浮球移入顶栏并成为其中的一个按钮，停靠位置与大小不再可调；
  *    顶栏与右侧栏改为可各自隐藏（ui.topBarOpen / ui.railOpen）。
  * 7：右侧栏去掉迷你与收藏；系统设置由独立窗口改为窗口内的一页（ui.homeTheme 同时加入）。
+ * 8：起始页主题由七个收到三个，并且主题开始决定界面形态（卡片 / 命令行）。
  */
-export const CONFIG_VERSION = 7
+export const CONFIG_VERSION = 8
 
 /** 1 版时代的竖屏尺寸；命中这些值说明是「没改过尺寸」的旧配置，迁移时重置 */
 export const LEGACY_PORTRAIT_SIZES: ReadonlyArray<{ width: number; height: number }> = [
@@ -139,32 +140,56 @@ export const SETTINGS_URL = 'moyu://settings'
 export const SETTINGS_TITLE = '系统设置'
 
 /**
+ * 起始页的两套世界。
+ *
+ * 主题不只是配色，它决定这一页**长成什么形态**：
+ * - modern：卡片排版，像一张安静的桌面（纸白、暗夜）
+ * - terminal：命令行排版，提示符 + 输出行 + 状态行（磷绿）
+ *
+ * 一份数据、一套交互，两套渲染。分开的理由是这两种形态对空间的用法根本不同：
+ * 卡片要横竖两个方向的余量，命令行只要一行行往下排，在迷你档（正文区
+ * 432×232）里反而更从容。
+ */
+export type HomeWorld = 'modern' | 'terminal'
+
+/**
  * 起始页主题。
  *
- * 前两个是正襟危坐的现代配色，其余是终端屏幕的几种荧光：
- * 磷绿、琥珀、冰蓝、白光，加上 DOS 那个蓝底。
+ * 三个主题 = 两套世界：现代配色两套，荧光屏一套。
  * 主题只在起始页生效——它是「自己的一页」，换个样子不会影响阅读网页时的观感。
  */
-export type HomeTheme =
-  | 'paper'
-  | 'night'
-  | 'crt-green'
-  | 'crt-amber'
-  | 'crt-ice'
-  | 'crt-white'
-  | 'dos'
+export type HomeTheme = 'paper' | 'night' | 'crt-green'
 
-export const HOME_THEMES: ReadonlyArray<{ id: HomeTheme; label: string; hint: string }> = [
-  { id: 'paper', label: '纸白', hint: '浅色，办公室日光灯下最不显眼' },
-  { id: 'night', label: '暗夜', hint: '深色但不发光，晚上眼睛舒服' },
-  { id: 'crt-green', label: '磷绿', hint: 'P1 单色终端：绿字、扫描线、余辉' },
-  { id: 'crt-amber', label: '琥珀', hint: 'IBM 5151 那种琥珀色单色屏' },
-  { id: 'crt-ice', label: '冰蓝', hint: 'IBM 3270 一类的青白色荧光屏' },
-  { id: 'crt-white', label: '白光', hint: 'P4 白色单色屏，冷而干净' },
-  { id: 'dos', label: 'DOS 蓝', hint: 'Norton Commander 时代的蓝底白字' }
+export const HOME_THEMES: ReadonlyArray<{
+  id: HomeTheme
+  label: string
+  hint: string
+  world: HomeWorld
+}> = [
+  { id: 'paper', label: '纸白', hint: '浅色卡片，日光灯下最不显眼', world: 'modern' },
+  { id: 'night', label: '暗夜', hint: '深色卡片，不发光，晚上眼睛舒服', world: 'modern' },
+  { id: 'crt-green', label: '磷绿', hint: 'P1 单色终端：命令行、扫描线、余辉', world: 'terminal' }
 ]
 
 export const DEFAULT_HOME_THEME: HomeTheme = 'paper'
+
+/** 主题属于哪套世界。表里没有的（旧配置、写坏的配置）按现代世界处理 */
+export function worldOfTheme(id: HomeTheme): HomeWorld {
+  return HOME_THEMES.find((t) => t.id === id)?.world ?? 'modern'
+}
+
+/**
+ * 8 版收掉的主题。
+ *
+ * 它们全是荧光屏那一类的，所以迁移时落到同属终端世界的磷绿上，
+ * 而不是落到纸白——把选过黑底的人扔回白底，比换个荧光色更突兀。
+ */
+export const LEGACY_HOME_THEMES: readonly string[] = [
+  'crt-amber',
+  'crt-ice',
+  'crt-white',
+  'dos'
+]
 
 /** 标签页状态广播去抖（毫秒） */
 export const TABS_BROADCAST_DEBOUNCE_MS = 60

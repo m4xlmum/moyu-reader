@@ -11,7 +11,8 @@
  *   npx electron spike/preview.js --no-topbar     # 顶栏藏起来，球浮在右上角
  *   npx electron spike/preview.js --collapsed     # 已收起（只剩一颗球）
  *   npx electron spike/preview.js --home          # 起始页
- *   npx electron spike/preview.js --home --themes # 起始页七个主题各截一张
+ *   npx electron spike/preview.js --home --themes # 起始页三套主题各截一张（走真实换主题那条路）
+ *   npx electron spike/preview.js --home --theme crt-green --width 448 --height 297
  *   npx electron spike/preview.js --settings --width 560 --height 400
  * 产物写在 spike/out/ 下：preview-<名字>.png 与 preview-<名字>.json
  *
@@ -107,26 +108,40 @@ const PAGE_MEASURE = `(() => {
   return {
     window: { w: window.innerWidth, h: window.innerHeight },
     theme: document.documentElement.dataset.theme ?? null,
+    world: document.documentElement.dataset.world ?? null,
     colors: {
       ground: style.backgroundColor,
       text: style.color,
       accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
     },
+    // 现代世界：卡片
+    cards: box('.cards'),
     wordmark: box('.wordmark'),
     search: box('.search'),
-    resume: box('.resume'),
-    tiles: document.querySelectorAll('.tile').length,
-    shortcuts: box('.shortcuts'),
-    themeWrap: box('.theme-wrap'),
-    themePanel: box('.theme-panel'),
-    themeItem: box('.theme-item'),
+    hero: box('.hero'),
+    tilesArea: box('.tiles'),
+    tileCount: document.querySelectorAll('.tile').length,
+    foot: box('.foot'),
+    // 终端世界：命令行
+    term: box('.term'),
+    termBar: box('.term .bar'),
+    prompt: box('.term .prompt'),
+    cursor: box('.term .cursor'),
+    lines: box('.term .lines'),
+    lineCount: document.querySelectorAll('.term .line').length,
+    firstLine: box('.term .line'),
+    status: box('.term .status'),
+    // 两套世界共用的主题选择器
+    themeMenu: box('.theme-menu'),
+    themePanel: box('.theme-menu .panel'),
+    themeItem: box('.theme-menu .item'),
     sidebar: box('.sidebar'),
     content: box('.content')
   }
 })()`
 
-/** 从起始页已有的主题列表里取全部主题 id——不在脚本里另抄一份名单 */
-const THEME_IDS = `[...document.querySelectorAll('.theme-panel .chips')].map((el) => el.dataset.theme)`
+/** 从主题选择器里取全部主题 id——不在脚本里另抄一份名单 */
+const THEME_IDS = `[...document.querySelectorAll('.theme-menu .panel .chips')].map((el) => el.dataset.theme)`
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -150,6 +165,24 @@ app.whenReady().then(async () => {
   fs.mkdirSync(outDir, { recursive: true })
 
   const shoot = async (name) => {
+    /*
+     * 先等渲染进程真的画完一帧，再抓图。
+     *
+     * 不显示窗口的合成帧会晚一拍：状态刚改完就 capturePage，拿到的往往是
+     * 上一帧——曾经出现过「crt-green 的截图里是第一版配色」这种灵异现象，
+     * 而同一时刻 executeJavaScript 读出来的 DOM 又是对的。
+     * 连等两帧（rAF 回调意味着这一帧已经提交），外加一次丢弃的抓取。
+     * rAF 在隐藏窗口里可能被节流，因此加个超时兜底，别把脚本挂住。
+     */
+    await win.webContents.executeJavaScript(
+      `Promise.race([
+         new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))),
+         new Promise((r) => setTimeout(r, 500))
+       ])`
+    )
+    await win.webContents.capturePage()
+    await wait(150)
+
     const image = await win.webContents.capturePage()
     const png = path.join(outDir, `${name}.png`)
     fs.writeFileSync(png, image.toPNG())
@@ -166,22 +199,36 @@ app.whenReady().then(async () => {
   }
 
   if (page === 'home' && has('--themes')) {
-    // 先展开主题面板，把选择器的样子也留一张
-    await win.webContents.executeJavaScript(
-      `document.querySelector('.theme-button').click()`
-    )
+    const run = (js) => win.webContents.executeJavaScript(js)
+    /*
+     * 展开主题选择器。
+     *
+     * 点开与点选必须分成两次 executeJavaScript：Vue 的 DOM 更新是下一帧的事，
+     * 同一次调用里点开面板就立刻去取面板里的按钮，取到的是空的。
+     */
+    const openMenu = `(() => {
+      const trigger = document.querySelector('.theme-menu .trigger')
+      if (trigger.getAttribute('aria-expanded') !== 'true') trigger.click()
+    })()`
+
+    await run(openMenu)
     await wait(300)
+    // 主题名单从面板里读，不在脚本里另抄一份
+    const ids = await run(THEME_IDS)
+    console.log(`THEMES ${JSON.stringify(ids)}`)
     await shoot('home-picker')
 
-    const ids = await win.webContents.executeJavaScript(THEME_IDS)
-    console.log(`THEMES ${JSON.stringify(ids)}`)
-    for (const id of ids) {
-      // 直接改属性而不走点击：点击会写配置，而这里只想看色板
-      await win.webContents.executeJavaScript(
-        `document.documentElement.dataset.theme = ${JSON.stringify(id)}`
-      )
+    for (let i = 0; i < ids.length; i += 1) {
+      /*
+       * 走真实那条路：点菜单项 → 写配置 → 广播 → 重新渲染。
+       * 直接改 dataset.theme 换不出另一套世界——主题要连形态一起换掉，
+       * 那一步只有应用自己知道（见 @shared/constants 的 worldOfTheme）。
+       */
+      await run(`document.querySelectorAll('.theme-menu .panel .item')[${i}].click()`)
       await wait(400)
-      await shoot(`home-${id}`)
+      await shoot(`home-${ids[i]}`)
+      await run(openMenu)
+      await wait(250)
     }
   } else {
     const name =

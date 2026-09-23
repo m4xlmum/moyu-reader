@@ -18,7 +18,9 @@
 | Q6 | `minimize()` → `restore()` | 透明度保持 | 仍需 reassert 以应对 DPI 切换 |
 | Q7 | `setShape` / `setOpacity` / `setIgnoreMouseEvents` / `setFocusable` / `setSkipTaskbar` / `setContentProtection` / `contentView.addChildView` / `view.setVisible` | 全部可用 | 无 API 缺失 |
 | Q8 | 在 `'closed'` 事件里读 `win.id` / `win.getBounds()` | **抛 `Object has been destroyed`** | 窗口销毁后才触发 `'closed'`，此时只有 `win.isDestroyed()` 还能读；id 要在建窗口时就记下来。见 `spike/destroyed.js` |
-| Q9 | 往自家页面（起始页 / 系统设置）注入「背景透明」 | **写在 `html, body` 上的底色被抹掉**，透明窗口里露出桌面 | 注入的是 user origin，层叠顺序里压过作者样式表（`!important` 也压得过）。底板因此要另画一层（起始页 `.start`、系统设置 `.layout`），且自家页面根本不该被注入网页样式。见 `spike/ownpage-bg.js` |
+| Q9 | 往自家页面（起始页 / 系统设置）注入「背景透明」 | **写在 `html, body` 上的底色被抹掉**，透明窗口里露出桌面 | 注入的是 user origin，层叠顺序里压过作者样式表（`!important` 也压得过）。底板因此要另画一层（起始页 `.page`、系统设置 `.layout`），且自家页面根本不该被注入网页样式。见 `spike/ownpage-bg.js` |
+| Q10 | 子组件根元素带父组件的作用域属性，父组件里一条 `.类名[data-v-父]` 的规则会不会落到子组件头上 | **会**。`variant` 的值被当类名用（`cards` / `terminal`），正好撞上两套世界根元素的类名，主题菜单于是被整页排版规则排了一遍：标识被挤成两行、菜单横跨整幅页眉 | 给子组件传形态用属性（`data-variant`）而不是类名。逐条 `matches` 查串味：`spike/which-rules.js` |
+| Q11 | 在 `show: false` 的窗口里连续改状态再 `capturePage()` | **抓到的是上一帧**（截图与同一时刻 DOM 对不上） | 隐藏窗口的合成帧晚一拍。抓图前先等两帧 `requestAnimationFrame`，并丢弃一次抓取。见 `spike/preview.js` 的 `shoot()` |
 
 ## 对原设计的两处修正
 

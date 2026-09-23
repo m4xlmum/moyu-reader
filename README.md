@@ -34,10 +34,15 @@
 **起始页**
 - 一个搜索框（输入网址直开，否则走搜索引擎）、「继续上次」、站点磁贴
 - 站点顺序遵循浏览器惯例：自己固定的 → 常访问的 → 预置的热门站点
-- **七个主题**：纸白、暗夜、磷绿、琥珀、冰蓝、白光、DOS 蓝。后五个是荧光屏：
-  扫描线、字发光、方块光标、等宽字体、直角。起始页右下角就能换，系统设置 → 通用里也能换
-- 主题写在 `html[data-theme]` 上，每个主题只是一段变量组（`src/renderer/src/styles/home.css`），
-  加一个主题就是加一段配色，不是加一条代码路径
+- **三个主题，两套世界**：纸白与暗夜是**卡片排版**（搜索框、继续上次、磁贴墙），
+  磷绿是**命令行排版**（提示符 `>`、一行行 `open 掘金 juejin.cn`、最底一条状态行，
+  外加扫描线与字发光）。主题换掉的不只是颜色，而是这一页的形态。
+  起始页页眉里就能换，系统设置 → 通用里也能换
+- 主题写在 `html[data-theme]` 上，形态写在 `html[data-world]` 上；每个主题只是一段变量组
+  （`src/renderer/src/styles/home.css`），加一个主题就是加一段配色，不是加一条代码路径。
+  哪套主题属于哪套世界，在 `@shared/constants` 的 `HOME_THEMES` 里，只有那一份
+- 一页放几个磁贴 / 几行输出是**按实测尺寸算出来的**：迷你档（正文区 432×232）只放一行磁贴、
+  六行命令，多出来的不渲染——裁出来的半行比没有这一行更难看
 
 **系统设置**
 - 是**窗口内的一页**（`moyu://settings`），与起始页同类：带 preload、能读写配置。
@@ -159,18 +164,24 @@ npx electron spike/preview.js --no-topbar
 | `--no-topbar` | 顶栏藏起来，球浮在右上角 |
 | `--collapsed` | 收起态。球此刻铺满整扇窗，正好用来确认它没有被拉成椭圆 |
 | `--home` | 起始页 |
-| `--home --themes` | 起始页七个主题各截一张，外加一张展开的主题面板 |
+| `--home --themes` | 起始页三套主题各截一张，外加一张展开的主题面板 |
 | `--settings` | 系统设置 |
 | `--width 620 --height 420` | 换个窗口尺寸，用来试窄窗口与矮窗口下的版面 |
 
 JSON 里的 `rightButtons` 是顶栏右侧那排按钮的顺序与坐标，`railButtons` 是右栏里
 剩下的功能，`themePanel` / `themeItem` 用来核对主题列表有没有被折进滚动区。
-`--home --themes` 的主题名单是**从页面上读的**（`.theme-panel .chips`），
-不在脚本里另抄一份。
+`--home --themes` 的主题名单是**从页面上读的**（`.theme-menu .panel .chips`），
+不在脚本里另抄一份；换主题走的是**真实那条路**（点菜单项 → 写配置 → 广播 → 重新渲染），
+因此它验的是「主题真的换了形态」，而不只是换了几个变量。
+
+另有一个一次性的探针 `spike/which-rules.js <主题> <选择器…>`：把命中了某个元素的
+CSS 规则逐条列出来。作用域样式会让**子组件的根元素带上父组件的作用域属性**，
+于是父组件里一条 `.某类名[data-v-父]` 的规则可能落到子组件头上——查这类串味，
+逐条 `matches` 比盯着两个文件猜快得多。它只是诊断工具，验证仍以 `preview.js` 为准。
 
 ## 架构要点
 
-有五处实现与直觉相反，都是被真机验证倒逼出来的，改动前请先读
+有六处实现与直觉相反，都是被真机验证倒逼出来的，改动前请先读
 [docs/spike-findings.md](docs/spike-findings.md)：
 
 1. **每个 `WebContentsView` 都必须调用 `setBackgroundColor('#00000000')`。**
@@ -194,7 +205,14 @@ JSON 里的 `rightButtons` 是顶栏右侧那排按钮的顺序与坐标，`rail
    user origin 的 `!important`，在层叠顺序里压过作者样式表——系统设置的底板
    原本就写在 `html, body` 上，于是被抹掉，打开它时窗口整个透出桌面。
    两条防线：`TabManager.applyPageStyles()` 只对访客页注入，自家页面的底板
-   另外画一层（起始页 `.start`、系统设置 `.layout`，`spike/ownpage-bg.js`）。
+   另外画一层（起始页 `.page`、系统设置 `.layout`，`spike/ownpage-bg.js`）。
+
+6. **子组件的根元素会带上父组件的作用域属性。** 于是父组件里任何一条
+   `.类名[data-v-父]` 的规则都可能落到子组件头上：主题菜单的根元素曾经带着
+   `cards` 这个类（`variant` 的值被当类名用），正好撞上两套世界根元素的类名，
+   结果它被 `StartCards` 的整页排版规则排了一遍——标识被挤成两行、菜单横跨整幅页眉，
+   而两边单独看都没有错。**给子组件传形态用属性（`data-variant`）而不是类名。**
+   查这类串味用 `spike/which-rules.js`。
 
 > 早期版本用 `setShape` 裁剪窗口的命中区域来实现「隐藏区域点击穿透」。
 > 改为收起成球之后这套机制已整体移除：窗口真的缩小了，就不需要再靠裁剪
@@ -217,7 +235,7 @@ src/renderer/  chrome 界面 / 弹出面板 / 系统设置
 | `src/main/services/windowController.ts` | 窗口编排与状态机：状态、合法迁移、守卫 |
 | `src/main/services/windowLeaveWatcher.ts` | 光标轮询、迟滞、挂起门控 |
 | `src/main/services/geometry.ts` | 版面矩形计算，坐标判断的唯一来源 |
-| `src/renderer/src/styles/home.css` | 起始页七套主题的配色，只有这一份 |
+| `src/renderer/src/styles/home.css` | 起始页三套主题的配色与两套世界的公共部分，只有这一份 |
 | `src/shared/ipc.ts` | 三个进程共享的通道与载荷契约 |
 
 > 计划里原本把状态机拆成独立的 `windowStateMachine.ts`，实现时发现它与窗口编排放一起

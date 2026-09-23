@@ -12,6 +12,7 @@ import {
   DEFAULT_SEARCH_TEMPLATE,
   HIDE_DELAY_MS,
   HOME_THEMES,
+  LEGACY_HOME_THEMES,
   LEGACY_PORTRAIT_SIZES,
   OPACITY_MAX,
   OPACITY_MIN,
@@ -131,6 +132,12 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   // 迁移到 6：悬浮球进了顶栏，停靠位置与大小都不再是配置项。
   // 迁移到 7：右侧栏去掉迷你与收藏，系统设置改在窗口内打开；
   //           window.miniMode / lastNormalSize 由上面的逐字段取值丢掉。
+  // 迁移到 8：起始页主题由七个收到三个。收掉的那几个全是荧光屏主题，
+  //           落到同属终端世界的磷绿上；落到纸白等于把选过黑底的人扔回白底。
+  //           必须在下面「主题不在表里就回落默认」之前做。
+  if ((input.version ?? 1) < 8 && LEGACY_HOME_THEMES.includes(String(input.ui?.homeTheme))) {
+    ui.homeTheme = 'crt-green'
+  }
 
   w.opacity = clamp(w.opacity, OPACITY_MIN, OPACITY_MAX)
   w.width = Math.round(clamp(w.width, 200, 4000))

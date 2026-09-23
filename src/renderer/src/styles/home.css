@@ -1,15 +1,18 @@
 /*
- * 首页：浏览器起始页。
+ * 起始页。
  *
- * 品类标准做法，以完全的工艺水准执行——不夹带私货，不做反讽式的改造。
- * 参照是 Chrome / Edge 的新标签页：中性底色、克制的分隔线、一个强调色、
- * 大量留白，界面不抢内容。
+ * 这一页有两套世界，主题决定用哪一套（见 src/home/HomeApp.vue）：
+ * - [data-world='modern']   卡片排版，参照 Chrome / Edge 新标签页
+ * - [data-world='terminal'] 命令行排版，提示符 + 输出行 + 状态行
+ *
+ * 配色与世界的对照表在 @shared/constants 的 HOME_THEMES 里，那边是唯一的一份；
+ * 这个文件只提供变量，不加任何「哪个主题长什么样」的判断。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 :root {
-  /* 底色与层次。起始页是浅色的：办公室日光灯下，浅色页面与文档并排时不显眼 */
+  /* 底色与层次。默认是纸白：办公室日光灯下，浅色页面与文档并排时不显眼 */
   --ground: #ffffff;
   --ground-hover: #f3f4f6;
   --ground-active: #e8eaee;
@@ -41,11 +44,12 @@
  *
  * 每个主题就是一套调色板 + 一套形状参数，不写任何选择器——界面元素只管用
  * 这些变量，于是「加一个主题」只是加一段配色，而不是加一条代码路径。
- * 主题名由 HomeApp 写到 html[data-theme] 上（见 config.ui.homeTheme）。
+ * 主题名由 HomeApp 写到 html[data-theme] 上，世界写到 html[data-world] 上
+ * （见 config.ui.homeTheme）。
  *
  * 配色块特意不带 html 前缀：任何元素带上这个属性就成了一块该主题的色卡，
- * 起始页右下角的主题选择器正是拿它画缩略色的——那些小色块用的是同一份
- * 变量，不是另抄一遍十六进制。
+ * 主题选择器正是拿它画缩略色的——那些小色块用的是同一份变量，
+ * 不是另抄一遍十六进制。
  */
 
 /* 纸白。默认主题，与上面的 :root 同值：默认值要能不出现在任何地方，
@@ -87,7 +91,7 @@
   --accent-soft: rgba(110, 168, 254, 0.14);
 }
 
-/* 磷绿。P1 单色荧光屏：绿字、黑底、扫描线、余辉 */
+/* 磷绿。P1 单色荧光屏：绿字、黑底、扫描线、余辉。终端世界目前唯一的配色 */
 [data-theme='crt-green'] {
   --ground: #050a06;
   --ground-hover: rgba(77, 255, 136, 0.08);
@@ -106,97 +110,13 @@
   --accent-soft: rgba(109, 255, 160, 0.14);
 }
 
-/* 琥珀。IBM 5151 那种琥珀色单色屏 */
-[data-theme='crt-amber'] {
-  --ground: #0d0700;
-  --ground-hover: rgba(255, 176, 0, 0.08);
-  --ground-active: rgba(255, 176, 0, 0.15);
-
-  --text: #ffb000;
-  --text-secondary: #d18f00;
-  --text-tertiary: #9c6b00;
-
-  --divider: #3a2600;
-  --divider-strong: #66430a;
-  --tile: rgba(255, 176, 0, 0.1);
-
-  --accent: #ffc53d;
-  --accent-hover: #ffd97a;
-  --accent-soft: rgba(255, 197, 61, 0.14);
-}
-
-/* 冰蓝。IBM 3270 一类的青白荧光屏 */
-[data-theme='crt-ice'] {
-  --ground: #03090d;
-  --ground-hover: rgba(159, 232, 255, 0.08);
-  --ground-active: rgba(159, 232, 255, 0.15);
-
-  --text: #9fe8ff;
-  --text-secondary: #6fc4e0;
-  --text-tertiary: #4a91ab;
-
-  --divider: #10323f;
-  --divider-strong: #1d5468;
-  --tile: rgba(159, 232, 255, 0.1);
-
-  --accent: #b9f2ff;
-  --accent-hover: #dcf9ff;
-  --accent-soft: rgba(185, 242, 255, 0.14);
-}
-
-/* 白光。P4 白色单色屏，冷而干净 */
-[data-theme='crt-white'] {
-  --ground: #07090a;
-  --ground-hover: rgba(238, 242, 244, 0.07);
-  --ground-active: rgba(238, 242, 244, 0.13);
-
-  --text: #eef2f4;
-  --text-secondary: #b9c2c7;
-  --text-tertiary: #808b91;
-
-  --divider: #212829;
-  --divider-strong: #364142;
-  --tile: rgba(238, 242, 244, 0.09);
-
-  --accent: #dff2ff;
-  --accent-hover: #ffffff;
-  --accent-soft: rgba(223, 242, 255, 0.14);
-}
-
-/* DOS 蓝。Norton Commander 时代的蓝底白字，方正、不发光 */
-[data-theme='dos'] {
-  --ground: #0000aa;
-  --ground-hover: #0000c4;
-  --ground-active: #0000dd;
-
-  --text: #ffffff;
-  --text-secondary: #d8d8ff;
-  --text-tertiary: #b0b0e0;
-
-  --divider: #4a4ac0;
-  --divider-strong: #8080ff;
-  --tile: #00008b;
-
-  --accent: #ffff55;
-  --accent-hover: #ffff99;
-  --accent-soft: rgba(255, 255, 85, 0.18);
-}
-
 /*
- * 荧光屏的公共部分：终端字体与直角。
+ * 终端世界的公共部分：屏幕字体与直角。
  *
  * 字体栈里放 YaHei 是必须的——Cascadia / Consolas 都没有汉字，不放的话中文
  * 会落到系统默认字体上，同一行里两种字形，反而不像一台终端。
  */
-html[data-theme^='crt-'] {
-  --font: 'Cascadia Mono', Consolas, 'Sarasa Mono SC', 'Microsoft YaHei', monospace;
-  --radius-sm: 0;
-  --radius: 0;
-  --radius-pill: 0;
-}
-
-/* DOS 同样是屏幕字体，但它那块屏幕是 VGA 的平面，不做扫描线 */
-[data-theme='dos'] {
+html[data-world='terminal'] {
   --font: 'Cascadia Mono', Consolas, 'Sarasa Mono SC', 'Microsoft YaHei', monospace;
   --radius-sm: 0;
   --radius: 0;
@@ -209,17 +129,17 @@ html[data-theme^='crt-'] {
  * 用 body::after 而不是给每个元素加滤镜：这是屏幕的属性，不是内容的属性。
  * 内容怎么排都与它无关，因此它只有这一处、也只有这一层。
  */
-html[data-theme^='crt-'] body::after {
+html[data-world='terminal'] body::after {
   content: '';
   position: fixed;
   inset: 0;
   z-index: 100;
   pointer-events: none;
   background:
-    /* 扫描线：一行暗、两行透亮 */
+    /* 扫描线：一行暗、两行透亮。0.14 是上限——再重一点，13px 的字就被割碎了 */
     repeating-linear-gradient(
       to bottom,
-      rgba(0, 0, 0, 0.24) 0 1px,
+      rgba(0, 0, 0, 0.14) 0 1px,
       rgba(0, 0, 0, 0) 1px 3px
     ),
     /* 球面管的余辉：中间亮一点，四角暗下去 */
@@ -232,13 +152,17 @@ html[data-theme^='crt-'] body::after {
 }
 
 /*
- * 字发光。text-shadow 是可继承属性，因此这一条管住了页面上所有文字，
- * 包括输入框与按钮——这正是要的效果：整块屏幕在发光，而不是几个标签在发光。
+ * 字发光。
+ *
+ * 关键在于「只加一点」：不透明地给 currentColor 打一圈光是糊的，汉字笔画密，
+ * 光晕一厚就互相吃掉，看上去像没对上焦。因此用 color-mix 把它降到四成再打。
+ * text-shadow 是可继承属性，一条就管住页面上所有文字，包括输入框与按钮——
+ * 这正是要的效果：整块屏幕在发光，而不是几个标签在发光。
  */
-html[data-theme^='crt-'] body,
-html[data-theme^='crt-'] input,
-html[data-theme^='crt-'] button {
-  text-shadow: 0 0 5px currentColor;
+html[data-world='terminal'] body,
+html[data-world='terminal'] input,
+html[data-world='terminal'] button {
+  text-shadow: 0 0 3px color-mix(in srgb, currentColor 38%, transparent);
 }
 
 /* 荧光屏的呼吸。幅度必须小到「说不上来哪里在动」，大了就成了屏闪 */
@@ -254,7 +178,7 @@ html[data-theme^='crt-'] button {
 
 /* 前庭功能敏感的人关掉动效；静态的扫描线照旧 */
 @media (prefers-reduced-motion: reduce) {
-  html[data-theme^='crt-'] body::after {
+  html[data-world='terminal'] body::after {
     animation: none;
   }
 }
