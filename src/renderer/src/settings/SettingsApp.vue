@@ -36,6 +36,9 @@ const SIZE_LABEL: Record<SizePreset, string> = {
   large: '大'
 }
 
+/** 版本号来自构建时写入的 package.json，见 electron.vite.config.ts */
+const APP_VERSION = __APP_VERSION__
+
 /** 当前起始页主题的一句话说明，取自主题表，不在模板里再写一遍 */
 const themeHint = computed(
   () => HOME_THEMES.find((t) => t.id === config.value?.ui.homeTheme)?.hint ?? ''
@@ -400,7 +403,7 @@ function setSizePreset(preset: SizePreset): void {
       <section v-if="active === 'about'">
         <h2>关于</h2>
         <div class="card">
-          <p><b>摸鱼阅读</b> · 版本 0.1.0</p>
+          <p><b>摸鱼阅读</b> · 版本 {{ APP_VERSION }}</p>
           <p class="hint">
             以 GPL-2.0-or-later 授权发布。你可以自由使用、修改与再分发，
             但衍生作品必须以同样的许可证开源。

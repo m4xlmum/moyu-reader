@@ -1,6 +1,18 @@
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import vue from '@vitejs/plugin-vue'
+
+/*
+ * 版本号只有 package.json 一份。
+ *
+ * 「关于」那一页要显示它，而打包时用的也是它（electron-builder 直接读 package.json）。
+ * 在页面里再抄一遍字面量，改版本号时就必然漏掉一处——显示的版本与装上的版本对不上，
+ * 而这一页存在的意义正是回答「我装的是哪一版」。因此在构建时把它塞进渲染进程。
+ */
+const { version } = JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as {
+  version: string
+}
 
 export default defineConfig({
   main: {
@@ -20,6 +32,8 @@ export default defineConfig({
     }
   },
   renderer: {
+    // 版本号从 package.json 读进来，见文件开头
+    define: { __APP_VERSION__: JSON.stringify(version) },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),
