@@ -15,7 +15,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed } from 'vue'
-import { HOME_URL } from '@shared/constants'
+import { isOwnUrl } from '@shared/url'
 import type { TabState } from '@shared/types'
 import Icon from './Icon.vue'
 import Ball from './Ball.vue'
@@ -35,12 +35,12 @@ const emit = defineEmits<{ toggleBall: []; ballMenu: [] }>()
 /**
  * 当前页的域名，显示在地址栏开关上。
  *
- * 首页是自家页面，它的 file:// 真实路径不该出现在界面上——
- * 那既不好看，也暴露了本机目录结构。
+ * 自家页面（起始页、个人中心）显示自己的标题：它们没有域名，
+ * 而真实的 file:// 路径既不好看，也暴露了本机目录结构。
  */
 const siteLabel = computed(() => {
   const url = props.activeTab?.url
-  if (!url || url === HOME_URL) return '起始页'
+  if (!url || isOwnUrl(url)) return props.activeTab?.title || '起始页'
   try {
     return new URL(url).host || url
   } catch {

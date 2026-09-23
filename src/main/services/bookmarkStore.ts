@@ -30,22 +30,6 @@ export class BookmarkStore extends JsonListStore<Bookmark> {
     super(userDataDir, 'bookmarks.json', normalizeBookmarks)
   }
 
-  add(input: { title: string; url: string; faviconUrl?: string }): Bookmark[] {
-    if (!input.url) return this.items
-    const existing = this.items.find((b) => b.url === input.url)
-    if (existing) return this.items
-
-    const record: Bookmark = {
-      id: makeId('bm'),
-      title: input.title || input.url,
-      url: input.url,
-      faviconUrl: input.faviconUrl,
-      order: this.items.length,
-      createdAt: Date.now()
-    }
-    return this.commit([...this.items, record])
-  }
-
   update(id: string, patch: Partial<Bookmark>): Bookmark[] {
     return this.commit(
       this.items.map((b) => (b.id === id ? { ...b, ...patch, id: b.id } : b))

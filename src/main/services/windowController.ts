@@ -88,6 +88,17 @@ export class WindowController {
    * 收起时窗口要缩到球身上，用的就是这个矩形。
    */
   private ballRect: Rect | null = null
+  /**
+   * 收起态窗口能缩到的边长下限（DIP）。
+   *
+   * 收起时窗口要缩到球身上，但平台不一定答应：Windows 上实测有约 32×39 的下限
+   * （见 spike/minsize.js），请求 28×28 会得到 32×39。窗口一旦比球大，而球是
+   * 铺满窗口画的，圆就被拉成椭圆——这就是「球形扭曲」。
+   *
+   * 初始值取球的直径，也就是正常情况下真正用到的那个值。真被平台卡住时
+   * applyCollapsedBounds() 会把它抬到实测尺寸，之后一步到位。
+   */
+  private ballFloor = BALL_SIZE
   private layout: Layout = computeLayout(960, 540, TOP_BAR_H, 0, RAIL_W)
 
   /** 拖动中的锚点：按下那一刻的光标位置与窗口位置 */
@@ -281,7 +292,7 @@ export class WindowController {
     // 顶栏藏起来时地址栏的开关也一并消失，留着它会让顶端挂着一行没来由的输入框
     if (!topBarOpen) this.addressOpen = false
 
-    this.deps.config.set((c) => ({ ...c, ui: { topBarOpen, railOpen } }))
+    this.deps.config.set((c) => ({ ...c, ui: { ...c.ui, topBarOpen, railOpen } }))
     this.recomputeLayout()
     this.deps.onStateChange()
   }
@@ -327,15 +338,9 @@ export class WindowController {
     this.addressOpen = false
 
     const cfg = this.deps.config.get()
-    const ball = this.ballBounds()
 
     this.transitionTo('collapsed')
-    this.surface?.apply({
-      mode: 'collapsed',
-      windowRect: ball,
-      opacity: cfg.window.opacity
-    })
-
+    this.applyCollapsedBounds(cfg.window.opacity)
     this.resizeChromeToWindow()
     this.watcher?.rearm()
   }
@@ -363,13 +368,17 @@ export class WindowController {
   }
 
   /**
-   * 悬浮球当前的屏幕矩形。
+   * 收起态下窗口该占的屏幕矩形：以球心为中心的正方形。
    *
    * 由「展开态的窗口矩形 + 球在窗口内的矩形」推出来，而不是另外挑一个屏幕角落：
    * 球本来就画在窗口里的那个位置上，收起只是把窗口缩到它身上。
    * 那个窗口内矩形由渲染进程量好上报，见 setBallRect()。
+   *
+   * 必须是严格正方形，而且不小于球本身：球在收起态是铺满整扇窗画的，
+   * 窗口一旦不是正方形，圆就成了椭圆。边长取三者的最大值——球宽、球高、
+   * 平台下限——再多出来的那点以球心为中心摊到四边。
    */
-  private ballBounds(): Rect {
+  private collapsedBounds(): Rect {
     const base = this.expandedBounds ?? this.win?.getBounds() ?? {
       x: 0,
       y: 0,
@@ -377,7 +386,43 @@ export class WindowController {
       height: SIZE_PRESETS.medium.height
     }
     const r = this.ballRectInWindow(base.width)
-    return { x: base.x + r.x, y: base.y + r.y, width: r.width, height: r.height }
+    const side = Math.round(Math.max(r.width, r.height, this.ballFloor))
+    const cx = base.x + r.x + r.width / 2
+    const cy = base.y + r.y + r.height / 2
+    return {
+      x: Math.round(cx - side / 2),
+      y: Math.round(cy - side / 2),
+      width: side,
+      height: side
+    }
+  }
+
+  /**
+   * 把窗口摆成收起态，并确认它真的缩到了那个尺寸。
+   *
+   * 平台可能拒绝把窗口缩得那么小（Windows 实测下限约 32×39，见 spike/minsize.js），
+   * 悄悄给一个更大的矩形。这里的读回就是为这件事：卡住了就把下限抬到实测值，
+   * 用抬过的正方形再摆一次（一次就够，抬过的值必然满足两个方向的下限）。
+   * 不读回的话，用户看到的是一颗被窗口拉长的椭圆——正是要修的那个问题。
+   */
+  private applyCollapsedBounds(opacity: number): void {
+    const win = this.win
+    if (!win) return
+    const want = this.collapsedBounds()
+    this.surface?.apply({ mode: 'collapsed', windowRect: want, opacity })
+
+    const got = win.getBounds()
+    if (got.width <= want.width && got.height <= want.height) return
+
+    const floor = Math.max(got.width, got.height)
+    if (floor <= this.ballFloor) return
+    this.ballFloor = floor
+    log.warn(
+      `窗口缩不到 ${want.width}×${want.height}，被平台卡在 ${got.width}×${got.height}；` +
+        `悬浮球下限抬到 ${floor}`
+    )
+    this.surface?.apply({ mode: 'collapsed', windowRect: this.collapsedBounds(), opacity })
+    this.resizeChromeToWindow()
   }
 
   /**
@@ -532,32 +577,6 @@ export class WindowController {
     this.recomputeLayout()
   }
 
-  setMiniMode(enabled: boolean): void {
-    const win = this.win
-    if (!win || this.mode !== 'expanded') return
-    const cfg = this.deps.config.get()
-    if (enabled === cfg.window.miniMode) return
-
-    const current = win.getBounds()
-    if (enabled) {
-      this.deps.config.set((c) => ({
-        ...c,
-        window: {
-          ...c.window,
-          miniMode: true,
-          lastNormalSize: { width: current.width, height: current.height }
-        }
-      }))
-      const { width, height } = SIZE_PRESETS.mini
-      win.setBounds({ x: current.x, y: current.y, width, height })
-    } else {
-      const { width, height } = cfg.window.lastNormalSize
-      this.deps.config.set((c) => ({ ...c, window: { ...c.window, miniMode: false } }))
-      win.setBounds({ x: current.x, y: current.y, width, height })
-    }
-    this.recomputeLayout()
-  }
-
   reassert(): void {
     this.surface?.reassert()
   }
@@ -674,7 +693,8 @@ export class WindowController {
    *
    * 收起态下窗口就是一颗球，它的矩形不能直接当作展开尺寸，
    * 需要反推出「球停在原处时，展开的窗口该在哪」，再记下来。
-   * 反推用的是与摆放球同一个函数，两边不会各自漂移。
+   * 反推是 collapsedBounds() 的逆运算——按球心对齐，两边不会各自漂移。
+   * 窗口被平台卡大时二者差着几个像素，按球心算才不会每拖一次就偏一点。
    */
   private syncBoundsMemory(): void {
     const win = this.win
@@ -686,7 +706,12 @@ export class WindowController {
     } else {
       const { width, height } = this.deps.config.get().window
       const r = this.ballRectInWindow(width)
-      this.expandedBounds = { x: b.x - r.x, y: b.y - r.y, width, height }
+      this.expandedBounds = {
+        x: Math.round(b.x + b.width / 2 - (r.x + r.width / 2)),
+        y: Math.round(b.y + b.height / 2 - (r.y + r.height / 2)),
+        width,
+        height
+      }
     }
 
     this.persistExpandedBounds()
@@ -715,7 +740,7 @@ export class WindowController {
     if (!win) return
     const cfg = this.deps.config.get()
     const windowRect =
-      this.mode === 'collapsed' ? this.ballBounds() : (this.expandedBounds ?? win.getBounds())
+      this.mode === 'collapsed' ? this.collapsedBounds() : (this.expandedBounds ?? win.getBounds())
     this.surface?.apply({ mode: this.mode, windowRect, opacity: cfg.window.opacity })
   }
 }

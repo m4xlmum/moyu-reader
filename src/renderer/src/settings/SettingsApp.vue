@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed, onMounted, ref } from 'vue'
-import { SIZE_PRESETS, type SizePreset } from '@shared/constants'
+import { HOME_THEMES, SIZE_PRESETS, type SizePreset } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
 import type { AppConfig, HotkeyInfo } from '@shared/types'
 
@@ -35,6 +35,11 @@ const SIZE_LABEL: Record<SizePreset, string> = {
   medium: '中',
   large: '大'
 }
+
+/** 当前起始页主题的一句话说明，取自主题表，不在模板里再写一遍 */
+const themeHint = computed(
+  () => HOME_THEMES.find((t) => t.id === config.value?.ui.homeTheme)?.hint ?? ''
+)
 
 onMounted(async () => {
   config.value = await window.moyu.config.get()
@@ -95,10 +100,6 @@ async function clearHistory(): Promise<void> {
 // 模板里的 window 指向组件实例而非全局对象，因此全局调用都要包一层方法
 function setSizePreset(preset: SizePreset): void {
   void window.moyu.win.setSize({ preset })
-}
-
-function toggleMiniMode(event: Event): void {
-  void window.moyu.win.toggleMini({ enabled: (event.target as HTMLInputElement).checked })
 }
 </script>
 
@@ -215,15 +216,25 @@ function toggleMiniMode(event: Event): void {
           </div>
 
           <div class="field">
-            <label>迷你模式</label>
-            <div class="control">
-              <input
-                type="checkbox"
-                :checked="config.window.miniMode"
-                @change="toggleMiniMode"
-              />
+            <label>起始页主题</label>
+            <div class="control column">
+              <div class="themes">
+                <button
+                  v-for="t in HOME_THEMES"
+                  :key="t.id"
+                  :class="{ on: config.ui.homeTheme === t.id }"
+                  @click="patch({ ui: { homeTheme: t.id } })"
+                >
+                  {{ t.label }}
+                </button>
+              </div>
+              <span class="dim">{{ themeHint }}</span>
             </div>
           </div>
+          <p class="hint">
+            主题只作用在起始页上：那是「自己的一页」，换个样子不影响阅读网页时的观感。
+            起始页右下角也能直接换。
+          </p>
         </div>
       </section>
 
@@ -507,6 +518,66 @@ h2 {
 .control button.danger:hover {
   border-color: var(--danger);
   background: #fdf3f2;
+}
+
+.themes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.control button.on {
+  border-color: var(--accent);
+  background: #eef4fd;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- 窄窗口 */
+
+/*
+ * 个人中心现在是窗口内的一页，宽度跟着主窗口走（最窄时正文只有四百多像素）。
+ * 窄到放不下侧边栏时把它折成顶部一条：160px 的竖栏留在那儿，
+ * 右边剩下的地方连一个设置项都排不开。
+ */
+@media (max-width: 720px) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 10px;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .brand {
+    display: none;
+  }
+
+  .nav-item {
+    width: auto;
+    margin-bottom: 0;
+    white-space: nowrap;
+  }
+
+  .content {
+    padding: 14px;
+  }
+
+  .field {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .field > label {
+    flex: 0 0 auto;
+  }
 }
 
 .key {

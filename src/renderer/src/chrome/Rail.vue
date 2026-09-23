@@ -2,7 +2,7 @@
 /**
  * 右侧功能栏。
  *
- * 站点、历史、书签、收藏、缩放、透明度、设置这些原本摊在底栏的功能都收在这里。
+ * 手机模式、置顶、站点、历史、书签、缩放、透明度、设置这些原本摊在底栏的功能都收在这里。
  * 横屏下纵向空间最贵，而底栏那条横带子要吃掉整个宽度；换成一条竖栏，
  * 代价只是正文窄了 48px。
  *
@@ -55,26 +55,10 @@ function togglePin(): void {
   emit('patch', { window: { alwaysOnTop: !cfg.window.alwaysOnTop } })
 }
 
-function toggleMini(): void {
-  const cfg = props.config
-  if (!cfg) return
-  void window.moyu.win.toggleMini({ enabled: !cfg.window.miniMode })
-}
-
 function zoom(op: 'in' | 'out' | 'reset'): void {
   const tabId = props.activeTab?.id
   if (!tabId) return
   void window.moyu.page.setZoom({ tabId, op })
-}
-
-function bookmarkCurrent(): void {
-  const tab = props.activeTab
-  if (!tab || !tab.url || tab.url === 'about:blank') return
-  void window.moyu.bookmarks.add({
-    title: tab.title || tab.url,
-    url: tab.url,
-    faviconUrl: tab.faviconUrl
-  })
 }
 
 function setOpacity(value: number): void {
@@ -106,14 +90,6 @@ function openSettings(): void {
       >
         置顶
       </button>
-      <button
-        class="item"
-        :class="{ on: config?.window.miniMode }"
-        title="迷你模式"
-        @click="toggleMini"
-      >
-        迷你
-      </button>
 
       <div class="sep" />
 
@@ -122,7 +98,6 @@ function openSettings(): void {
       </button>
       <button class="item" title="历史记录" @click="openPopover('history', $event)">历史</button>
       <button class="item" title="书签" @click="openPopover('bookmarks', $event)">书签</button>
-      <button class="item" title="收藏当前页面" @click="bookmarkCurrent">收藏</button>
 
       <div class="sep" />
 
@@ -167,7 +142,7 @@ function openSettings(): void {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  /* 迷你模式下这一列放不下，允许纵向滚动；横向必须裁掉——
+  /* 窗口矮的时候这一列放不下，允许纵向滚动；横向必须裁掉——
      透明度滑块是横条转 90° 画出来的，它的布局盒比栏宽得多 */
   overflow-y: auto;
   overflow-x: hidden;

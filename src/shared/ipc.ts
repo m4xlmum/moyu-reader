@@ -31,7 +31,6 @@ export const INVOKE = {
   historyClear: 'history:clear',
 
   bookmarksList: 'bookmarks:list',
-  bookmarksAdd: 'bookmarks:add',
   bookmarksRemove: 'bookmarks:remove',
   bookmarksUpdate: 'bookmarks:update',
 
@@ -56,7 +55,6 @@ export const INVOKE = {
   winExpand: 'window:expand',
   winOpenBallMenu: 'window:openBallMenu',
   winSetSize: 'window:setSize',
-  winToggleMini: 'window:toggleMini',
   winMinimize: 'window:minimize',
   winHideToTray: 'window:hideToTray',
   winReassert: 'window:reassert',
@@ -158,7 +156,6 @@ export interface MoyuApi {
   }
   bookmarks: {
     list(input?: { query?: string }): Promise<Bookmark[]>
-    add(input: { title: string; url: string; faviconUrl?: string }): Promise<Bookmark[]>
     remove(input: { id: string }): Promise<Bookmark[]>
     update(input: { id: string; patch: Partial<Bookmark> }): Promise<Bookmark[]>
   }
@@ -215,7 +212,6 @@ export interface MoyuApi {
     /** 在光标处弹出悬浮球菜单（含「隐藏顶部栏」） */
     openBallMenu(): Promise<void>
     setSize(input: { preset: string } | { width: number; height: number }): Promise<void>
-    toggleMini(input: { enabled: boolean }): Promise<void>
     minimize(): Promise<void>
     hideToTray(): Promise<void>
     reassert(): Promise<void>
@@ -226,7 +222,14 @@ export interface MoyuApi {
   ui: {
     openPopover(req: OpenPopoverRequest): Promise<void>
     closePopover(): Promise<void>
-    openSettings(input?: { section?: string }): Promise<void>
+    /**
+     * 打开个人中心。
+     *
+     * 它和起始页一样是窗口内的一页，不开独立窗口：独立窗口会出现在任务栏
+     * 与 Alt+Tab 里，等于把「我在摸鱼」写在脸上。已有这一页就切过去，
+     * 不重复开。
+     */
+    openSettings(): Promise<void>
   }
   hotkey: {
     list(): Promise<{ bossMinimize: HotkeyInfo; bossHideToTray: HotkeyInfo }>

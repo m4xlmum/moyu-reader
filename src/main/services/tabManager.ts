@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { WebContentsView, type BaseWindow, type Session } from 'electron'
-import { HOME_TITLE, HOME_URL } from '@shared/constants'
+import { HOME_TITLE, HOME_URL, SETTINGS_TITLE, SETTINGS_URL } from '@shared/constants'
 import type { Rect, TabState } from '@shared/types'
 import { resolveInput } from '@shared/url'
 import { uaFor, type UaMode } from '@shared/ua'
@@ -12,8 +12,20 @@ import { injectPageStyles } from './pageStyler'
 import { rendererUrl } from './rendererUrl'
 import { log } from './logger'
 
-/** 首页是自家页面（带 preload），访客页是纯网页（无 preload）。两者绝不共用视图。 */
-export type TabKind = 'home' | 'guest'
+/**
+ * 自家页面（带 preload，以伪地址示人）与访客页（纯网页，无 preload）。
+ * 两者绝不共用视图：给访客页注入 preload 等于把主进程能力交给任意网页。
+ */
+export type TabKind = 'home' | 'settings' | 'guest'
+
+/** 自家页面：渲染产物名、对外伪地址与标签标题 */
+const OWN_PAGE: Record<'home' | 'settings', { page: 'home' | 'settings'; url: string; title: string }> =
+  {
+    home: { page: 'home', url: HOME_URL, title: HOME_TITLE },
+    settings: { page: 'settings', url: SETTINGS_URL, title: SETTINGS_TITLE }
+  }
+
+const isOwnPage = (kind: TabKind): kind is 'home' | 'settings' => kind !== 'guest'
 
 interface TabEntry {
   id: string
@@ -124,8 +136,8 @@ export class TabManager {
       webPreferences: {
         // 访客页面不注入任何 preload，是纯网页。
         // 一切注入都走主进程的 insertCSS / executeJavaScript。
-        // 只有自家首页带 preload，且 preload 内部还会再校验一次来源。
-        preload: kind === 'home' ? this.deps.getPreloadPath() : undefined,
+        // 只有自家页面（首页、个人中心）带 preload，且 preload 内部还会再校验来源。
+        preload: isOwnPage(kind) ? this.deps.getPreloadPath() : undefined,
         session: this.deps.getSession(),
         contextIsolation: true,
         nodeIntegration: false,
@@ -135,12 +147,13 @@ export class TabManager {
     // 必须设成全透明，否则会在透明窗口里画出一块白底（spike Q1/Q2）
     view.setBackgroundColor('#00000000')
 
+    const own = isOwnPage(kind) ? OWN_PAGE[kind] : null
     const entry: TabEntry = {
       id,
       kind,
       view,
-      url: kind === 'home' ? HOME_URL : 'about:blank',
-      title: kind === 'home' ? HOME_TITLE : '',
+      url: own ? own.url : 'about:blank',
+      title: own ? own.title : '',
       isLoading: false,
       uaMode: cfg.defaultUaMode,
       zoom: cfg.defaultZoom,
@@ -153,9 +166,9 @@ export class TabManager {
     this.layoutTab(entry)
     this.wireEvents(entry)
 
-    if (kind === 'home') {
-      view.webContents.loadURL(rendererUrl('home')).catch((err) => {
-        log.error('加载首页失败', err)
+    if (own) {
+      view.webContents.loadURL(rendererUrl(own.page)).catch((err) => {
+        log.error(`加载${own.title}失败`, err)
       })
     } else if (input.url && input.url !== 'about:blank') {
       // about:blank 是视图的初始状态，再 loadURL 一次会被 Chromium 判为
@@ -170,10 +183,10 @@ export class TabManager {
     return id
   }
 
-  /** 首页标签页的 id（若存在） */
-  private findHomeTabId(): string | null {
+  /** 某一类自家页面的标签页 id（若存在） */
+  private findOwnTabId(kind: 'home' | 'settings'): string | null {
     for (const id of this.order) {
-      if (this.tabs.get(id)?.kind === 'home') return id
+      if (this.tabs.get(id)?.kind === kind) return id
     }
     return null
   }
@@ -183,12 +196,26 @@ export class TabManager {
    * 首页是常驻的一张标签页，不随导航消失——它是「回到起点」的落点。
    */
   openHome(): string {
-    const existing = this.findHomeTabId()
+    return this.openOwn('home')
+  }
+
+  /**
+   * 打开个人中心。
+   *
+   * 与首页同一条路：它是窗口内的一页，而不是一扇独立窗口。独立窗口会出现在
+   * 任务栏与 Alt+Tab 里，等于把「我在摸鱼」写在脸上——那正是它原来的样子。
+   */
+  openSettings(): string {
+    return this.openOwn('settings')
+  }
+
+  private openOwn(kind: 'home' | 'settings'): string {
+    const existing = this.findOwnTabId(kind)
     if (existing) {
       this.activate(existing)
       return existing
     }
-    return this.create({ kind: 'home', activate: true })
+    return this.create({ kind, activate: true })
   }
 
   close(tabId: string): void {
@@ -271,15 +298,35 @@ export class TabManager {
     }
   }
 
+  // ------------------------------------------------------------ 广播
+
+  /**
+   * 把广播发给自家页面（首页、个人中心）。
+   *
+   * 只按 kind 挑选，而不是撒给全部 webContents：访客页面没有 preload，
+   * 收不到也没人听，而自家页面需要跟着配置变化重绘——起始页换主题
+   * 正是一条配置变更。
+   */
+  broadcastToOwnPages(channel: string, payload: unknown): void {
+    for (const entry of this.tabs.values()) {
+      if (!isOwnPage(entry.kind)) continue
+      try {
+        if (!entry.view.webContents.isDestroyed()) entry.view.webContents.send(channel, payload)
+      } catch {
+        // 页面可能正在销毁
+      }
+    }
+  }
+
   // ------------------------------------------------------------ 导航
 
   goto(tabId: string, input: string): void {
     const entry = this.tabs.get(tabId)
     if (!entry) return
 
-    // 首页标签页不承载访客内容——它是自家页面，带着 preload。
-    // 在它上面打开网址意味着另开一个访客标签页，首页本身始终留在原处。
-    if (entry.kind === 'home') {
+    // 自家页面不承载访客内容——它们带着 preload。
+    // 在它们上面打开网址意味着另开一个访客标签页，原页面始终留在原处。
+    if (entry.kind !== 'guest') {
       this.create({ url: input, activate: true })
       return
     }
@@ -405,10 +452,10 @@ export class TabManager {
     })
 
     wc.on('did-navigate', (_e, url) => {
-      // 首页对外始终以自己的伪地址示人。
+      // 自家页面对外始终以自己的伪地址示人。
       // 若不这样处理，did-navigate 会把真实文件路径写进 entry.url，
       // 地址栏就会显示出本机的目录结构。
-      entry.url = entry.kind === 'home' ? HOME_URL : url
+      entry.url = entry.kind === 'guest' ? url : OWN_PAGE[entry.kind].url
       // 页面文档已重建，样式必须重新注入
       void injectPageStyles(wc, { hideScrollbars: this.deps.getConfig().browser.hideScrollbars })
       // UA 会随导航重置，需按本标签页的模式重新应用。

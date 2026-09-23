@@ -8,15 +8,17 @@ import {
   CONFIG_VERSION,
   DEFAULT_BOSS_HIDE,
   DEFAULT_BOSS_MINIMIZE,
+  DEFAULT_HOME_THEME,
   DEFAULT_SEARCH_TEMPLATE,
   HIDE_DELAY_MS,
+  HOME_THEMES,
   LEGACY_PORTRAIT_SIZES,
   OPACITY_MAX,
   OPACITY_MIN,
   PERSIST_DEBOUNCE_MS
 } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
-import type { AppConfig, StealthConfig } from '@shared/types'
+import type { AppConfig, HomeTheme, StealthConfig, UiConfig, WindowConfig } from '@shared/types'
 import { DebouncedWriter, readJson } from './jsonFile'
 import { log } from './logger'
 
@@ -28,8 +30,6 @@ export function defaultConfig(): AppConfig {
       y: null,
       width: 960,
       height: 540,
-      lastNormalSize: { width: 960, height: 540 },
-      miniMode: false,
       opacity: 1,
       alwaysOnTop: true,
       showInTaskbar: false
@@ -38,7 +38,8 @@ export function defaultConfig(): AppConfig {
       // 两条栏默认都在。隐藏是留给「只想留一颗球看网页」的场合的，
       // 默认藏起来会把第一次打开的人挡在门外。
       topBarOpen: true,
-      railOpen: true
+      railOpen: true,
+      homeTheme: DEFAULT_HOME_THEME
     },
     stealth: {
       // 默认关闭：收起与否由用户点悬浮球决定，不自动发生。
@@ -73,15 +74,30 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   const d = defaultConfig()
   if (!input || typeof input !== 'object') return d
 
-  const w = { ...d.window, ...(input.window ?? {}) }
   const h = { ...d.hotkeys, ...(input.hotkeys ?? {}) }
   const b = { ...d.browser, ...(input.browser ?? {}) }
   const ls = { ...d.lastSession, ...(input.lastSession ?? {}) }
-  const ui = { ...d.ui, ...(input.ui ?? {}) }
 
-  // stealth 逐字段取，而不是整段摊开：
-  // 摊开会让已经从类型里去掉的旧字段（ballCorner / ballSize）随着落盘的
-  // 配置一路活下来，每次合并都把它们原样写回去，永远清不掉。
+  // window / ui / stealth 都逐字段取，而不是整段摊开：
+  // 摊开会让已经从类型里去掉的旧字段（ballCorner / ballSize / miniMode /
+  // lastNormalSize …）随着落盘的配置一路活下来，每次合并都把它们原样写回去，
+  // 永远清不掉。删掉一个配置项时，这里也要跟着删一行。
+  const w: WindowConfig = {
+    x: typeof input.window?.x === 'number' ? input.window.x : d.window.x,
+    y: typeof input.window?.y === 'number' ? input.window.y : d.window.y,
+    width: input.window?.width ?? d.window.width,
+    height: input.window?.height ?? d.window.height,
+    opacity: input.window?.opacity ?? d.window.opacity,
+    alwaysOnTop: input.window?.alwaysOnTop ?? d.window.alwaysOnTop,
+    showInTaskbar: input.window?.showInTaskbar ?? d.window.showInTaskbar
+  }
+
+  const ui: UiConfig = {
+    topBarOpen: input.ui?.topBarOpen ?? d.ui.topBarOpen,
+    railOpen: input.ui?.railOpen ?? d.ui.railOpen,
+    homeTheme: input.ui?.homeTheme ?? d.ui.homeTheme
+  }
+
   const s: StealthConfig = {
     autoCollapse: input.stealth?.autoCollapse ?? d.stealth.autoCollapse,
     hideDelayMs: input.stealth?.hideDelayMs ?? d.stealth.hideDelayMs,
@@ -99,7 +115,6 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
     if (untouched) {
       w.width = d.window.width
       w.height = d.window.height
-      w.lastNormalSize = { ...d.window.lastNormalSize }
       // 位置也一并重算：横屏更宽，沿用旧坐标可能贴出屏幕外
       w.x = null
       w.y = null
@@ -113,16 +128,13 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   }
 
   // 迁移到 5：底栏取消，功能移入右侧栏，窗口左下角不再是 chrome 区域。
-  // 迁移到 6：悬浮球进了顶栏，停靠位置与大小都不再是配置项——
-  // 旧的 ballCorner / ballSize 已由上面的逐字段取值丢掉，无需再管。
+  // 迁移到 6：悬浮球进了顶栏，停靠位置与大小都不再是配置项。
+  // 迁移到 7：右侧栏去掉迷你与收藏，个人中心改在窗口内打开；
+  //           window.miniMode / lastNormalSize 由上面的逐字段取值丢掉。
 
   w.opacity = clamp(w.opacity, OPACITY_MIN, OPACITY_MAX)
   w.width = Math.round(clamp(w.width, 200, 4000))
   w.height = Math.round(clamp(w.height, 200, 4000))
-  w.lastNormalSize = {
-    width: Math.round(clamp(w.lastNormalSize?.width ?? d.window.width, 200, 4000)),
-    height: Math.round(clamp(w.lastNormalSize?.height ?? d.window.height, 200, 4000))
-  }
   s.hideDelayMs = Math.round(clamp(s.hideDelayMs, 200, 5000))
   b.defaultZoom = clamp(b.defaultZoom, 0.25, 5)
   if (typeof b.searchTemplate !== 'string' || !b.searchTemplate.includes('%s')) {
@@ -131,6 +143,9 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   if (!Array.isArray(ls.openUrls)) ls.openUrls = []
   if (typeof ui.topBarOpen !== 'boolean') ui.topBarOpen = d.ui.topBarOpen
   if (typeof ui.railOpen !== 'boolean') ui.railOpen = d.ui.railOpen
+  if (!HOME_THEMES.some((t) => t.id === ui.homeTheme)) {
+    ui.homeTheme = d.ui.homeTheme as HomeTheme
+  }
 
   return {
     version: CONFIG_VERSION,

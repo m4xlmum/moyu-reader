@@ -9,7 +9,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { onMounted, ref, watch } from 'vue'
-import { HOME_URL } from '@shared/constants'
+import { isOwnUrl } from '@shared/url'
 import type { TabState } from '@shared/types'
 
 const props = defineProps<{
@@ -23,14 +23,14 @@ const field = ref<HTMLInputElement | null>(null)
 
 /**
  * 未编辑时地址栏跟随当前标签页；编辑时不抢用户的输入。
- * 首页是自家页面，它的 file:// 真实路径不该出现在界面上——
- * 那既不好看，也暴露了本机目录结构。
+ * 自家页面（起始页、个人中心）在地址栏里留空：它们没有网址，
+ * 而真实的 file:// 路径既不好看，也暴露了本机目录结构。
  */
 watch(
   () => props.activeTab?.url,
   (url) => {
     if (editing.value) return
-    input.value = !url || url === HOME_URL ? '' : url
+    input.value = !url || isOwnUrl(url) ? '' : url
   },
   { immediate: true }
 )

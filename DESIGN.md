@@ -161,6 +161,17 @@ A neutral white page lit by one cool blue. Everything that is not the accent is 
 
 **The Neutral Ground Rule.** The page is white and stays white. No tinted canvas, no gradient, no tonal shift to signal depth — the accent is the only color event.
 
+### Themes
+
+The start page ships **seven palettes**, chosen with `html[data-theme]` (`home.css`); everything named above is the `paper` default, and every other theme keeps the same variable names and the same shape of the system.
+
+- **Night** keeps the structure above — three ink steps, one blue accent, hairlines — and reads it against a near-black ground instead of a white one.
+- **The five phosphor screens** — `crt-green`, `crt-amber`, `crt-ice`, `crt-white`, `dos` — replace the neutral ground with a single luminous ink on a near-black (or, for `dos`, VGA-blue) ground. They add what a terminal has and a browser does not: zero radii, a monospace stack (with a CJK face in it, so a line of mixed text is still one typeface), a scanline-and-vignette overlay on `body::after`, and `text-shadow: 0 0 5px currentColor` so the whole screen glows rather than a few labels. The block cursor after the wordmark and the `>` prompt in the search row are the theme's only other marks.
+
+A theme is a variable block and nothing more: no theme-specific selectors outside the shared `[data-theme^='crt-']` rules, so adding one is adding a palette, not a code path. The theme picker's swatches lean on the same property — a nested element carrying `data-theme` resolves that theme's variables inside itself, so the list shows real palettes with no second copy of the hex values anywhere.
+
+The theme belongs to the start page alone. The chrome keeps the paper palette, so reading a page looks the same whatever the start page happens to be wearing.
+
 ## Typography
 
 **Display Font:** system CJK stack — Microsoft YaHei, PingFang SC, Segoe UI, system-ui (`--font` / `--moyu-font`)
@@ -180,7 +191,9 @@ A neutral white page lit by one cool blue. Everything that is not the accent is 
 
 ## Layout
 
-The window is a fixed 16:9 frame (default 960×540; presets mini 480×270, small 800×450, medium 960×540, large 1280×720). It is a 38px top bar spanning the full width, and below it a row of two columns: the main column (a 34px address bar, collapsed by default, over the flexible transparent middle that the page view fills or the desktop shows through) and a 48px right rail. The rail carries 手机 / 置顶 / 迷你 / 站点 / 历史 / 书签 / 收藏 / 缩放 / 透明度, with 设置 pinned at its foot — the tools that used to sit in a bottom bar. The rail is the cheaper of the two edges to spend: 48px of a 960px width is 5%, where a 44px bar cost 8% of a 540px height.
+The window is a fixed 16:9 frame (default 960×540; presets mini 480×270, small 800×450, medium 960×540, large 1280×720). It is a 44px top bar spanning the full width, and below it a row of two columns: the main column (a 34px address bar, collapsed by default, over the flexible transparent middle that the page view fills or the desktop shows through) and a 48px right rail. The rail carries 手机 / 置顶 / 站点 / 历史 / 书签 / 缩放 / 透明度, with 设置 pinned at its foot — the tools that used to sit in a bottom bar. The rail is the cheaper of the two edges to spend: 48px of a 960px width is 5%, where a 44px bar cost 8% of a 540px height.
+
+The top bar's own height is set by the floating ball it carries: 44 = a 40px ball plus 2px above and below. The ball sits at the bar's right end, last but one before the rail toggle; when the bar is hidden the ball floats at the window's top-right inside the rail column, and it is the collapse switch — clicking it shrinks the whole window to the ball itself (40×40, the platform's floor for a frameless transparent window). Because the window *is* the ball in that state, the ball is drawn square and clipped to `circle(closest-side)`: a platform that refuses to shrink that far must not be allowed to stretch it into an ellipse.
 
 The page itself is one centered column: `max-width: 760px`, 24px side padding, `padding-top: 6%`. Order is wordmark → search → "continue last" line → tile grid → footnote. Width is comfortable and height is scarce, so the layout is horizontal-first and never long-scrolls; the tile grid itself is the only scrolling region.
 
@@ -223,9 +236,9 @@ Every control is quiet at rest and answers on hover/focus with a background or o
 ### Buttons
 - **Shape:** small rounded rectangles, 4px radius (`--radius-sm` / `--moyu-radius-sm`); 26px tall.
 - **Icon button (chrome):** 26px square-ish, 0 6px padding, glyph drawn in `currentColor` from the authored icon set. At rest ink-secondary; on hover it takes the hover-gray fill and ink; in the `on` state it takes the Focus Blue Wash fill and Focus Blue text. The close glyph is the lone danger exception (red fill on hover).
-- **Text button (chrome, 站点 / 历史 / 书签 / 收藏 / 设置):** same box, 0 8px padding, same rest/hover progression.
+- **Text button (chrome, 站点 / 历史 / 书签 / 设置):** same box, 0 8px padding, same rest/hover progression.
 - **Hover / Focus:** background `120ms ease-out`; keyboard focus gets the shared 2px accent outline.
-- **Segmented item (缩放 / 尺寸 / 停靠位置):** a 4px-radius chip, 2px 6px padding, ink-tertiary at rest; hover fills hover-gray with ink; the active one takes active-gray with Focus Blue text.
+- **Segmented item (缩放 / 尺寸):** a 4px-radius chip, 2px 6px padding, ink-tertiary at rest; hover fills hover-gray with ink; the active one takes active-gray with Focus Blue text.
 
 ### Chips
 - **Tab chip (chrome):** 26px tall, `max-width: 130px`, radius 4px; ink-secondary at rest, hover-gray on hover, active-gray + ink when active. Its close glyph is hidden (`opacity: 0`) until hover or active, then dims in at 0.75 and goes danger-red on its own hover.
@@ -266,8 +279,9 @@ The chrome's navigation is icon buttons (home / back / forward / reload) at the 
 
 ## Recorded drift (not repaired; the build wins)
 
-The page and chrome are one system by construction, and in the shipped code they **agree exactly on every color, on the font stack, and on the 4px small radius** — `home.css` and `tokens.css` define the same values under different names (e.g. `#2563eb` is both `--accent` and `--moyu-accent`). Three real drifts remain, recorded rather than papered over:
+The page and chrome are one system by construction, and in the shipped code they **agree exactly on every color, on the font stack, and on the 4px small radius** — `home.css` and `tokens.css` define the same values under different names (e.g. `#2563eb` is both `--accent` and `--moyu-accent`). Four real drifts remain, recorded rather than papered over:
 
 1. **Base size.** The page sets `html, body { font-size: 13px }`; the chrome sets `12px`. Both are inside the ≥12px accessibility floor; the chrome is the denser surface, so the split is defensible, but it is a split.
 2. **Medium radius.** The page's default radius is `8px`; the chrome's is `6px` (the 4px small step matches). Recorded as `{rounded.md-page}` vs `{rounded.md-chrome}`.
 3. **Scrollbars disagree.** The page's scrollbar thumb is the Hairline Strong gray (`#d1d5db`) with a 4px radius; the chrome's is a hard-coded `rgba(21, 23, 28, 0.42)` → `rgba(21, 23, 28, 0.72)` on hover, square, matching no declared chrome token. This is the `base.css` comment's "只用墨" scrollbar; its RGB value (`#15171c`) is unbacked by any token and coincides with the abandoned world's ink, so it is **not** canonized here as a system value — treat it as an in-flight literal, not a rule. `--moyu-paper` (`#ffffff`) is likewise a declared-but-unused alias of the surface color.
+4. **The color rules describe one theme out of seven.** The One Accent Rule and the Neutral Ground Rule above hold for `paper` and for the chrome, and are violated on purpose by the six other start-page themes — `dos` has a blue ground and a yellow accent, the phosphor screens have no neutral at all. The rules are still the right ones for the default and for the chrome; the theme block is the documented exception, not a hole in them. Likewise the type and shape rules ("never ship a display face", zero radii nowhere): the phosphor themes swap the stack for a monospace one and set every radius to 0 — inside `html[data-theme^='crt-']`, deliberately, and nowhere else.

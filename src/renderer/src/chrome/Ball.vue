@@ -169,12 +169,19 @@ watch(
   right: var(--moyu-ball-margin);
 }
 
-/* 收起态：窗口就是球，球紧贴着窗口的四条边 */
+/*
+ * 收起态：窗口就是球，球紧贴着窗口的四条边。
+ * clip-path 是保险：窗口本应是正方形（主进程按球心摆一个正方形，见
+ * WindowController.collapsedBounds），但平台有最小窗口尺寸，万一还是被卡成
+ * 非正方，border-radius 会画出椭圆。circle(closest-side) 取短边作直径，
+ * 窗口是正方形时与 border-radius: 50% 完全一致，不是时也仍是正圆。
+ */
 .ball.collapsed {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  clip-path: circle(closest-side at 50% 50%);
 }
 
 .ball.docked {

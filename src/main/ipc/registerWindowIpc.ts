@@ -59,10 +59,6 @@ export function registerWindowIpc(ctx: AppContext): void {
     ctx.controller.setSize(input)
   })
 
-  ipcMain.handle(INVOKE.winToggleMini, (_e, input: { enabled: boolean }) => {
-    ctx.controller.setMiniMode(input.enabled)
-  })
-
   ipcMain.handle(INVOKE.winMinimize, () => {
     ctx.controller.minimize()
   })
@@ -89,8 +85,8 @@ export function registerWindowIpc(ctx: AppContext): void {
     ctx.closePopover()
   })
 
-  ipcMain.handle(INVOKE.uiOpenSettings, (_e, input?: { section?: string }) => {
-    ctx.openSettings(input?.section)
+  ipcMain.handle(INVOKE.uiOpenSettings, () => {
+    ctx.openSettings()
   })
 
   // ---------------------------------------------------------------- 老板键

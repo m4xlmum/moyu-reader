@@ -57,7 +57,6 @@ export const api: MoyuApi = {
 
   bookmarks: {
     list: (input) => ipcRenderer.invoke(INVOKE.bookmarksList, input) as Promise<Bookmark[]>,
-    add: (input) => ipcRenderer.invoke(INVOKE.bookmarksAdd, input) as Promise<Bookmark[]>,
     remove: (input) => ipcRenderer.invoke(INVOKE.bookmarksRemove, input) as Promise<Bookmark[]>,
     update: (input) => ipcRenderer.invoke(INVOKE.bookmarksUpdate, input) as Promise<Bookmark[]>
   },
@@ -111,7 +110,6 @@ export const api: MoyuApi = {
     openBallMenu: () => ipcRenderer.invoke(INVOKE.winOpenBallMenu) as Promise<void>,
     setSize: (input: { preset: SizePreset } | { width: number; height: number }) =>
       ipcRenderer.invoke(INVOKE.winSetSize, input) as Promise<void>,
-    toggleMini: (input) => ipcRenderer.invoke(INVOKE.winToggleMini, input) as Promise<void>,
     minimize: () => ipcRenderer.invoke(INVOKE.winMinimize) as Promise<void>,
     hideToTray: () => ipcRenderer.invoke(INVOKE.winHideToTray) as Promise<void>,
     reassert: () => ipcRenderer.invoke(INVOKE.winReassert) as Promise<void>,
@@ -124,7 +122,7 @@ export const api: MoyuApi = {
     openPopover: (req: OpenPopoverRequest) =>
       ipcRenderer.invoke(INVOKE.uiOpenPopover, req) as Promise<void>,
     closePopover: () => ipcRenderer.invoke(INVOKE.uiClosePopover) as Promise<void>,
-    openSettings: (input) => ipcRenderer.invoke(INVOKE.uiOpenSettings, input) as Promise<void>
+    openSettings: () => ipcRenderer.invoke(INVOKE.uiOpenSettings) as Promise<void>
   },
 
   hotkey: {

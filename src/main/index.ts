@@ -21,7 +21,6 @@ import { initLogger, log } from './services/logger'
 import { PopoverWindowService } from './services/popoverWindow'
 import { rendererUrl } from './services/rendererUrl'
 import { hardenWebContents, setupSession } from './services/sessionSetup'
-import { SettingsWindowService } from './services/settingsWindow'
 import { SiteStore } from './services/siteStore'
 import { TabManager } from './services/tabManager'
 import { TrayService } from './services/trayService'
@@ -78,6 +77,9 @@ function bootstrap(): void {
     if (chrome && !chrome.webContents.isDestroyed()) {
       chrome.webContents.send(channel, payload)
     }
+    // 自家页面（首页、个人中心）也是渲染进程，只是住在标签页那一层视图里，
+    // 不在上面两个集合中。起始页换主题靠的就是这条配置广播。
+    tabsRef?.broadcastToOwnPages(channel, payload)
   }
 
   // tabs 与 controller 互相引用，用可变引用打破声明顺序上的死结
@@ -116,12 +118,23 @@ function bootstrap(): void {
   })
   tabsRef = tabs
 
-  const settings = new SettingsWindowService(registry, preloadPath)
   const popover = new PopoverWindowService(
     registry,
     preloadPath,
     (): Rect | null => controller.getWindow()?.getBounds() ?? null
   )
+
+  /**
+   * 打开个人中心。
+   *
+   * 它是窗口内的一页（与起始页同一种标签页），不是一扇独立窗口——
+   * 独立窗口会出现在任务栏与 Alt+Tab 里，等于把「我在摸鱼」写在脸上。
+   * 窗口若正缩成球或藏在托盘里，先叫回来：用户要的是看到设置。
+   */
+  function showSettings(): void {
+    tabs.openSettings()
+    controller.showForeground()
+  }
 
   function quit(): void {
     app.quit()
@@ -134,7 +147,7 @@ function bootstrap(): void {
     onRepeatedClick: () => controller.raiseFromTray(),
     // 菜单里的「现形」意图明确，只把它提到最前，不切换
     onReveal: () => controller.showForeground(),
-    onOpenSettings: () => settings.open(),
+    onOpenSettings: () => showSettings(),
     onQuit: () => quit()
   })
 
@@ -150,7 +163,7 @@ function bootstrap(): void {
     bossKeys,
     tray,
     broadcast,
-    openSettings: (section) => settings.open(section),
+    openSettings: () => showSettings(),
     openPopover: (req: OpenPopoverRequest) => popover.open(req),
     closePopover: () => popover.close(),
     quit

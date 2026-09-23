@@ -14,7 +14,7 @@
 | Q2 | 设置 `#00000000` 后 | **像素级完全透明**（与桌面基线差值 0） | 透明方案成立 |
 | Q3 | `transparent:true` 窗口上 `setOpacity(0.5)` | **正常混合**，实测与理论值总偏差 1 | 两条合成路径**可以**共存 |
 | Q4 | `setShape()` 与 `transparent:true` | **完美共存**，裁掉区域与桌面基线差值 0 | `setShape` 可作为命中区域的主策略 |
-| Q5 | `resizable:false` 下程序化 `setBounds` | 生效 | 迷你模式可用，无需开启用户缩放（开启会破坏透明） |
+| Q5 | `resizable:false` 下程序化 `setBounds` | 生效 | 无需开启用户缩放也能改窗口矩形（开启用户缩放会破坏透明） |
 | Q6 | `minimize()` → `restore()` | 透明度保持 | 仍需 reassert 以应对 DPI 切换 |
 | Q7 | `setShape` / `setOpacity` / `setIgnoreMouseEvents` / `setFocusable` / `setSkipTaskbar` / `setContentProtection` / `contentView.addChildView` / `view.setVisible` | 全部可用 | 无 API 缺失 |
 

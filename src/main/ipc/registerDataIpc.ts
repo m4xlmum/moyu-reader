@@ -62,9 +62,6 @@ export function registerDataIpc(ctx: AppContext): void {
 
   // ---------------------------------------------------------------- 书签
   ipcMain.handle(INVOKE.bookmarksList, (_e, input?: { query?: string }) => ctx.bookmarks.query(input ?? {}))
-  ipcMain.handle(INVOKE.bookmarksAdd, (_e, input: { title: string; url: string; faviconUrl?: string }) =>
-    ctx.bookmarks.add(input)
-  )
   ipcMain.handle(INVOKE.bookmarksRemove, (_e, input: { id: string }) => ctx.bookmarks.remove(input.id))
   ipcMain.handle(INVOKE.bookmarksUpdate, (_e, input: { id: string; patch: Record<string, unknown> }) =>
     ctx.bookmarks.update(input.id, input.patch)

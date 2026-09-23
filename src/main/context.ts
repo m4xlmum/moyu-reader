@@ -27,7 +27,7 @@ export interface AppContext {
   tray: TrayService
   /** 向所有界面窗口广播 */
   broadcast: (channel: string, payload: unknown) => void
-  openSettings: (section?: string) => void
+  openSettings: () => void
   openPopover: (req: OpenPopoverRequest) => void
   closePopover: () => void
   quit: () => void

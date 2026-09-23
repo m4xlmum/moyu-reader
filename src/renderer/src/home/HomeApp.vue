@@ -7,11 +7,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { HOME_URL } from '@shared/constants'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { DEFAULT_HOME_THEME, HOME_THEMES } from '@shared/constants'
 import { PRESET_SITES } from '@shared/presets'
-import { registrableDomain, hostOf, resolveInput } from '@shared/url'
-import type { AppConfig, Bookmark, HistoryEntry, SiteRecord, TabState } from '@shared/types'
+import { registrableDomain, hostOf, isOwnUrl, resolveInput } from '@shared/url'
+import type { AppConfig, Bookmark, HistoryEntry, HomeTheme, SiteRecord, TabState } from '@shared/types'
 import Icon from '../chrome/Icon.vue'
 
 const mySites = ref<SiteRecord[]>([])
@@ -20,6 +20,9 @@ const bookmarks = ref<Bookmark[]>([])
 const config = ref<AppConfig | null>(null)
 const query = ref('')
 const focused = ref(false)
+/** 起始页主题，见 config.ui.homeTheme */
+const theme = ref<HomeTheme>(DEFAULT_HOME_THEME)
+const themeOpen = ref(false)
 
 /** 当前正在别处打开着的站点，用于给对应磁贴加一圈强调色 */
 const currentDomain = ref<string | null>(null)
@@ -36,12 +39,16 @@ function domainOf(url: string | null | undefined): string | null {
 
 onMounted(async () => {
   config.value = await window.moyu.config.get()
+  applyTheme(config.value.ui.homeTheme)
   offConfig = window.moyu.config.onChanged((next) => {
     config.value = next
+    // 主题也可能是在个人中心里改的，那条路上只有这条广播会通知到这里
+    applyTheme(next.ui.homeTheme)
   })
 
   const applyTabs = (payload: { tabs: TabState[]; activeTabId: string | null }): void => {
-    const guests = payload.tabs.filter((t) => t.url && t.url !== HOME_URL)
+    // 只剩访客页参与「当前站点」的判定：起始页与个人中心是自家页面，没有域名可亮
+    const guests = payload.tabs.filter((t) => t.url && !isOwnUrl(t.url))
     const active = guests.find((t) => t.id === payload.activeTabId)
     currentDomain.value = domainOf((active ?? guests[guests.length - 1])?.url)
   }
@@ -54,6 +61,8 @@ onMounted(async () => {
 onUnmounted(() => {
   offConfig?.()
   offTabs?.()
+  document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+  document.removeEventListener('keydown', onDocumentKeydown)
 })
 
 async function reload(): Promise<void> {
@@ -152,6 +161,53 @@ function resume(): void {
   window.setTimeout(() => (resumeLit.value = false), 500)
   open(last.url)
 }
+
+// ---------------------------------------------------------------- 主题
+
+/**
+ * 主题写在 html[data-theme] 上，样式表按这个属性挑变量组（见 styles/home.css）。
+ *
+ * 不绑 class：属性选择器在样式表里更直白，也不会与作用域样式打架——
+ * 作用域样式会给选择器末尾补一个 data-v 属性，属性选择器不参与那套改写。
+ */
+function applyTheme(next: HomeTheme): void {
+  theme.value = next
+  document.documentElement.dataset.theme = next
+}
+
+/**
+ * 选一个主题。
+ *
+ * 先落地再持久化：换主题是一次视觉反馈，不该等一趟 IPC 往返才看到效果。
+ * 配置更新后主进程会广播回来，那条路也会再调一次 applyTheme——幂等，不冲突。
+ */
+function pickTheme(next: HomeTheme): void {
+  applyTheme(next)
+  themeOpen.value = false
+  void window.moyu.config.patch({ ui: { homeTheme: next } })
+}
+
+const themeLabel = computed(() => HOME_THEMES.find((t) => t.id === theme.value)?.label ?? '')
+
+/** 点面板外面或按 Esc 就收起来，浮层的常规礼数 */
+function onDocumentPointerDown(event: PointerEvent): void {
+  const target = event.target as HTMLElement | null
+  if (!target?.closest('.theme-wrap')) themeOpen.value = false
+}
+
+function onDocumentKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') themeOpen.value = false
+}
+
+watch(themeOpen, (open) => {
+  if (open) {
+    document.addEventListener('pointerdown', onDocumentPointerDown, true)
+    document.addEventListener('keydown', onDocumentKeydown)
+  } else {
+    document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+    document.removeEventListener('keydown', onDocumentKeydown)
+  }
+})
 </script>
 
 <template>
@@ -195,6 +251,50 @@ function resume(): void {
       </div>
 
       <p class="footnote">Alt+Z 最小化 · Alt+X 藏进托盘</p>
+    </div>
+
+    <!--
+      主题选择。放在右下角：它是起始页上唯一一处「改自己的样子」的入口，
+      不属于内容，所以待在视线之外，但一伸手就能够到。
+    -->
+    <div class="theme-wrap">
+      <div v-if="themeOpen" class="theme-panel" role="listbox" aria-label="起始页主题">
+        <button
+          v-for="t in HOME_THEMES"
+          :key="t.id"
+          class="theme-item"
+          role="option"
+          :aria-selected="t.id === theme"
+          :class="{ on: t.id === theme }"
+          @click="pickTheme(t.id)"
+        >
+          <!--
+            色卡：这一小块自己带上目标主题的属性，于是 --ground / --text /
+            --accent / --tile 就在它内部解析成那个主题的颜色。
+            配色只有样式表里那一份，这里不另抄一遍十六进制。
+          -->
+          <span class="chips" :data-theme="t.id" aria-hidden="true">
+            <i class="chip-text" />
+            <i class="chip-accent" />
+            <i class="chip-tile" />
+          </span>
+          <span class="theme-text">
+            <span class="theme-label">{{ t.label }}</span>
+            <span class="theme-hint">{{ t.hint }}</span>
+          </span>
+        </button>
+      </div>
+
+      <button
+        class="theme-button"
+        :aria-expanded="themeOpen"
+        aria-haspopup="listbox"
+        title="起始页主题"
+        @click="themeOpen = !themeOpen"
+      >
+        主题 · {{ themeLabel }}
+        <Icon name="chevron-down" :size="12" />
+      </button>
     </div>
   </div>
 </template>
@@ -403,9 +503,166 @@ function resume(): void {
   text-align: center;
 }
 
+/* ---------------------------------------------------------------- 主题选择 */
+
+.theme-wrap {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.theme-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text-tertiary);
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.theme-button:hover,
+.theme-button[aria-expanded='true'] {
+  background: var(--ground-hover);
+  color: var(--text);
+}
+
+.theme-panel {
+  width: 264px;
+  /*
+   * 高度贴着可用空间给，而不是给一个固定的百分比：七个主题要能一眼看全，
+   * 少一条看上去就像漏了一个主题。窗口矮的时候（尺寸预设选了小号）才滚动。
+   */
+  max-height: min(360px, calc(100vh - 72px));
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--ground);
+  border: 1px solid var(--divider-strong);
+  border-radius: var(--radius);
+  /* 阴影用中性的黑，不用强调色的偏蓝：它在七个主题里都得立得住 */
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22);
+}
+
+.theme-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  transition: background 120ms ease-out;
+}
+
+.theme-item:hover {
+  background: var(--ground-hover);
+}
+
+.theme-item.on {
+  background: var(--accent-soft);
+}
+
+/*
+ * 色卡。它自己带着目标主题的属性，于是里面的 --ground / --text / --accent /
+ * --tile 解析成那个主题的颜色——配色只有 home.css 里那一份。
+ * 底色格用不着单画：这一小块的地就是那个主题的底色。
+ */
+.chips {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--ground);
+  border: 1px solid var(--divider-strong);
+  border-radius: 3px;
+}
+
+.chips i {
+  display: block;
+  width: 8px;
+  height: 15px;
+}
+
+.chip-text {
+  background: var(--text);
+}
+
+.chip-accent {
+  background: var(--accent);
+}
+
+.chip-tile {
+  background: var(--tile);
+}
+
+.theme-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.theme-label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.theme-hint {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-tertiary);
+}
+
+/* ---------------------------------------------------------------- 荧光屏的记号 */
+
+/*
+ * 光标。标识后面跟一个方块，一闪一闪——这是这套主题唯一的动效，
+ * 也是「这里是一台终端」最省笔墨的一句话。
+ */
+:root[data-theme^='crt-'] .wordmark::after {
+  content: '▌';
+  margin-left: 5px;
+  color: var(--accent);
+  animation: block-blink 1.1s step-end infinite;
+}
+
+/* 搜索行改成一条终端提示行：放大镜在这里是浏览器的东西，与提示符不搭 */
+:root[data-theme^='crt-'] .search :deep(svg) {
+  display: none;
+}
+
+:root[data-theme^='crt-'] .search::before {
+  content: '>';
+  color: var(--accent);
+}
+
+@keyframes block-blink {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  55.01%,
+  100% {
+    opacity: 0.15;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme^='crt-'] .wordmark::after {
+    animation: none;
+  }
+}
+
 /* ---------------------------------------------------------------- 紧凑高度 */
 
-/* 迷你模式下纵向空间极少：脚注让位，磁贴收紧 */
+/* 窗口很矮的时候（尺寸预设选了小号、或用户自己拉矮了）：脚注让位，磁贴收紧 */
 @media (max-height: 400px) {
   .column {
     padding-top: 14px;

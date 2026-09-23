@@ -3,9 +3,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import type { SizePreset } from './constants'
+import type { HomeTheme, SizePreset } from './constants'
 
-export type { SizePreset }
+export type { HomeTheme, SizePreset }
 
 // ---------------------------------------------------------------- 配置
 
@@ -14,9 +14,6 @@ export interface WindowConfig {
   y: number | null
   width: number
   height: number
-  /** 最后一次非迷你模式的尺寸，退出迷你模式时恢复 */
-  lastNormalSize: { width: number; height: number }
-  miniMode: boolean
   /** 无极透明度，0.05 ~ 1 */
   opacity: number
   alwaysOnTop: boolean
@@ -49,6 +46,8 @@ export interface UiConfig {
   topBarOpen: boolean
   /** 显示右侧功能栏。顶栏隐藏时这一栏会被强制保留，见 WindowRuntime.railVisible */
   railOpen: boolean
+  /** 起始页主题。只在起始页生效，不影响阅读网页时的观感 */
+  homeTheme: HomeTheme
 }
 
 export interface HotkeyConfig {
