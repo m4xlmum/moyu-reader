@@ -1,0 +1,369 @@
+<script setup lang="ts">
+/**
+ * 顶栏上的标签条：起始页、系统设置、各个网页各占一格，点一下就切过去。
+ *
+ * 为什么又把它拿回来：只有下拉清单时，「我现在开着哪些页」这件事在界面上
+ * 完全看不见——清单要主动点开才知道，切换一个标签页得先点开、再找到、再点。
+ * 标签条把这一层状态摆回明面上。
+ *
+ * 但仍要防着它把顶栏挤爆：窗口窄到放不下**全部**标签（迷你档尤其）时，
+ * 这一条整体让位给原来的下拉清单——宁可不显示，也不显示一条被截断、
+ * 需要横向滚动才能找到想去的那个的标签条。**判断依据是量出来的宽度**，
+ * 不是窗口宽度：顶栏里还有导航、地址栏开关、新建按钮，留给标签条的
+ * 是它们分剩下的那一块，只有量了才知道有多少。
+ *
+ * 量法：标签条始终挂着。放不下时给它 `position: absolute; visibility: hidden`
+ * ——离开流（不占宽度、不把后面的按钮挤走），但照样能量出自己的自然宽度。
+ * 因此「容量」这个数在两态下都算得出来，不会出现
+ * 「一藏起来就显得放得下 → 又显示 → 又放不下」的来回抖。
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
+import { isOwnUrl } from '@shared/url'
+import type { TabState } from '@shared/types'
+import Icon from './Icon.vue'
+
+const props = defineProps<{
+  tabs: TabState[]
+  activeTabId: string | null
+}>()
+
+/** 标签之间的间距，与 .zone 的 gap 一致；算容量时要用到 */
+const GAP = 4
+
+/**
+ * 标签条需要的宽度之外，再留一点余量。
+ *
+ * 上面那套算法是拿容器宽度减去同排控件的实测宽度得到的，取整与边框
+ * 会有几个像素的出入。差这一两个像素的后果是最后一个标签被啃掉一条边，
+ * 所以宁可早一点让位。
+ */
+const SLACK = 8
+
+const zone = useTemplateRef<HTMLElement>('zone')
+const strip = useTemplateRef<HTMLElement>('strip')
+
+/**
+ * 是否给标签条腾出了位置。
+ *
+ * 初值为 true：标签条是这一栏的常态，先按常态排一帧，量完再决定要不要让位。
+ * 反过来初值给 false 的话，每次开窗都要先闪一条下拉按钮出来。
+ */
+const fits = ref(true)
+
+const activeTab = computed(() => props.tabs.find((t) => t.id === props.activeTabId) ?? null)
+
+const activeTitle = computed(() => activeTab.value?.title || '新标签页')
+
+/**
+ * 自家页面（起始页、系统设置）画自己的图标：它们没有网站图标，
+ * 留一个空位不如画个标记——一眼能认出「这一格不是网页」。
+ */
+function ownIcon(tab: TabState): 'home' | 'settings' | null {
+  if (!isOwnUrl(tab.url)) return null
+  return tab.url.startsWith('moyu://settings') ? 'settings' : 'home'
+}
+
+function measure(): void {
+  const z = zone.value
+  const s = strip.value
+  if (!z || !s) return
+
+  // 与标签条同排的还有别的控件（新建按钮），它们占掉的宽度得先扣出去。
+  // 让位给下拉清单时，清单本身不算——它占的正是标签条的位置，
+  // 算进去就等于「越窄越显得放不下」，标签条再也回不来。
+  let used = 0
+  let others = 0
+  for (const child of Array.from(z.children)) {
+    const el = child as HTMLElement
+    if (el === s || el.classList.contains('rest') || el.classList.contains('fallback')) continue
+    used += el.offsetWidth
+    others += 1
+  }
+
+  // 在流里的东西：标签条、扣掉的那些、末尾那个弹性占位，间距因此是 others + 1 段
+  const avail = z.clientWidth - used - (others + 1) * GAP
+  fits.value = s.scrollWidth + SLACK <= avail
+}
+
+let ro: ResizeObserver | null = null
+
+onMounted(() => {
+  // 同步量一次：标签条按常态排完这一帧就该定下来，不必等下一帧
+  measure()
+  ro = new ResizeObserver(measure)
+  if (zone.value) ro.observe(zone.value)
+  // 字体的度量在首帧之后才落定，再量一次收口
+  void document.fonts?.ready.then(() => measure())
+})
+
+onUnmounted(() => ro?.disconnect())
+
+watch(
+  () => props.tabs,
+  () => void nextTick(measure)
+)
+
+function activate(tabId: string): void {
+  if (tabId === props.activeTabId) return
+  void window.moyu.tabs.activate({ tabId })
+}
+
+function close(tabId: string): void {
+  void window.moyu.tabs.close({ tabId })
+}
+
+/**
+ * 打开标签页清单。
+ *
+ * 做成独立面板而不是 CSS 下拉：面板是另一个窗口，可以盖在网页上；
+ * 顶栏里的 DOM 只要画到顶栏下沿以外就会被标签页视图整个盖住。
+ * 锚点取按钮自身的位置，主进程据此把它摆在按钮正下方。
+ */
+function openList(event: MouseEvent): void {
+  const el = event.currentTarget as HTMLElement
+  const r = el.getBoundingClientRect()
+  void window.moyu.ui.openPopover({
+    kind: 'tabs',
+    anchorRect: {
+      x: Math.round(r.left),
+      y: Math.round(r.top),
+      width: Math.round(r.width),
+      height: Math.round(r.height)
+    }
+  })
+}
+
+function hideBrokenIcon(event: Event): void {
+  ;(event.target as HTMLImageElement).style.display = 'none'
+}
+</script>
+
+<template>
+  <!--
+    整块是 no-drag：标签格挨着排，若留出可拖动的缝，拖窗口就会误伤成拖标签。
+    可拖动的地方在两侧（导航栏那一头与窗口操作那一头）足够多了。
+  -->
+  <div ref="zone" class="zone moyu-no-drag">
+    <div ref="strip" class="strip" :data-fits="fits" role="tablist" aria-label="标签页">
+      <div
+        v-for="tab in tabs"
+        :key="tab.id"
+        class="tab"
+        role="tab"
+        :class="{ on: tab.id === activeTabId }"
+        :aria-selected="tab.id === activeTabId"
+        :tabindex="tab.id === activeTabId ? 0 : -1"
+        :title="tab.title || tab.url"
+        @click="activate(tab.id)"
+        @keydown.enter="activate(tab.id)"
+        @keydown.space.prevent="activate(tab.id)"
+        @mousedown.middle.prevent="close(tab.id)"
+      >
+        <span class="glyph" aria-hidden="true">
+          <Icon v-if="ownIcon(tab)" :name="ownIcon(tab)!" :size="12" />
+          <img v-else-if="tab.faviconUrl" :src="tab.faviconUrl" alt="" @error="hideBrokenIcon" />
+          <span v-else class="dot" />
+        </span>
+        <span class="title">{{ tab.title || '新标签页' }}</span>
+        <!--
+          关闭键是 role="tab" 里的一个 <button>：外层用 div 而不是 button，
+          按钮里套按钮在 HTML 里是错的，点击行为也会打架。
+        -->
+        <button class="x" title="关闭标签页" @click.stop="close(tab.id)">
+          <Icon name="close" :size="10" />
+        </button>
+      </div>
+    </div>
+
+    <!-- 让位时的下拉清单：形状仍是那个单按钮，只是宽度改由这一条给 -->
+    <button
+      v-if="!fits"
+      class="fallback"
+      :title="`标签页（${tabs.length}）`"
+      @click="openList"
+    >
+      <span class="title">{{ activeTitle }}</span>
+      <span v-if="tabs.length > 1" class="count">{{ tabs.length }}</span>
+      <Icon name="chevron-down" :size="12" />
+    </button>
+
+    <!-- 新建标签页跟在标签条（或那个下拉）后面，浏览器就是这么摆的。由顶栏塞进来 -->
+    <slot />
+
+    <!-- 吃掉剩余宽度，把窗口操作那组推到最右。它自己不是控件，算容量时跳过 -->
+    <span class="rest" aria-hidden="true" />
+  </div>
+</template>
+
+<style scoped>
+.zone {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* 让位后的标签条是绝对定位的，锚在这个盒子的左端 */
+  position: relative;
+  overflow: hidden;
+}
+
+.strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/*
+ * 放不下：离开流，但仍挂着——量宽度得靠它自己。
+ * 用 visibility 而不是 display: none，后者量出来是 0，两态之间就会来回抖。
+ */
+.strip[data-fits='false'] {
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* 下限保证每格都还认得出是个标签，上限防着一篇长标题把整条吃光 */
+  min-width: 84px;
+  max-width: 180px;
+  height: 26px;
+  padding: 0 3px 0 8px;
+  border-radius: var(--moyu-radius);
+  color: var(--moyu-text-dim);
+  white-space: nowrap;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.tab:hover {
+  background: var(--moyu-surface-hover);
+  color: var(--moyu-ink);
+}
+
+/* 当前这一格：与地址栏开关的「展开中」同一套说法——底色抬起，文字压深 */
+.tab.on {
+  background: var(--moyu-surface-active);
+  color: var(--moyu-ink);
+}
+
+.glyph {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  color: var(--moyu-text-faint);
+}
+
+.tab.on .glyph {
+  color: var(--moyu-accent);
+}
+
+.glyph img {
+  width: 14px;
+  height: 14px;
+  object-fit: contain;
+}
+
+/* 没有图标也不换过图标的站点：一个灰点，比留空整齐 */
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * 关闭键平时不画。用 visibility 而不是 display: none——它得一直占着那 18px，
+ * 否则鼠标扫过标签时文字会随着按钮出现而缩一截，看着像在抖。
+ */
+.x {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--moyu-radius-sm);
+  color: var(--moyu-text-faint);
+  visibility: hidden;
+}
+
+/*
+ * 只在标签条真的在显示时才露出来。
+ *
+ * `visibility` 是可继承的，但后代能把它改回去——上面那条让位规则隐藏了整条标签条，
+ * 而 `.tab.on .x` 会把当前那一格的关闭键重新点亮，于是在下拉按钮旁边、
+ * 标签条本该不在的地方留下一个孤零零的 ✕（还能被 Tab 键选中）。
+ * 因此这两条必须挂在「显示中」这一态上。
+ */
+.strip[data-fits='true'] .tab:hover .x,
+.strip[data-fits='true'] .tab.on .x {
+  visibility: visible;
+}
+
+.x:hover {
+  background: var(--moyu-surface);
+  color: var(--moyu-danger);
+}
+
+/* 让位时的下拉清单：形状沿用地址栏开关那一套，宽度由容器给 */
+.fallback {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 190px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-radius: 13px;
+  background: var(--moyu-surface-hover);
+  color: var(--moyu-text-dim);
+  white-space: nowrap;
+  transition: background 120ms ease-out, color 120ms ease-out;
+}
+
+.fallback:hover {
+  background: var(--moyu-surface-active);
+  color: var(--moyu-ink);
+}
+
+/* 窄到只剩几十像素时先舍标题，标签数那枚小牌与箭头要留住 */
+.fallback .title {
+  flex: 0 1 auto;
+}
+
+.count {
+  flex: 0 0 auto;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--moyu-surface-active);
+  color: var(--moyu-text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.rest {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+</style>

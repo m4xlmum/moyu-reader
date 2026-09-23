@@ -166,8 +166,8 @@ export const HOME_THEMES: ReadonlyArray<{
   hint: string
   world: HomeWorld
 }> = [
-  { id: 'paper', label: '纸白', hint: '浅色卡片，日光灯下最不显眼', world: 'modern' },
-  { id: 'night', label: '暗夜', hint: '深色卡片，不发光，晚上眼睛舒服', world: 'modern' },
+  { id: 'paper', label: '纸白', hint: '浅色行式列表，日光灯下最不显眼', world: 'modern' },
+  { id: 'night', label: '暗夜', hint: '深色行式列表，不发光，晚上眼睛舒服', world: 'modern' },
   { id: 'crt-green', label: '磷绿', hint: 'P1 单色终端：命令行、扫描线、余辉', world: 'terminal' }
 ]
 

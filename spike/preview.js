@@ -10,6 +10,10 @@
  *   npx electron spike/preview.js                 # 顶栏展开
  *   npx electron spike/preview.js --no-topbar     # 顶栏藏起来，球浮在右上角
  *   npx electron spike/preview.js --collapsed     # 已收起（只剩一颗球）
+ *   npx electron spike/preview.js --width 480 --height 270   # 迷你档多大，标签条就得让位
+ *   npx electron spike/preview.js --tabs 3        # 只留前 3 个标签页：放得下那一态
+ *   npx electron spike/preview.js --click-tab 0   # 点第 0 格标签，再截一张
+ *   npx electron spike/preview.js --resize 1100x700   # 改窗口尺寸再截一张：让位与回归
  *   npx electron spike/preview.js --home          # 起始页
  *   npx electron spike/preview.js --home --themes # 起始页三套主题各截一张（走真实换主题那条路）
  *   npx electron spike/preview.js --home --theme crt-green --width 448 --height 297
@@ -40,6 +44,19 @@ const PAGE_FILE = { chrome: 'index.html', home: 'home.html', settings: 'settings
 
 const WIDTH = num('--width', 960)
 const HEIGHT = num('--height', 540)
+/** 只留前 N 个标签页。标签条放不放得下是算出来的，得能用少几张试出「放得下」那一态 */
+const TABS = num('--tabs', 0)
+/**
+ * --resize 1100x700：截完第一张之后把窗口改到这么大，再截一张。
+ *
+ * 标签条的让位是靠 ResizeObserver 重新量出来的，这条路只有真改窗口尺寸才走得到。
+ */
+const resize = (() => {
+  const i = args.indexOf('--resize')
+  if (i < 0) return null
+  const m = /^(\d+)x(\d+)$/.exec(args[i + 1] ?? '')
+  return m ? { width: Number(m[1]), height: Number(m[2]) } : null
+})()
 /** 主题id由起始页自己给出（见下面的 THEME_IDS），这里只需要一个能看得清的默认值 */
 const theme = (() => {
   const i = args.indexOf('--theme')
@@ -55,7 +72,7 @@ ipcMain.on('preview:ballRect', (_event, rect) => {
   reportedBallRect = rect
 })
 ipcMain.on('preview:options', (event) => {
-  event.returnValue = { mode, theme }
+  event.returnValue = { mode, theme, tabs: TABS }
 })
 
 /** 量一圈关键元素。数字比眼睛靠谱，而且能直接和主进程的版面常量对照 */
@@ -70,14 +87,49 @@ const MEASURE = `(() => {
     }
   }
   const rightGroup = document.querySelector('.topbar .group:last-of-type')
+  /*
+   * 标签条这一块。要看的是三件事：
+   * 放不下时有没有让位（fits / fallback 存在与否）、让位后的标签条是不是
+   * 真的离开了流（不在流里才不会把「+」与窗口操作挤走）、
+   * 显示时最后一格有没有被啃掉一条边（lastTab 右端 ≤ zone 右端）。
+   */
+  const zone = box('.zone')
+  const lastTab = box('.zone .tab:last-of-type')
+  const tabs = [...document.querySelectorAll('.zone .tab')]
   return {
     window: { w: window.innerWidth, h: window.innerHeight },
     topbar: box('.topbar'),
     rail: box('.rail'),
     ball: box('.ball'),
-    tabSelect: box('.tab-select'),
-    tabSelectText: document.querySelector('.tab-select .ellipsis')?.textContent?.trim() ?? null,
-    tabCount: document.querySelector('.tab-count')?.textContent?.trim() ?? null,
+    zone,
+    stripFits: document.querySelector('.strip')?.dataset.fits ?? null,
+    // 逐格实测：左端、宽度，以及里面的文字有没有被省略号截掉
+    tabBoxes: tabs.map((el) => {
+      const r = el.getBoundingClientRect()
+      const title = el.querySelector('.title')
+      return {
+        x: Math.round(r.x),
+        w: Math.round(r.width),
+        on: el.classList.contains('on'),
+        glyph: el.querySelector('img') ? 'img' : el.querySelector('svg') ? 'svg' : 'dot',
+        titleClipped: title ? title.scrollWidth > title.clientWidth : null,
+        /*
+         * 用 checkVisibility 而不是 getComputedStyle(...).visibility：
+         * 后者只看这一格自己的值，祖先被隐藏它照样报 visible。
+         * 实测踩过：让位时整条标签条是 hidden 的，可当前那一格的关闭键
+         * 自己写着 visibility: visible，于是在下拉按钮旁边留下一个孤零零的 ✕，
+         * 而这一项当时报的是 true —— 看不见的 bug 正是这么混过去的。
+         */
+        closeVisible: el.querySelector('.x')?.checkVisibility({ visibilityProperty: true }) ?? null
+      }
+    }),
+    lastTab,
+    // 超出容器右沿就是被啃了——这正是「放不下却没让位」的样子
+    lastTabOverflow: lastTab && zone ? Math.round(lastTab.x + lastTab.w - (zone.x + zone.w)) : null,
+    fallback: box('.fallback'),
+    fallbackText: document.querySelector('.fallback .title')?.textContent?.trim() ?? null,
+    fallbackCount: document.querySelector('.fallback .count')?.textContent?.trim() ?? null,
+    plus: box('.zone > button.icon:not(.fallback)'),
     addressToggle: box('.address-toggle'),
     // 右侧那一组按钮，从左到右，用来核对顺序
     rightButtons: rightGroup
@@ -92,11 +144,11 @@ const MEASURE = `(() => {
     railButtons: [...document.querySelectorAll('.rail button')].map(
       (el) => el.getAttribute('title') ?? el.className
     ),
-    bodySample: box('.spacer')
+    bodySample: box('.rest')
   }
 })()`
 
-/** 起始页与个人中心的版面：看排版是否成立，以及主题有没有真的换掉颜色 */
+/** 起始页与系统设置的版面：看排版是否成立，以及主题有没有真的换掉颜色 */
 const PAGE_MEASURE = `(() => {
   const box = (sel) => {
     const el = document.querySelector(sel)
@@ -114,23 +166,25 @@ const PAGE_MEASURE = `(() => {
       text: style.color,
       accent: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()
     },
-    // 现代世界：卡片
-    cards: box('.cards'),
+    // 现代世界：行式列表。两套世界的四段划分逐段对齐，选的名也就一一对应
+    modern: box('.modern'),
     wordmark: box('.wordmark'),
-    search: box('.search'),
-    hero: box('.hero'),
-    tilesArea: box('.tiles'),
-    tileCount: document.querySelectorAll('.tile').length,
-    foot: box('.foot'),
+    prompt: box('.modern .prompt'),
+    favicon: box('.modern .favicon'),
+    lines: box('.modern .lines'),
+    lineCount: document.querySelectorAll('.modern .line').length,
+    firstLine: box('.modern .line'),
+    resumeVerb: document.querySelector('.modern .line.resume .verb')?.textContent?.trim() ?? null,
+    status: box('.modern .status'),
     // 终端世界：命令行
     term: box('.term'),
     termBar: box('.term .bar'),
-    prompt: box('.term .prompt'),
+    termPrompt: box('.term .prompt'),
     cursor: box('.term .cursor'),
-    lines: box('.term .lines'),
-    lineCount: document.querySelectorAll('.term .line').length,
-    firstLine: box('.term .line'),
-    status: box('.term .status'),
+    termLines: box('.term .lines'),
+    termLineCount: document.querySelectorAll('.term .line').length,
+    termFirstLine: box('.term .line'),
+    termStatus: box('.term .status'),
     // 两套世界共用的主题选择器
     themeMenu: box('.theme-menu'),
     themePanel: box('.theme-menu .panel'),
@@ -198,8 +252,12 @@ app.whenReady().then(async () => {
     if (page === 'chrome') console.log(`BALL_RECT ${JSON.stringify(reportedBallRect)}`)
   }
 
+  const run = (js) => win.webContents.executeJavaScript(js)
+  // 尺寸与非默认的标签数都写进名字：同一台机器上跑几档下来，别互相覆盖
+  const size = WIDTH !== 960 || HEIGHT !== 540 ? `-${WIDTH}x${HEIGHT}` : ''
+  const tabs = TABS ? `-${TABS}tabs` : ''
+
   if (page === 'home' && has('--themes')) {
-    const run = (js) => win.webContents.executeJavaScript(js)
     /*
      * 展开主题选择器。
      *
@@ -216,7 +274,7 @@ app.whenReady().then(async () => {
     // 主题名单从面板里读，不在脚本里另抄一份
     const ids = await run(THEME_IDS)
     console.log(`THEMES ${JSON.stringify(ids)}`)
-    await shoot('home-picker')
+    await shoot(`home-picker${size}`)
 
     for (let i = 0; i < ids.length; i += 1) {
       /*
@@ -226,16 +284,39 @@ app.whenReady().then(async () => {
        */
       await run(`document.querySelectorAll('.theme-menu .panel .item')[${i}].click()`)
       await wait(400)
-      await shoot(`home-${ids[i]}`)
+      await shoot(`home-${ids[i]}${size}`)
       await run(openMenu)
       await wait(250)
     }
   } else {
     const name =
       page !== 'chrome'
-        ? `${page}${page === 'home' ? `-${theme}` : ''}${WIDTH !== 960 ? `-${WIDTH}x${HEIGHT}` : ''}`
-        : `preview-${mode}`
+        ? `${page}${page === 'home' ? `-${theme}` : ''}${size}${tabs}`
+        : `preview-${mode}${size}${tabs}`
     await shoot(name)
+
+    /*
+     * 点一格标签，再截一张。
+     *
+     * 「点得动」是标签条的全部意义，而这件事只有真点一下才知道：
+     * 假桥里 activate 会改掉当前格并广播，两张图的选中格应当不同。
+     */
+    if (page === 'chrome' && has('--click-tab')) {
+      const at = num('--click-tab', 0)
+      await run(`document.querySelectorAll('.zone .tab')[${at}]?.click()`)
+      await wait(400)
+      await shoot(`${name}-click${at}`)
+    }
+
+    /*
+     * 改窗口尺寸，再截一张：标签条的让位与回归都靠这一步走一遍。
+     * 窗口一变，渲染进程那边的 ResizeObserver 才量得出新的余量。
+     */
+    if (resize) {
+      win.setSize(resize.width, resize.height)
+      await wait(600)
+      await shoot(`${name}-resized${resize.width}x${resize.height}`)
+    }
   }
 
   app.exit(0)

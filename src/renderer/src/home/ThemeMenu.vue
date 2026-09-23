@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * 主题选择器：一个触发器 + 一层浮层。两套世界共用，只有触发器长得不一样。
+ * 主题选择器：一个触发器 + 一层浮层。两套世界共用，只有触发器长得不一样
+ * （终端那边是 `THEME 磷绿` 这样的键值对，现代这边是「主题 · 纸白」）。
  *
- * 放在起始页的页眉里（两套世界的页眉都在同一个位置，见 StartCards /
- * StartTerminal）：它是这一页上唯一「改自己样子」的入口，不属于内容，
- * 因此待在视线之外，但一伸手就能够到。
+ * 触发器待在这一页最底下那条状态行的右端（两套世界都把它放在这里）：
+ * 它是这一页上唯一「改自己样子」的入口，不属于内容，因此待在视线之外，
+ * 但一伸手就能够到。
  *
- * 浮层朝哪边开由形态决定：卡片世界的触发器在页眉上，朝下开；
- * 终端世界在页面最底下那条状态行里，朝上开。两边都是往页面里面开。
+ * 浮层一律朝上开：触发器已经在页脚了，朝下开就直接落到窗口外面去。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -15,7 +15,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { HOME_THEMES, type HomeTheme } from '@shared/constants'
 import Icon from '../chrome/Icon.vue'
 
-const props = defineProps<{ theme: HomeTheme; variant: 'cards' | 'terminal' }>()
+const props = defineProps<{ theme: HomeTheme; variant: 'modern' | 'terminal' }>()
 const emit = defineEmits<{ pick: [theme: HomeTheme] }>()
 
 const open = ref(false)
@@ -57,7 +57,7 @@ onUnmounted(() => {
   <!--
     形态用 data-variant 而不是 class。
     子组件的根元素会带上**父组件**的作用域属性，于是父组件里任何一条
-    `.某类名[data-v-父]` 的规则都可能落到这里；而 cards / terminal 正好是
+    `.某类名[data-v-父]` 的规则都可能落到这里；而 modern / terminal 正好是
     两套世界根元素的类名，撞上就是「主题菜单被当成整页排了一遍版」。
     属性名不参与那套改写，也就撞不上。
   -->
@@ -116,15 +116,6 @@ onUnmounted(() => {
   align-items: flex-end;
 }
 
-/*
- * 终端世界反过来朝上开：那一边的触发器在页面最底下那条状态行里，
- * 朝下开就直接落到窗口外面去了。
- */
-.theme-menu[data-variant='terminal'] .panel {
-  top: auto;
-  bottom: calc(100% + 4px);
-}
-
 .trigger {
   display: inline-flex;
   align-items: center;
@@ -159,9 +150,13 @@ onUnmounted(() => {
   color: var(--accent);
 }
 
+/*
+ * 触发器待在页脚，浮层一律朝上开——朝下就直接落到窗口外面去。
+ */
 .panel {
   position: absolute;
-  top: calc(100% + 4px);
+  top: auto;
+  bottom: calc(100% + 4px);
   right: 0;
   z-index: 30;
   width: 252px;

@@ -5,9 +5,8 @@
  * 地址栏本身不在这里——它默认折叠，展开时是顶栏下方独立的一行。
  * 这里只留一个开关，兼作「当前在哪」的一眼可见处。
  *
- * 标签页不再是排开的标签条：标签一多就会溢出，只得横向滚动才能找到想去的那个。
- * 改成一个下拉样式的按钮，显示当前页，点开是一份竖排清单（面板窗口里画，
- * 因为 chrome 层在标签页视图之下，画在顶栏里的下拉会被网页盖住）。
+ * 标签条与它的让位（窗口窄时退回下拉清单）都在 TabStrip 里，
+ * 那一条要按实测宽度决定自己让不让位，是顶栏里唯一需要知道自己有多宽的东西。
  *
  * 整条可拖动（-webkit-app-region: drag），其中的控件需标记 no-drag，
  * 否则点击会被当成拖动窗口起手。
@@ -19,6 +18,7 @@ import { isOwnUrl } from '@shared/url'
 import type { TabState } from '@shared/types'
 import Icon from './Icon.vue'
 import Ball from './Ball.vue'
+import TabStrip from './TabStrip.vue'
 
 const props = defineProps<{
   tabs: TabState[]
@@ -48,9 +48,7 @@ const siteLabel = computed(() => {
   }
 })
 
-/** 下拉按钮上显示的当前页标题 */
-const tabLabel = computed(() => props.activeTab?.title || '新标签页')
-
+/** 新建一张标签页并切过去 */
 async function newTab(): Promise<void> {
   await window.moyu.tabs.create({ activate: true })
 }
@@ -65,27 +63,6 @@ async function newTab(): Promise<void> {
 function toggleAddress(event: MouseEvent): void {
   event.preventDefault()
   window.moyu.win.setAddressOpen({ open: !props.addressOpen })
-}
-
-/**
- * 打开标签页清单。
- *
- * 做成独立面板而不是 CSS 下拉：面板是另一个窗口，可以盖在网页上；
- * 顶栏里的 DOM 只要画到顶栏下沿以外就会被标签页视图整个盖住。
- * 锚点取按钮自身的位置，主进程据此把它摆在按钮正下方。
- */
-function openTabList(event: MouseEvent): void {
-  const el = event.currentTarget as HTMLElement
-  const r = el.getBoundingClientRect()
-  void window.moyu.ui.openPopover({
-    kind: 'tabs',
-    anchorRect: {
-      x: Math.round(r.left),
-      y: Math.round(r.top),
-      width: Math.round(r.width),
-      height: Math.round(r.height)
-    }
-  })
 }
 
 function toggleRail(): void {
@@ -146,22 +123,15 @@ function goHome(): void {
       <span class="ellipsis">{{ siteLabel }}</span>
     </button>
 
-    <!-- 标签页：下拉式的单按钮，标签再多也不会把顶栏挤爆 -->
-    <button
-      class="tab-select moyu-no-drag"
-      :title="`标签页（${tabs.length}）`"
-      @click="openTabList"
-    >
-      <span class="ellipsis">{{ tabLabel }}</span>
-      <span v-if="tabs.length > 1" class="tab-count">{{ tabs.length }}</span>
-      <Icon name="chevron-down" :size="12" />
-    </button>
-
-    <button class="icon moyu-no-drag" title="新建标签页" @click="newTab">
-      <Icon name="plus" />
-    </button>
-
-    <div class="spacer" />
+    <!--
+      标签条。它自己占住中间那一整块，也自己决定放不下时退回下拉清单，
+      新建按钮跟着它走——浏览器里那个「+」也是挨着最后一个标签。
+    -->
+    <TabStrip :tabs="tabs" :active-tab-id="activeTabId">
+      <button class="icon" title="新建标签页" @click="newTab">
+        <Icon name="plus" />
+      </button>
+    </TabStrip>
 
     <!-- 窗口操作。顺序：最小化、关闭、悬浮球、收起右侧栏 -->
     <div class="group moyu-no-drag">
@@ -202,9 +172,7 @@ function goHome(): void {
   gap: 1px;
 }
 
-.spacer {
-  flex: 1 1 auto;
-}
+/* 标签条那一块自己吃掉剩余宽度（见 TabStrip 的 .rest），这里不必再放占位 */
 
 .icon {
   height: 26px;
@@ -270,35 +238,26 @@ function goHome(): void {
   background: var(--moyu-accent-soft);
 }
 
-/* 标签页下拉：形状与地址栏开关一致，宽度受控，标题长了就省略 */
-.tab-select {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  min-width: 108px;
-  max-width: 190px;
-  padding: 0 10px 0 12px;
-  border-radius: 13px;
-  background: var(--moyu-surface-hover);
-  color: var(--moyu-text-dim);
-  transition: background 120ms ease-out, color 120ms ease-out;
-}
+/*
+ * 迷你档（窗口 480 宽）里把地址栏开关收成一个图标。
+ *
+ * 它占的 120px 是顶栏里最奢侈的一笔：那个宽度上域名本来就被截成「docs.claud…」，
+ * 看得出来的一半信息标签条上也有一份。收掉它，标签条才拿得到放得下一个标签的
+ * 地方——否则顶栏中间只剩一个光秃秃的数字，谁也不知道那是标签页。
+ *
+ * 阈值取在迷你档与 800 那一档之间：到了 800，这点宽度就不必省了。
+ */
+@media (max-width: 620px) {
+  .address-toggle {
+    width: 26px;
+    min-width: 26px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+  }
 
-.tab-select:hover {
-  background: var(--moyu-surface-active);
-  color: var(--moyu-ink);
-}
-
-.tab-count {
-  flex: 0 0 auto;
-  min-width: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
-  background: var(--moyu-surface-active);
-  color: var(--moyu-text-dim);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
+  .address-toggle .ellipsis {
+    display: none;
+  }
 }
 </style>

@@ -19,8 +19,10 @@
 | Q7 | `setShape` / `setOpacity` / `setIgnoreMouseEvents` / `setFocusable` / `setSkipTaskbar` / `setContentProtection` / `contentView.addChildView` / `view.setVisible` | 全部可用 | 无 API 缺失 |
 | Q8 | 在 `'closed'` 事件里读 `win.id` / `win.getBounds()` | **抛 `Object has been destroyed`** | 窗口销毁后才触发 `'closed'`，此时只有 `win.isDestroyed()` 还能读；id 要在建窗口时就记下来。见 `spike/destroyed.js` |
 | Q9 | 往自家页面（起始页 / 系统设置）注入「背景透明」 | **写在 `html, body` 上的底色被抹掉**，透明窗口里露出桌面 | 注入的是 user origin，层叠顺序里压过作者样式表（`!important` 也压得过）。底板因此要另画一层（起始页 `.page`、系统设置 `.layout`），且自家页面根本不该被注入网页样式。见 `spike/ownpage-bg.js` |
-| Q10 | 子组件根元素带父组件的作用域属性，父组件里一条 `.类名[data-v-父]` 的规则会不会落到子组件头上 | **会**。`variant` 的值被当类名用（`cards` / `terminal`），正好撞上两套世界根元素的类名，主题菜单于是被整页排版规则排了一遍：标识被挤成两行、菜单横跨整幅页眉 | 给子组件传形态用属性（`data-variant`）而不是类名。逐条 `matches` 查串味：`spike/which-rules.js` |
+| Q10 | 子组件根元素带父组件的作用域属性，父组件里一条 `.类名[data-v-父]` 的规则会不会落到子组件头上 | **会**。`variant` 的值被当类名用（`cards` / `terminal`），正好撞上当时那套世界根元素的类名，主题菜单于是被整页排版规则排了一遍：标识被挤成两行、菜单横跨整幅页眉 | 给子组件传形态用属性（`data-variant`）而不是类名。逐条 `matches` 查串味：`spike/which-rules.js` |
 | Q11 | 在 `show: false` 的窗口里连续改状态再 `capturePage()` | **抓到的是上一帧**（截图与同一时刻 DOM 对不上） | 隐藏窗口的合成帧晚一拍。抓图前先等两帧 `requestAnimationFrame`，并丢弃一次抓取。见 `spike/preview.js` 的 `shoot()` |
+| Q12 | 顶栏标签条放不下时 `display: none` 让位 | **会抖**：藏起来之后量出来是 0，于是又判成「放得下」→ 显示 → 又放不下（`display: none` 的元素量不出宽度是必然的，由此推出的来回翻是推演——无头抓图抓不到这种帧间抖动，能抓到的只是「测出来的几何对不对」） | 让位时用 `position: absolute; visibility: hidden`：离开流（不占宽度、不挤走后面的按钮）但仍能量出自然宽度。「容量」与「需求」两把尺子在两态下都成立。见 `chrome/TabStrip.vue`，验证用 `spike/preview.js --tabs N --resize WxH` |
+| Q13 | 整条标签条 `visibility: hidden` 之后，里面当前那一格的关闭键还画不画 | **照画**。`visibility` 可继承，但后代能把它改回去，而 `.tab.on .x` 正写着 `visibility: visible`——于是让位状态下，下拉按钮右边凭空多一个孤零零的 ✕（还能被 Tab 键选中，按一下就关掉标签页）。更糟的是这一项当时**报的是 false 也看不出来**：`getComputedStyle(x).visibility` 只看这一格自己的值，祖先被隐藏它照样说 visible | 露出关闭键的两条规则挂在「显示中」这一态上（`.strip[data-fits='true'] .tab.on .x`）。度量改用 `checkVisibility({ visibilityProperty: true })`，它把祖先算进去——**比像素比对可靠**：这个 ✕ 在整窗截图里只有几个像素，是靠放大裁图才看出来的 |
 
 ## 对原设计的两处修正
 

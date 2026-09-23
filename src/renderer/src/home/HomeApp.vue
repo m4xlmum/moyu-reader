@@ -2,25 +2,29 @@
 /**
  * 起始页：一份数据，两套世界。
  *
- * 主题决定的不只是配色，还有这一页长成什么形态（见 @shared/constants 的
+ * 主题决定的不只是配色，还有这一页披哪一层皮（见 @shared/constants 的
  * HOME_THEMES 与 worldOfTheme）：
- * - modern   卡片排版 → StartCards
- * - terminal 命令行排版 → StartTerminal
+ * - modern   行式列表，纸白与暗夜 → StartModern
+ * - terminal 命令行，磷绿 → StartTerminal
  *
- * 这一层只管数据与动作：站点怎么排、继续上次打开哪一篇、回车去哪、主题怎么落盘。
- * 至于画成什么样、能放下几个，交给两套世界各自按实测尺寸算——
- * 只有它们知道自己的盒子里还剩多少地方。
+ * 两套世界的**划分与交互是同一套**（页眉 / 输入行 / 内容行 / 状态行，
+ * 见 useRows）：换主题换的是观感，不是这一页怎么用。
+ *
+ * 这一层只管数据与动作：站点从哪来、继续上次打开哪一篇、回车去哪、主题怎么落盘。
+ * 至于画成什么样、一屏放得下几行，交给两套世界各自按实测尺寸算——
+ * 只有它们知道自己的行有多高、盒子里还剩多少地方。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
 import { DEFAULT_HOME_THEME, worldOfTheme, type HomeTheme } from '@shared/constants'
 import { PRESET_SITES } from '@shared/presets'
-import { registrableDomain, hostOf, isOwnUrl, resolveInput } from '@shared/url'
+import { registrableDomain, hostOf, resolveInput } from '@shared/url'
 import type { AppConfig, Bookmark, HistoryEntry, SiteRecord, TabState } from '@shared/types'
-import StartCards from './StartCards.vue'
+import StartModern from './StartModern.vue'
 import StartTerminal from './StartTerminal.vue'
 import { useBox } from './useBox'
+import { rowsOf } from './useRows'
 import type { HomeTile } from './types'
 
 const mySites = ref<SiteRecord[]>([])
@@ -30,11 +34,8 @@ const config = ref<AppConfig | null>(null)
 const query = ref('')
 /** 起始页主题，见 config.ui.homeTheme */
 const theme = ref<HomeTheme>(DEFAULT_HOME_THEME)
-/** 开着几张标签页。只有终端世界拿它当状态行上的一格读数 */
+/** 开着几张标签页。两套世界的页眉都要报这个数 */
 const tabCount = ref(0)
-
-/** 当前正在别处打开着的站点，用于给对应磁贴加一圈强调色 */
-const currentDomain = ref<string | null>(null)
 
 let offConfig: (() => void) | null = null
 let offTabs: (() => void) | null = null
@@ -69,10 +70,6 @@ onMounted(async () => {
 
   const applyTabs = (payload: { tabs: TabState[]; activeTabId: string | null }): void => {
     tabCount.value = payload.tabs.length
-    // 只剩访客页参与「当前站点」的判定：起始页与系统设置是自家页面，没有域名可亮
-    const guests = payload.tabs.filter((t) => t.url && !isOwnUrl(t.url))
-    const active = guests.find((t) => t.id === payload.activeTabId)
-    currentDomain.value = domainOf((active ?? guests[guests.length - 1])?.url)
   }
   applyTabs(await window.moyu.tabs.list())
   offTabs = window.moyu.tabs.onState(applyTabs)
@@ -126,8 +123,8 @@ const mostVisited = computed(() => {
  *
  * 顺序即优先级：自己固定的 → 常访问的 → 预置的热门站点。
  *
- * 上限只是防着一份用了很久的历史把 DOM 撑起来：最密的一档（小号窗口的卡片）
- * 也就摆得下十几个，36 已经远超任何一档能显示的数量，因此这个截断不会被看见。
+ * 上限只是防着一份用了很久的历史把 DOM 撑起来：任何一档窗口都显示不了这么多行，
+ * 因此这个截断不会被看见。
  */
 const MAX_TILES = 36
 
@@ -151,16 +148,22 @@ const tiles = computed<HomeTile[]>(() => {
 
 const lastRead = computed<HistoryEntry | null>(() => history.value[0] ?? null)
 
+/**
+ * 两套世界共用的一份行：继续上次在最前，其后是站点。
+ *
+ * 在这里建一次而不是交给两套世界各建一次——它们要的就是同一份东西，
+ * 各建一遍只能多出两处会分家的地方。
+ */
+const rows = computed(() => rowsOf(tiles.value, lastRead.value))
+
 // ---------------------------------------------------------------- 动作
 
 /**
  * 打开一个站点。
  *
- * 先把当前站点指过去，再开标签页——反馈必须发生在点击这一刻。
  * 起始页始终留在原处，新站点另开一张标签页。
  */
 function open(url: string): void {
-  currentDomain.value = domainOf(url)
   void window.moyu.tabs.create({ url, activate: true })
 }
 
@@ -211,10 +214,11 @@ function pickTheme(next: HomeTheme): void {
 
 <template>
   <div ref="page" class="page">
-    <StartCards
+    <StartModern
       v-if="world === 'modern'"
-      :tiles="tiles"
-      :last-read="lastRead"
+      :rows="rows"
+      :site-count="tiles.length"
+      :tab-count="tabCount"
       :query="query"
       :theme="theme"
       :compact="compact"
@@ -226,12 +230,12 @@ function pickTheme(next: HomeTheme): void {
     />
     <StartTerminal
       v-else
-      :tiles="tiles"
-      :last-read="lastRead"
+      :rows="rows"
+      :site-count="tiles.length"
+      :tab-count="tabCount"
       :query="query"
       :theme="theme"
       :compact="compact"
-      :tab-count="tabCount"
       @open="open"
       @resume="resume"
       @submit="submit"

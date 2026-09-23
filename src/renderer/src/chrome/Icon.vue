@@ -21,7 +21,7 @@ defineProps<{
     | 'search'
     | 'history'
     | 'bookmark'
-    | 'arrow-right'
+    | 'settings'
     | 'chevron-down'
     | 'panel-right'
   size?: number
@@ -85,9 +85,15 @@ defineProps<{
     <template v-else-if="name === 'bookmark'">
       <path d="M7 4.5h10a1 1 0 0 1 1 1v14l-6-3.6-6 3.6v-14a1 1 0 0 1 1-1z" />
     </template>
-    <template v-else-if="name === 'arrow-right'">
-      <path d="M5 12h13" />
-      <path d="M13 7l5 5-5 5" />
+    <!--
+      设置用「三条带旋钮的滑杆」而不是齿轮：齿轮的齿在 24 视框里要画准，
+      得靠一条几十个点的路径，手写一个八齿轮廓几乎必然歪。滑杆同样一眼认得出。
+    -->
+    <template v-else-if="name === 'settings'">
+      <path d="M5 7h9M18 7h1M5 12h3M12 12h7M5 17h9M18 17h1" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="10" cy="12" r="2" />
+      <circle cx="16" cy="17" r="2" />
     </template>
   </svg>
 </template>

@@ -1,35 +1,34 @@
 <script setup lang="ts">
 /**
- * 起始页的终端世界：命令行排版。
+ * 起始页的终端世界：命令行排版，磷绿用它。
  *
  * 参照是 P1 荧光屏上的单色终端——提示符、一行行输出、最底一条状态行。
  * 它不是为了怀旧：命令行天然是「一维」的，只吃行数和字符宽度，不吃纵向余量，
- * 因此在迷你档（正文区 432×232）里比卡片排版从容得多。
+ * 因此在迷你档（正文区 432×232）里比别种排版从容。
  *
- * 与卡片世界共用同一份数据与同一套动作（打开站点 / 继续上次 / 搜索），
- * 差别只在这一层皮上：
- * - 站点不是磁贴，是 `open 掘金  juejin.cn` 这样一行；
- * - 输入框不是搜索框，是提示符后面那一截，回车执行当前选中行；
- * - 主题切换是状态行里的一个键值对。
+ * 划分与现代世界逐段对齐（页眉 / 提示行 / 内容行 / 状态行），
+ * 行为也同一套（见 useRows）：差别只在这一层皮上——
+ * - 站点行首印的是动词 `open`，不是图标；
+ * - 输入框不是搜索框，是提示符后面那一截；
+ * - 字体等宽、直角、扫描线、字发光。
  *
- * 行数按实测高度算出来再渲染，放不下的行不渲染（理由同 StartCards）。
+ * 行数按实测高度算出来再渲染，放不下的不渲染（理由同 StartModern）。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { computed, ref, useTemplateRef, watch } from 'vue'
-import type { HistoryEntry } from '@shared/types'
+import { computed, ref, useTemplateRef } from 'vue'
 import ThemeMenu from './ThemeMenu.vue'
 import { useBox } from './useBox'
-import type { HomeTile } from './types'
+import { filterRows, useRowList, type HomeRow } from './useRows'
 import type { HomeTheme } from '@shared/constants'
 
 const props = defineProps<{
-  tiles: HomeTile[]
-  lastRead: HistoryEntry | null
+  rows: HomeRow[]
+  siteCount: number
+  tabCount: number
   query: string
   theme: HomeTheme
   compact: boolean
-  tabCount: number
 }>()
 
 const emit = defineEmits<{
@@ -43,134 +42,20 @@ const emit = defineEmits<{
 /** 行高（px）。这个数是唯一的：行高、可容纳行数都由它推出来，见 --row-h */
 const ROW_H = computed(() => (props.compact ? 20 : 22))
 
-interface TermRow {
-  key: string
-  verb: 'resume' | 'open'
-  label: string
-  host: string
-  url: string
-  /** 过滤用的一整串，省得每次比较都拼一遍 */
-  haystack: string
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '')
-  } catch {
-    return ''
-  }
-}
-
-const resumeRow = computed<TermRow | null>(() => {
-  const entry = props.lastRead
-  if (!entry) return null
-  const label = entry.title || entry.url
-  return {
-    key: 'resume',
-    verb: 'resume',
-    label,
-    host: hostOf(entry.url),
-    url: entry.url,
-    haystack: `${label} ${entry.url}`.toLowerCase()
-  }
-})
-
-const tileRows = computed<TermRow[]>(() =>
-  props.tiles.map((tile) => ({
-    key: tile.key,
-    verb: 'open' as const,
-    label: tile.name,
-    host: tile.domain,
-    url: tile.url,
-    haystack: `${tile.name} ${tile.domain} ${tile.url}`.toLowerCase()
-  }))
-)
-
-/**
- * 输入框里的文字既当命令也当过滤器。
- *
- * `open x` 只拿 x 去过滤——用户已经说清楚要的是站点，再拿 "open" 这两个
- * 字母去比就什么都比不中了。
- */
-const needle = computed(() => {
-  const q = props.query.trim().toLowerCase()
-  const open = /^(?:open|o)\s+(.*)$/i.exec(q)
-  if (open) return open[1].trim()
-  if (/^(?:resume|r)$/i.test(q)) return ''
-  return q
-})
-
-const rows = computed<TermRow[]>(() => {
-  const all = resumeRow.value ? [resumeRow.value, ...tileRows.value] : tileRows.value
-  if (!needle.value) return all
-  return all.filter((row) => row.haystack.includes(needle.value))
-})
+const filtered = computed(() => filterRows(props.rows, props.query))
 
 const area = useTemplateRef<HTMLElement>('area')
 const { h: areaH } = useBox(area)
 
 /** 可容纳的行数。至少留一行——能放一行也比空着强 */
-const budget = computed(() => Math.max(1, Math.floor(areaH.value / ROW_H.value)))
-const visible = computed(() => rows.value.slice(0, budget.value))
+const limit = computed(() => Math.max(1, Math.floor(areaH.value / ROW_H.value)))
 
-/** 光标停在选中行上，回车打开的就是它 */
-const sel = ref(0)
-watch([rows, visible], () => {
-  if (sel.value > visible.value.length - 1) sel.value = Math.max(0, visible.value.length - 1)
+const { visible, sel, pick, onKeydown, onSubmit } = useRowList(filtered, limit, {
+  open: (url) => emit('open', url),
+  resume: () => emit('resume'),
+  submit: (text) => emit('submit', text),
+  clearQuery: () => emit('update:query', '')
 })
-
-function onKeydown(event: KeyboardEvent): void {
-  const last = visible.value.length - 1
-  if (event.key === 'ArrowDown') {
-    event.preventDefault()
-    sel.value = Math.min(sel.value + 1, Math.max(0, last))
-  } else if (event.key === 'ArrowUp') {
-    event.preventDefault()
-    sel.value = Math.max(sel.value - 1, 0)
-  } else if (event.key === 'Escape') {
-    emit('update:query', '')
-    sel.value = 0
-  }
-}
-
-function pickRow(row: TermRow): void {
-  if (row.verb === 'resume') emit('resume')
-  else emit('open', row.url)
-}
-
-/**
- * 回车。
- *
- * 顺序是「先认命令，再认站点，最后才当网址或关键词」：
- * 敲 `bili` 的人要的多半是 B 站而不是「搜索 bili」；而想搜「如何做红烧肉」
- * 这种匹配不上任何站点的话，才落到搜索上——这一层判断交给外面，
- * 因为它要拿搜索引擎模板，那是配置里的事。
- */
-function onSubmit(): void {
-  const q = props.query.trim()
-  // 回车就是执行。执行完提示行清空——终端的老规矩，也免得同一条命令被按两次
-  if (q) emit('update:query', '')
-
-  if (!q) {
-    const row = visible.value[sel.value] ?? visible.value[0]
-    if (row) pickRow(row)
-    return
-  }
-  if (/^(?:resume|r)$/i.test(q)) {
-    emit('resume')
-    return
-  }
-  const open = /^(?:open|o)\s+(.*)$/i.exec(q)
-  if (open) {
-    if (open[1].trim()) emit('submit', open[1].trim())
-    else if (visible.value[0]) emit('open', visible.value[0].url)
-    return
-  }
-  const looksLikeUrl = /^[a-z][a-z0-9+.-]*:\/\//i.test(q) || /^[\w-]+(\.[\w-]+)+/.test(q)
-  const hit = visible.value[sel.value] ?? visible.value[0]
-  if (hit && !looksLikeUrl) pickRow(hit)
-  else emit('submit', q)
-}
 
 const promptEl = useTemplateRef<HTMLInputElement>('promptEl')
 const focused = ref(false)
@@ -202,7 +87,7 @@ function onRootClick(event: MouseEvent): void {
       提示行上不写 placeholder：块状光标就停在提示符后面那一格，
       写了占位文字就正好被它压住。想说的话挪到状态行——终端本来就是这么报消息的。
     -->
-    <form class="prompt" :class="{ empty: !query }" @submit.prevent="onSubmit">
+    <form class="prompt" :class="{ empty: !query }" @submit.prevent="onSubmit(query)">
       <span class="caret" aria-hidden="true">&gt;</span>
       <span class="field">
         <input
@@ -239,7 +124,7 @@ function onRootClick(event: MouseEvent): void {
         class="line"
         :class="{ sel: i === sel }"
         :title="row.url"
-        @click="pickRow(row)"
+        @click="pick(row)"
         @mouseenter="sel = i"
       >
         <span class="verb">{{ row.verb }}</span>
@@ -253,7 +138,7 @@ function onRootClick(event: MouseEvent): void {
     </div>
 
     <footer class="status">
-      <span class="stat tnum">SITES {{ tiles.length }}</span>
+      <span class="stat tnum">SITES {{ siteCount }}</span>
       <span class="keys">回车打开选中行 · 输入网址或关键词搜索 · ALT+Z 最小化 · ALT+X 藏进托盘</span>
       <ThemeMenu variant="terminal" :theme="theme" @pick="emit('pick', $event)" />
     </footer>

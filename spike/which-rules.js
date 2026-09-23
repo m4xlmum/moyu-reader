@@ -4,14 +4,17 @@
  * 存在的理由是一次真实的串味。作用域样式会给**子组件的根元素**补上父组件的作用域
  * 属性，于是父组件里任何一条 `.类名[data-v-父]` 的规则都可能落到子组件头上。
  * 主题菜单的根元素当时带着 `cards` 这个类（`variant` 的值被当类名用），
- * 而 `cards` 正是卡片世界根元素的类名——于是 `StartCards` 里那条整页排版规则
- * 落在了菜单上：菜单横跨整幅页眉，旁边的标识被挤成两行。两个文件单独看都没有错，
- * 盯着它们猜是猜不出来的（见 docs/spike-findings.md Q10）。
+ * 而 `cards` 正是当时那套世界根元素的类名——于是 `StartCards`（现已由 StartModern
+ * 取代）里那条整页排版规则落在了菜单上：菜单横跨整幅页眉，旁边的标识被挤成两行。
+ * 两个文件单独看都没有错，盯着它们猜是猜不出来的（见 docs/spike-findings.md Q10）。
+ *
+ * 如今 `variant` 取 `modern` / `terminal`，与两套世界根元素的类名依旧同名，
+ * 这条陷阱还是活的——只是形态的传递改用了 `data-variant` 属性，撞不上了。
  *
  * 逐条 `matches` 一遍样式表，比猜快，也比翻 DevTools 方便——这里的窗口是不显示的。
  *
  * 用法：
- *   npx electron spike/which-rules.js paper .theme-menu .head .wordmark
+ *   npx electron spike/which-rules.js paper .theme-menu .bar .wordmark
  *   npx electron spike/which-rules.js crt-green .term .status
  * 第一个参数是主题（决定渲染哪套世界），后面是要查的选择器。
  * 它只读不写；验证版面仍以 spike/preview.js 为准。
