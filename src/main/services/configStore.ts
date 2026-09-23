@@ -5,8 +5,6 @@
  */
 import path from 'node:path'
 import {
-  BALL_CORNERS,
-  BALL_SIZE,
   CONFIG_VERSION,
   DEFAULT_BOSS_HIDE,
   DEFAULT_BOSS_MINIMIZE,
@@ -18,7 +16,7 @@ import {
   PERSIST_DEBOUNCE_MS
 } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
-import type { AppConfig } from '@shared/types'
+import type { AppConfig, StealthConfig } from '@shared/types'
 import { DebouncedWriter, readJson } from './jsonFile'
 import { log } from './logger'
 
@@ -36,15 +34,19 @@ export function defaultConfig(): AppConfig {
       alwaysOnTop: true,
       showInTaskbar: false
     },
+    ui: {
+      // 两条栏默认都在。隐藏是留给「只想留一颗球看网页」的场合的，
+      // 默认藏起来会把第一次打开的人挡在门外。
+      topBarOpen: true,
+      railOpen: true
+    },
     stealth: {
       // 默认关闭：收起与否由用户点悬浮球决定，不自动发生。
       // 自动收起会让界面在用户没打算藏的时候忽然缩成一颗球，反而更容易被注意到。
       autoCollapse: false,
       hideDelayMs: HIDE_DELAY_MS,
       muteMediaOnCollapse: true,
-      contentProtection: false,
-      ballCorner: 'bottom-right',
-      ballSize: BALL_SIZE
+      contentProtection: false
     },
     hotkeys: {
       bossMinimize: DEFAULT_BOSS_MINIMIZE,
@@ -72,10 +74,20 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   if (!input || typeof input !== 'object') return d
 
   const w = { ...d.window, ...(input.window ?? {}) }
-  const s = { ...d.stealth, ...(input.stealth ?? {}) }
   const h = { ...d.hotkeys, ...(input.hotkeys ?? {}) }
   const b = { ...d.browser, ...(input.browser ?? {}) }
   const ls = { ...d.lastSession, ...(input.lastSession ?? {}) }
+  const ui = { ...d.ui, ...(input.ui ?? {}) }
+
+  // stealth 逐字段取，而不是整段摊开：
+  // 摊开会让已经从类型里去掉的旧字段（ballCorner / ballSize）随着落盘的
+  // 配置一路活下来，每次合并都把它们原样写回去，永远清不掉。
+  const s: StealthConfig = {
+    autoCollapse: input.stealth?.autoCollapse ?? d.stealth.autoCollapse,
+    hideDelayMs: input.stealth?.hideDelayMs ?? d.stealth.hideDelayMs,
+    muteMediaOnCollapse: input.stealth?.muteMediaOnCollapse ?? d.stealth.muteMediaOnCollapse,
+    contentProtection: input.stealth?.contentProtection ?? d.stealth.contentProtection
+  }
 
   // 迁移：1 版的竖屏尺寸与新的 16:9 横屏版面不兼容。
   // 只重置「从未调过尺寸」的配置（即恰好等于某个旧预设），
@@ -101,11 +113,8 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   }
 
   // 迁移到 5：底栏取消，功能移入右侧栏，窗口左下角不再是 chrome 区域。
-  // 球停在那里会被正文视图盖住半个，所以这个停靠位取消，旧配置挪到左上。
-  // 类型上早已没有 'bottom-left'，但落盘的配置里可能有，因此按字符串比较。
-  if ((s.ballCorner as string) === 'bottom-left') {
-    s.ballCorner = 'top-left'
-  }
+  // 迁移到 6：悬浮球进了顶栏，停靠位置与大小都不再是配置项——
+  // 旧的 ballCorner / ballSize 已由上面的逐字段取值丢掉，无需再管。
 
   w.opacity = clamp(w.opacity, OPACITY_MIN, OPACITY_MAX)
   w.width = Math.round(clamp(w.width, 200, 4000))
@@ -115,19 +124,18 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
     height: Math.round(clamp(w.lastNormalSize?.height ?? d.window.height, 200, 4000))
   }
   s.hideDelayMs = Math.round(clamp(s.hideDelayMs, 200, 5000))
-  s.ballSize = Math.round(clamp(s.ballSize, 36, 96))
-  if (!(BALL_CORNERS as readonly string[]).includes(s.ballCorner)) {
-    s.ballCorner = d.stealth.ballCorner
-  }
   b.defaultZoom = clamp(b.defaultZoom, 0.25, 5)
   if (typeof b.searchTemplate !== 'string' || !b.searchTemplate.includes('%s')) {
     b.searchTemplate = d.browser.searchTemplate
   }
   if (!Array.isArray(ls.openUrls)) ls.openUrls = []
+  if (typeof ui.topBarOpen !== 'boolean') ui.topBarOpen = d.ui.topBarOpen
+  if (typeof ui.railOpen !== 'boolean') ui.railOpen = d.ui.railOpen
 
   return {
     version: CONFIG_VERSION,
     window: w,
+    ui,
     stealth: s,
     hotkeys: h,
     browser: b,
@@ -161,6 +169,7 @@ export class ConfigStore {
     const next: AppConfig = {
       version: this.config.version,
       window: { ...this.config.window, ...(patch.window ?? {}) },
+      ui: { ...this.config.ui, ...(patch.ui ?? {}) },
       stealth: { ...this.config.stealth, ...(patch.stealth ?? {}) },
       hotkeys: { ...this.config.hotkeys, ...(patch.hotkeys ?? {}) },
       browser: { ...this.config.browser, ...(patch.browser ?? {}) },

@@ -14,6 +14,8 @@
 import { BaseWindow, WebContentsView, screen } from 'electron'
 import {
   ADDRESS_H,
+  BALL_MARGIN,
+  BALL_SIZE,
   DRAG_TICK_MS,
   MOVE_SETTLE_MS,
   RAIL_W,
@@ -21,8 +23,8 @@ import {
   TOP_BAR_H,
   type SizePreset
 } from '@shared/constants'
-import { ballDockRect, ballOffsetInWindow, effectiveBallSize } from '@shared/ball'
-import type { BallCorner, Rect, WindowMode, WindowRuntime } from '@shared/types'
+import type { ChromePatch } from '@shared/ipc'
+import type { AppConfig, Rect, WindowMode, WindowRuntime } from '@shared/types'
 import type { ConfigStore } from './configStore'
 import { computeLayout, sameRect, type Layout } from './geometry'
 import { log } from './logger'
@@ -78,6 +80,14 @@ export class WindowController {
    * 网页就会有一瞬间压在地址栏上。
    */
   private addressOpen = false
+  /**
+   * 悬浮球此刻在窗口内的矩形，由渲染进程量好后上报。
+   *
+   * 球是 DOM 元素（排在顶栏里，或顶栏隐藏时浮在右上角），它的位置由 CSS
+   * 决定；主进程若自己再算一遍「球该在哪」，等于把版面规则抄成两份。
+   * 收起时窗口要缩到球身上，用的就是这个矩形。
+   */
+  private ballRect: Rect | null = null
   private layout: Layout = computeLayout(960, 540, TOP_BAR_H, 0, RAIL_W)
 
   /** 拖动中的锚点：按下那一刻的光标位置与窗口位置 */
@@ -210,13 +220,14 @@ export class WindowController {
     // 收起态下不重算版面：那时的尺寸是球的尺寸，不是版面尺寸
     if (this.mode === 'collapsed') return
 
+    const cfg = this.deps.config.get()
     const previous = this.layout
     this.layout = computeLayout(
       width,
       height,
-      TOP_BAR_H,
+      cfg.ui.topBarOpen ? TOP_BAR_H : 0,
       this.addressOpen ? ADDRESS_H : 0,
-      RAIL_W
+      railVisible(cfg) ? RAIL_W : 0
     )
     this.chrome?.setBounds({ x: 0, y: 0, width, height })
     this.applySurface()
@@ -236,8 +247,9 @@ export class WindowController {
     return {
       mode: this.mode,
       opacity: cfg.window.opacity,
-      ballCorner: cfg.stealth.ballCorner,
-      addressOpen: this.addressOpen
+      addressOpen: this.addressOpen,
+      topBarOpen: cfg.ui.topBarOpen,
+      railVisible: railVisible(cfg)
     }
   }
 
@@ -252,6 +264,31 @@ export class WindowController {
     this.addressOpen = open
     this.recomputeLayout()
     this.deps.onStateChange()
+  }
+
+  /**
+   * 顶栏 / 右侧栏的显隐。
+   *
+   * 与地址栏同一条路子：改完立刻重排、广播，界面按回传的结果绘制。
+   * 用户的选择还要落盘——「隐藏顶部栏」是个人偏好，不该每次启动都重来一遍。
+   */
+  setChrome(patch: ChromePatch): void {
+    const cfg = this.deps.config.get()
+    const topBarOpen = patch.topBar ?? cfg.ui.topBarOpen
+    const railOpen = patch.rail ?? cfg.ui.railOpen
+    if (topBarOpen === cfg.ui.topBarOpen && railOpen === cfg.ui.railOpen) return
+
+    // 顶栏藏起来时地址栏的开关也一并消失，留着它会让顶端挂着一行没来由的输入框
+    if (!topBarOpen) this.addressOpen = false
+
+    this.deps.config.set((c) => ({ ...c, ui: { topBarOpen, railOpen } }))
+    this.recomputeLayout()
+    this.deps.onStateChange()
+  }
+
+  /** 悬浮球在窗口内的矩形变化（渲染进程量好后上报） */
+  setBallRect(rect: Rect): void {
+    this.ballRect = rect
   }
 
   transitionTo(next: WindowMode): void {
@@ -328,19 +365,36 @@ export class WindowController {
   /**
    * 悬浮球当前的屏幕矩形。
    *
-   * 由「展开态的窗口矩形 + 停靠角」推出来，而不是另外挑一个屏幕角落：
-   * 球本来就画在窗口的那个角上，收起只是把窗口缩到它身上。
+   * 由「展开态的窗口矩形 + 球在窗口内的矩形」推出来，而不是另外挑一个屏幕角落：
+   * 球本来就画在窗口里的那个位置上，收起只是把窗口缩到它身上。
+   * 那个窗口内矩形由渲染进程量好上报，见 setBallRect()。
    */
   private ballBounds(): Rect {
-    const cfg = this.deps.config.get()
     const base = this.expandedBounds ?? this.win?.getBounds() ?? {
       x: 0,
       y: 0,
       width: SIZE_PRESETS.medium.width,
       height: SIZE_PRESETS.medium.height
     }
-    const size = effectiveBallSize(cfg.stealth.ballSize, cfg.stealth.ballCorner)
-    return ballDockRect(cfg.stealth.ballCorner, base, size)
+    const r = this.ballRectInWindow(base.width)
+    return { x: base.x + r.x, y: base.y + r.y, width: r.width, height: r.height }
+  }
+
+  /**
+   * 球在窗口内的矩形。
+   *
+   * 收到过上报就用上报值；还没有（界面尚未加载完）时退回右上角——
+   * 这只是个「还没量到」时的占位，真要用到它的时候（用户点球收起）
+   * 界面必然已经画出来并报过一次了。
+   */
+  private ballRectInWindow(windowWidth: number): Rect {
+    if (this.ballRect) return this.ballRect
+    return {
+      x: windowWidth - BALL_MARGIN - BALL_SIZE,
+      y: BALL_MARGIN,
+      width: BALL_SIZE,
+      height: BALL_SIZE
+    }
   }
 
   /** 隐藏窗口时，chrome 视图要铺满当前窗口尺寸 */
@@ -349,20 +403,6 @@ export class WindowController {
     if (!win || !this.chrome) return
     const b = win.getBounds()
     this.chrome.setBounds({ x: 0, y: 0, width: b.width, height: b.height })
-  }
-
-  /** 换一个停靠角。若当前正处于收起态，窗口要跟着挪到新的球位上。 */
-  setBallCorner(corner: BallCorner): void {
-    this.deps.config.set((cfg) => ({ ...cfg, stealth: { ...cfg.stealth, ballCorner: corner } }))
-    if (this.mode === 'collapsed') {
-      const ball = this.ballBounds()
-      this.surface?.apply({
-        mode: 'collapsed',
-        windowRect: ball,
-        opacity: this.deps.config.get().window.opacity
-      })
-    }
-    this.deps.onStateChange()
   }
 
   // ------------------------------------------------------------ 动作
@@ -644,12 +684,9 @@ export class WindowController {
     if (this.mode === 'expanded') {
       this.expandedBounds = b
     } else {
-      const cfg = this.deps.config.get()
-      const { width, height } = cfg.window
-      const corner = cfg.stealth.ballCorner
-      const size = effectiveBallSize(cfg.stealth.ballSize, corner)
-      const off = ballOffsetInWindow(corner, width, height, size)
-      this.expandedBounds = { x: b.x - off.x, y: b.y - off.y, width, height }
+      const { width, height } = this.deps.config.get().window
+      const r = this.ballRectInWindow(width)
+      this.expandedBounds = { x: b.x - r.x, y: b.y - r.y, width, height }
     }
 
     this.persistExpandedBounds()
@@ -685,6 +722,17 @@ export class WindowController {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * 右侧栏此刻是否占位。
+ *
+ * 顶栏藏起来之后悬浮球就停在右栏顶端——那是它唯一的落脚处，
+ * 而 chrome 层位于标签页视图**之下**，落在正文区里的球会被网页整个盖住，
+ * 既看不见也点不到。因此这时无论用户怎么选，这一栏都必须保留。
+ */
+function railVisible(cfg: AppConfig): boolean {
+  return cfg.ui.railOpen || !cfg.ui.topBarOpen
 }
 
 function resolveInitialOrigin(w: { x: number | null; y: number | null }): { x: number; y: number } {

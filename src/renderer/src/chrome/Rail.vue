@@ -17,6 +17,8 @@ import OpacitySlider from './OpacitySlider.vue'
 const props = defineProps<{
   config: AppConfig | null
   activeTab: TabState | null
+  /** 顶栏已隐藏，球浮在本栏顶端，需要给它让出一段空白 */
+  ballGapTop: boolean
 }>()
 
 const emit = defineEmits<{ patch: [patch: ConfigPatch] }>()
@@ -86,7 +88,7 @@ function openSettings(): void {
 </script>
 
 <template>
-  <aside class="rail moyu-drag">
+  <aside class="rail moyu-drag" :class="{ 'ball-top': ballGapTop }">
     <div class="stack moyu-no-drag">
       <button
         class="item"
@@ -146,10 +148,17 @@ function openSettings(): void {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  /* 球停在这一栏底部时给它留出槽位，否则会压住「设置」 */
-  padding: 4px 4px calc(4px + var(--ball-gutter-bottom, 0px));
+  padding: 4px;
   background: var(--moyu-surface);
   border-left: 1px solid var(--moyu-hairline);
+}
+
+/*
+ * 顶栏藏起来之后，球浮在本栏顶端。
+ * 不给它让位的话，第一个按钮就被压在球底下了。
+ */
+.rail.ball-top {
+  padding-top: calc(4px + var(--moyu-ball-size) + var(--moyu-ball-margin) * 2);
 }
 
 .stack {

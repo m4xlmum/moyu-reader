@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { ipcMain } from 'electron'
-import { INVOKE, SEND, type OpenPopoverRequest } from '@shared/ipc'
+import { INVOKE, SEND, type ChromePatch, type OpenPopoverRequest } from '@shared/ipc'
 import type { SizePreset } from '@shared/constants'
-import type { BallCorner } from '@shared/types'
+import type { Rect } from '@shared/types'
 import type { AppContext } from '../context'
+import { popupBallMenu } from '../services/ballMenu'
 
 export function registerWindowIpc(ctx: AppContext): void {
   ipcMain.handle(INVOKE.winGetState, () => ctx.controller.getRuntime())
@@ -24,10 +25,6 @@ export function registerWindowIpc(ctx: AppContext): void {
     ctx.controller.expand()
   })
 
-  ipcMain.handle(INVOKE.winSetBallCorner, (_e, input: { corner: BallCorner }) => {
-    ctx.controller.setBallCorner(input.corner)
-  })
-
   // 拖动走单向消息：高频且不需要回执
   ipcMain.on(SEND.dragStart, () => ctx.controller.beginDrag())
   ipcMain.on(SEND.dragEnd, () => ctx.controller.endDrag())
@@ -35,6 +32,27 @@ export function registerWindowIpc(ctx: AppContext): void {
   // 地址栏折叠同样走单向消息：它只是一次版面切换，状态由主进程持有并回传
   ipcMain.on(SEND.setAddressOpen, (_e, input: { open: boolean }) => {
     ctx.controller.setAddressOpen(input.open)
+  })
+
+  // 顶栏 / 右侧栏的显隐与地址栏同类
+  ipcMain.on(SEND.setChrome, (_e, input: ChromePatch) => {
+    ctx.controller.setChrome(input)
+  })
+
+  // 球在窗口内的位置由渲染进程量好上报，收起时按它把窗口缩到球身上
+  ipcMain.on(SEND.setBallRect, (_e, rect: Rect) => {
+    ctx.controller.setBallRect(rect)
+  })
+
+  ipcMain.handle(INVOKE.winOpenBallMenu, () => {
+    popupBallMenu({
+      getWindow: () => ctx.controller.getWindow(),
+      getRuntime: () => ctx.controller.getRuntime(),
+      setChrome: (patch) => ctx.controller.setChrome(patch),
+      hideToTray: () => void ctx.controller.hideToTray(),
+      openSettings: () => ctx.openSettings(),
+      quit: () => ctx.quit()
+    })
   })
 
   ipcMain.handle(INVOKE.winSetSize, (_e, input: { preset: SizePreset } | { width: number; height: number }) => {

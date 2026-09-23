@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * 弹出面板。四种面板共用这一个组件，由 URL 的 ?kind= 决定内容。
+ * 弹出面板。五种面板共用这一个组件，由 URL 的 ?kind= 决定内容。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { computed, onMounted, ref } from 'vue'
-import type { Bookmark, HistoryEntry, PresetSite, SiteRecord } from '@shared/types'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import type { Bookmark, HistoryEntry, PresetSite, SiteRecord, TabState } from '@shared/types'
 
-type Kind = 'sites' | 'history' | 'bookmarks' | 'uaZoom'
+type Kind = 'sites' | 'history' | 'bookmarks' | 'uaZoom' | 'tabs'
 
 const kind = (new URLSearchParams(location.search).get('kind') ?? 'sites') as Kind
 
@@ -15,23 +15,35 @@ const mySites = ref<SiteRecord[]>([])
 const presets = ref<PresetSite[]>([])
 const history = ref<HistoryEntry[]>([])
 const bookmarks = ref<Bookmark[]>([])
+const tabList = ref<TabState[]>([])
 const query = ref('')
 const newSiteUrl = ref('')
 const activeTabId = ref<string | null>(null)
 const uaMode = ref<'desktop' | 'mobile'>('desktop')
 
 const title = computed(
-  () => ({ sites: '站点', history: '历史记录', bookmarks: '书签', uaZoom: '显示' })[kind]
+  () => ({ sites: '站点', history: '历史记录', bookmarks: '书签', uaZoom: '显示', tabs: '标签页' })[kind]
 )
+
+let unsubscribeTabs: (() => void) | null = null
 
 onMounted(async () => {
   const tabsState = await window.moyu.tabs.list()
   activeTabId.value = tabsState.activeTabId
+  tabList.value = tabsState.tabs
   const current = tabsState.tabs.find((t) => t.id === tabsState.activeTabId)
   uaMode.value = current?.uaMode ?? 'desktop'
 
+  // 标签页清单打开期间标题、顺序都可能变，跟着主进程的推送走
+  unsubscribeTabs = window.moyu.tabs.onState((payload) => {
+    tabList.value = payload.tabs
+    activeTabId.value = payload.activeTabId
+  })
+
   await refreshAll()
 })
+
+onUnmounted(() => unsubscribeTabs?.())
 
 async function refreshAll(): Promise<void> {
   if (kind === 'sites') {
@@ -49,6 +61,17 @@ function open(url: string): void {
   if (!tabId) return
   void window.moyu.nav.goto({ tabId, input: url })
   void window.moyu.ui.closePopover()
+}
+
+/** 切到某个标签页。面板随即收起，用户的注意力该回到网页上 */
+function selectTab(tabId: string): void {
+  void window.moyu.tabs.activate({ tabId })
+  void window.moyu.ui.closePopover()
+}
+
+function closeTab(tabId: string, event: MouseEvent): void {
+  event.stopPropagation()
+  void window.moyu.tabs.close({ tabId })
 }
 
 async function addSite(): Promise<void> {
@@ -145,6 +168,22 @@ function zoom(op: 'in' | 'out' | 'reset'): void {
         </div>
       </template>
 
+      <!-- 标签页 -->
+      <template v-else-if="kind === 'tabs'">
+        <div v-if="!tabList.length" class="empty">暂无标签页</div>
+        <div
+          v-for="tab in tabList"
+          :key="tab.id"
+          class="row"
+          :class="{ active: tab.id === activeTabId }"
+          :title="tab.title"
+          @click="selectTab(tab.id)"
+        >
+          <span class="row-title">{{ tab.title || '新标签页' }}</span>
+          <button class="mini" title="关闭标签页" @click="closeTab(tab.id, $event)">✕</button>
+        </div>
+      </template>
+
       <!-- 显示 -->
       <template v-else>
         <div class="section">访问方式</div>
@@ -225,6 +264,12 @@ function zoom(op: 'in' | 'out' | 'reset'): void {
 
 .row:hover {
   background: var(--moyu-surface-hover);
+}
+
+/* 当前正在看的那个标签页，一眼看得出来是它 */
+.row.active {
+  background: var(--moyu-surface-active);
+  color: var(--moyu-ink);
 }
 
 .row-title {

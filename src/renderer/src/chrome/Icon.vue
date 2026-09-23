@@ -17,12 +17,13 @@ defineProps<{
     | 'plus'
     | 'minus'
     | 'minimize'
-    | 'tray'
     | 'close'
     | 'search'
     | 'history'
     | 'bookmark'
     | 'arrow-right'
+    | 'chevron-down'
+    | 'panel-right'
   size?: number
 }>()
 </script>
@@ -62,13 +63,15 @@ defineProps<{
     <template v-else-if="name === 'minimize'">
       <path d="M5 18h14" />
     </template>
-    <template v-else-if="name === 'tray'">
-      <path d="M12 4v10" />
-      <path d="M8 10.5l4 4 4-4" />
-      <path d="M4 19.5h16" />
-    </template>
     <template v-else-if="name === 'close'">
       <path d="M6 6l12 12M18 6L6 18" />
+    </template>
+    <template v-else-if="name === 'chevron-down'">
+      <path d="M7 10l5 5 5-5" />
+    </template>
+    <template v-else-if="name === 'panel-right'">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+      <path d="M15 4.5v15" />
     </template>
     <template v-else-if="name === 'search'">
       <circle cx="11" cy="11" r="6.5" />

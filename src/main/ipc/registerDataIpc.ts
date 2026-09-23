@@ -21,8 +21,13 @@ export function registerDataIpc(ctx: AppContext): void {
     if (after.stealth.contentProtection !== before.stealth.contentProtection) {
       ctx.controller.setContentProtection(after.stealth.contentProtection)
     }
-    if (after.stealth.ballCorner !== before.stealth.ballCorner) {
-      ctx.controller.setBallCorner(after.stealth.ballCorner)
+    // 界面分区显隐牵动原生正文视图的版面，正常走 win.setChrome；
+    // 这里兜住从设置界面直接改配置的那条路
+    if (
+      after.ui.topBarOpen !== before.ui.topBarOpen ||
+      after.ui.railOpen !== before.ui.railOpen
+    ) {
+      ctx.controller.setChrome({ topBar: after.ui.topBarOpen, rail: after.ui.railOpen })
     }
     if (after.window.alwaysOnTop !== before.window.alwaysOnTop) {
       ctx.controller.reassert()

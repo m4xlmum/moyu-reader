@@ -2,34 +2,34 @@
 /**
  * 悬浮球。
  *
- * 它是窗口**内部**的常驻元素，不是屏幕角落的挂件：
- *   - 展开时贴在窗口的某一角（位置由 ballCorner 决定）
- *   - 收起时窗口缩到球身上，球铺满整个窗口
+ * 三种形态，同一个组件：
+ *   - 排在顶栏里（默认）——它是工具栏里的一个按钮，位置由 CSS 排布决定
+ *   - 顶栏被隐藏时，浮在窗口右上角（右栏顶端）
+ *   - 收起时铺满整扇窗，窗口此刻恰好就是球的尺寸
  *
- * 两种形态下球在屏幕上的矩形完全一致，因此收起与展开看起来就是
- * 界面在球的位置上缩进去、再长出来，球本身一动不动。
+ * 收起态与展开态下球在屏幕上的矩形完全一致，因此收起与展开看起来就是
+ * 界面在球的位置上缩进去、再长出来，球本身一动不动。这不是巧合：主进程
+ * 收缩窗口时用的就是这里量出来并上报的矩形（见 @shared/ipc 的 SEND.setBallRect）。
+ * 让主进程自己算一遍「球该在哪」等于把版面规则抄成两份，迟早会差出几个像素。
  *
- * 平时 55% 不透明，鼠标移上去变清晰——既找得到，又不抢眼。
- * 反馈只用透明度、阴影这类不改变占位的属性：任何缩放都会让球在收起态
- * 顶出窗口边界，被切出四个方角。
+ * 平时半透明、悬停变清晰——既找得到，又不抢眼。反馈只用透明度、阴影这类
+ * 不改变占位的属性：任何缩放都会让球在收起态顶出窗口边界，被切出四个方角。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { computed } from 'vue'
-import { ballOffsetInWindow, effectiveBallSize } from '@shared/ball'
-import type { BallCorner } from '@shared/types'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { BALL_SIZE } from '@shared/constants'
 
 const props = defineProps<{
-  /** 用户配置的直径；实际生效值会按工具栏高度收窄 */
-  size: number
-  corner: BallCorner
+  /** 收起态：球铺满整扇窗 */
   collapsed: boolean
+  /** 顶栏被隐藏，球改浮在窗口右上角 */
+  floating: boolean
 }>()
 
-const emit = defineEmits<{ toggle: [] }>()
+const emit = defineEmits<{ toggle: []; menu: [] }>()
 
-/** 实际生效的直径：主进程算收起尺寸时用的是同一个函数 */
-const ballSize = computed(() => effectiveBallSize(props.size, props.corner))
+const el = ref<HTMLButtonElement | null>(null)
 
 /** 位移小于这个距离就当作点击，而不是拖动 */
 const CLICK_SLOP = 5
@@ -73,30 +73,56 @@ function onPointerCancel(): void {
   window.moyu.win.dragEnd()
 }
 
-/** 展开时贴在工具栏内的那个角，收起时铺满窗口 */
-const positionStyle = computed(() => {
-  if (props.collapsed) {
-    return { inset: '0px' }
-  }
-  const off = ballOffsetInWindow(props.corner, window.innerWidth, window.innerHeight, ballSize.value)
-  return { left: `${off.x}px`, top: `${off.y}px` }
+/**
+ * 把球当前的矩形报给主进程。
+ *
+ * 收起时窗口要缩到球身上，而球的位置由 CSS 排布决定，只有渲染进程量得准。
+ * 收起态下不上报：那时球铺满整扇窗，量到的是窗口而不是球，
+ * 报上去会把「球该在哪」覆盖成窗口的位置，展开后收起就再也落不回原处。
+ */
+function reportRect(): void {
+  if (props.collapsed) return
+  const node = el.value
+  if (!node) return
+  const r = node.getBoundingClientRect()
+  window.moyu.win.setBallRect({
+    x: Math.round(r.left),
+    y: Math.round(r.top),
+    width: Math.round(r.width),
+    height: Math.round(r.height)
+  })
+}
+
+onMounted(() => {
+  reportRect()
+  window.addEventListener('resize', reportRect)
 })
+
+onBeforeUnmount(() => window.removeEventListener('resize', reportRect))
+
+// 顶栏藏起来前后，球换了个落脚处，位置要重新报一次
+watch(
+  () => props.floating,
+  () => void nextTick(reportRect)
+)
 </script>
 
 <template>
   <button
+    ref="el"
     class="ball"
-    :class="{ docked: !collapsed, collapsed }"
-    :style="[{ width: `${ballSize}px`, height: `${ballSize}px` }, positionStyle]"
-    :title="collapsed ? '展开摸鱼阅读' : '收起成悬浮球（拖动可移动窗口）'"
+    :class="{ docked: !collapsed, floating, collapsed }"
+    :style="collapsed ? undefined : { width: 'var(--moyu-ball-size)', height: 'var(--moyu-ball-size)' }"
+    :title="collapsed ? '展开摸鱼阅读（右键更多）' : '收起成悬浮球（右键更多，拖动可移动窗口）'"
     :aria-label="collapsed ? '展开摸鱼阅读' : '收起成悬浮球'"
     @pointerdown="onPointerDown"
     @pointerup="onPointerUp"
     @pointercancel="onPointerCancel"
+    @contextmenu.prevent="emit('menu')"
   >
     <svg
-      :width="ballSize * 0.46"
-      :height="ballSize * 0.46"
+      :width="BALL_SIZE * 0.46"
+      :height="BALL_SIZE * 0.46"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -113,9 +139,11 @@ const positionStyle = computed(() => {
 
 <style scoped>
 .ball {
-  position: absolute;
+  /* 默认排在顶栏里：跟着 flex 走，自己占位 */
+  position: relative;
   display: grid;
   place-items: center;
+  flex: 0 0 auto;
   border-radius: 50%;
   background: var(--moyu-accent);
   color: #ffffff;
@@ -132,6 +160,21 @@ const positionStyle = computed(() => {
    * 因此反馈只用透明度与阴影——它们不会改变球的占位。
    */
   transform: none;
+}
+
+/* 顶栏藏起来时球浮在右上角。右栏会被强制保留，所以那里一定是 chrome 的地盘 */
+.ball.floating {
+  position: absolute;
+  top: var(--moyu-ball-margin);
+  right: var(--moyu-ball-margin);
+}
+
+/* 收起态：窗口就是球，球紧贴着窗口的四条边 */
+.ball.collapsed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 .ball.docked {

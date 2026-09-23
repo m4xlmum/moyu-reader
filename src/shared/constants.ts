@@ -33,36 +33,21 @@ export const RAIL_W = 48
 export const ASPECT_RATIO = 16 / 9
 
 /**
- * 悬浮球直径的默认值（DIP）。
+ * 悬浮球直径（DIP）。
  *
- * 上限受工具栏高度约束（球必须完全落在栏内，否则会被正文区的视图盖住），
- * 具体由 @shared/ball.ts 的 effectiveBallSize 裁定。
+ * 球是顶栏里的一个按钮，因此直径是个版面常量，不再是可调项：
+ * 它比同排的图标按钮略大一圈，落在 38px 高的顶栏里上下各余 5px。
+ * 顶栏藏起来时球改停在右侧栏顶端（RAIL_W = 48 = 直径 + 两侧留白）。
  */
-export const BALL_SIZE = 40
+export const BALL_SIZE = 28
+
 /**
- * 悬浮球距窗口边缘的留白。
+ * 顶栏藏起来之后，悬浮球距窗口边缘的留白。
  *
- * 球是窗口**内部**的一个元素，停靠在窗口的某一角。
- * 收起时窗口缩到球的屏幕矩形上，因此球在屏幕上的位置不发生移动——
- * 它就停在用户刚才看到的地方。渲染进程的 CSS 用同一个常量。
+ * 球平时就排在顶栏里，不需要留白；只有顶栏被隐藏、球孤零零地浮在
+ * 右上角时才用得上这个值。渲染进程的 CSS 与主进程的兜底矩形共用它。
  */
 export const BALL_MARGIN = 10
-
-/**
- * 悬浮球可停靠的位置。
- *
- * 只有这三处。球画在 chrome 层，而那层位于标签页视图**之下**，
- * 因此停靠位必须落在真正有 chrome 绘制的地方：顶栏的两端，与右侧栏的底部。
- * 窗口左下角在版面改造后已属于正文区，球停在那里会被网页盖住半个，
- * 于是这个选项被取消，旧配置由 configStore 迁移到左上。
- *
- * 这里既是取值清单也是类型来源：configStore 的校验与设置界面的选项
- * 都取自这一份，不会有第二处需要同步。
- */
-export const BALL_CORNERS = ['top-left', 'top-right', 'bottom-right'] as const
-
-/** 悬浮球停靠位置 */
-export type BallCorner = (typeof BALL_CORNERS)[number]
 
 /** 主进程鼠标位置轮询间隔（毫秒） */
 export const POLL_MS = 50
@@ -108,8 +93,10 @@ export const DEFAULT_BOSS_HIDE = 'Alt+X'
  * 3：隐藏策略改为收起成悬浮球，旧的按区域隐藏设置整体作废。
  * 4：悬浮球改为窗口内的常驻元素，且自动收起默认关闭。
  * 5：底栏取消，功能移入右侧栏，悬浮球不再有「左下」这个停靠位。
+ * 6：悬浮球移入顶栏并成为其中的一个按钮，停靠位置与大小不再可调；
+ *    顶栏与右侧栏改为可各自隐藏（ui.topBarOpen / ui.railOpen）。
  */
-export const CONFIG_VERSION = 5
+export const CONFIG_VERSION = 6
 
 /** 1 版时代的竖屏尺寸；命中这些值说明是「没改过尺寸」的旧配置，迁移时重置 */
 export const LEGACY_PORTRAIT_SIZES: ReadonlyArray<{ width: number; height: number }> = [

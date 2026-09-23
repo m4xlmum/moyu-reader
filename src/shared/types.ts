@@ -3,9 +3,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import type { BallCorner, SizePreset } from './constants'
+import type { SizePreset } from './constants'
 
-export type { BallCorner, SizePreset }
+export type { SizePreset }
 
 // ---------------------------------------------------------------- 配置
 
@@ -36,10 +36,19 @@ export interface StealthConfig {
   muteMediaOnCollapse: boolean
   /** 从屏幕捕获中排除窗口（SetWindowDisplayAffinity） */
   contentProtection: boolean
-  /** 悬浮球停靠的屏幕角落 */
-  ballCorner: BallCorner
-  /** 悬浮球直径（DIP） */
-  ballSize: number
+}
+
+/**
+ * 界面分区显隐。
+ *
+ * 悬浮球是顶栏里的一员，顶栏藏起来之后它改停在右上角，
+ * 因此这两项都会牵动原生正文视图的版面，状态由主进程持有并落盘。
+ */
+export interface UiConfig {
+  /** 显示顶部功能栏 */
+  topBarOpen: boolean
+  /** 显示右侧功能栏。顶栏隐藏时这一栏会被强制保留，见 WindowRuntime.railVisible */
+  railOpen: boolean
 }
 
 export interface HotkeyConfig {
@@ -62,6 +71,7 @@ export interface BrowserConfig {
 export interface AppConfig {
   version: number
   window: WindowConfig
+  ui: UiConfig
   stealth: StealthConfig
   hotkeys: HotkeyConfig
   browser: BrowserConfig
@@ -147,7 +157,6 @@ export interface TabState {
 export interface WindowRuntime {
   mode: WindowMode
   opacity: number
-  ballCorner: BallCorner
   /**
    * 地址栏是否展开。
    *
@@ -156,6 +165,16 @@ export interface WindowRuntime {
    * 网页就会有一瞬间压在地址栏上。
    */
   addressOpen: boolean
+  /** 顶栏是否显示（用户的选择） */
+  topBarOpen: boolean
+  /**
+   * 右侧栏**实际**是否占位并绘制。
+   *
+   * 与 ui.railOpen 不一定相同：顶栏藏起来之后悬浮球就停在右栏顶端，
+   * 那一栏是它唯一的落脚处，因此这时无论如何都要保留。
+   * 版面与界面都按这个值走，省得两处各自推导。
+   */
+  railVisible: boolean
 }
 
 export interface Rect {

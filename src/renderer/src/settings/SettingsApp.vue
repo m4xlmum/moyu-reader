@@ -8,9 +8,9 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed, onMounted, ref } from 'vue'
-import { BALL_CORNERS, SIZE_PRESETS, type SizePreset } from '@shared/constants'
+import { SIZE_PRESETS, type SizePreset } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
-import type { AppConfig, BallCorner, HotkeyInfo } from '@shared/types'
+import type { AppConfig, HotkeyInfo } from '@shared/types'
 
 type SectionKey = 'general' | 'stealth' | 'hotkey' | 'data' | 'about'
 
@@ -35,15 +35,6 @@ const SIZE_LABEL: Record<SizePreset, string> = {
   medium: '中',
   large: '大'
 }
-
-const BALL_CORNER_LABEL: Record<BallCorner, string> = {
-  'top-left': '左上',
-  'top-right': '右上',
-  'bottom-right': '右下'
-}
-
-/** 取值清单来自 @shared/constants，与主进程校验用的是同一份 */
-const ballCorners = BALL_CORNERS.map((value) => ({ value, label: BALL_CORNER_LABEL[value] }))
 
 onMounted(async () => {
   config.value = await window.moyu.config.get()
@@ -196,6 +187,34 @@ function toggleMiniMode(event: Event): void {
           </div>
 
           <div class="field">
+            <label>顶部功能栏</label>
+            <div class="control">
+              <input
+                type="checkbox"
+                :checked="config.ui.topBarOpen"
+                @change="
+                  patch({ ui: { topBarOpen: ($event.target as HTMLInputElement).checked } })
+                "
+              />
+              <span class="dim">
+                藏起来之后悬浮球改浮在右上角，右键点球可以再把它叫回来
+              </span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>右侧功能栏</label>
+            <div class="control">
+              <input
+                type="checkbox"
+                :checked="config.ui.railOpen"
+                @change="patch({ ui: { railOpen: ($event.target as HTMLInputElement).checked } })"
+              />
+              <span class="dim">顶栏藏起来时这一栏会被保留，它是悬浮球的落脚处</span>
+            </div>
+          </div>
+
+          <div class="field">
             <label>迷你模式</label>
             <div class="control">
               <input
@@ -214,7 +233,7 @@ function toggleMiniMode(event: Event): void {
 
         <div class="card">
           <p class="hint">
-            窗口角上那颗球是收起开关：点一下整个界面缩进球里，再点一下展开。
+            顶栏里那颗球是收起开关：点一下整个界面缩进球里，再点一下展开。
             收起时窗口是真的变小了，屏幕上不会留下任何看不见却仍在接收点击的区域。
           </p>
 
@@ -250,40 +269,6 @@ function toggleMiniMode(event: Event): void {
                 "
               />
               <span class="dim">毫秒。数值越大越不容易误收起</span>
-            </div>
-          </div>
-
-          <div class="field">
-            <label>悬浮球停靠位置</label>
-            <div class="control">
-              <button
-                v-for="c in ballCorners"
-                :key="c.value"
-                :class="{ active: config.stealth.ballCorner === c.value }"
-                @click="patch({ stealth: { ballCorner: c.value } })"
-              >
-                {{ c.label }}
-              </button>
-              <span class="dim">指窗口的哪个角。球画在工具栏一层，只能停在有工具栏的地方</span>
-            </div>
-          </div>
-
-          <div class="field">
-            <label>悬浮球大小</label>
-            <div class="control">
-              <input
-                type="range"
-                min="36"
-                max="96"
-                step="2"
-                :value="config.stealth.ballSize"
-                @input="
-                  patch({
-                    stealth: { ballSize: Number(($event.target as HTMLInputElement).value) }
-                  })
-                "
-              />
-              <span class="value">{{ config.stealth.ballSize }} px</span>
             </div>
           </div>
 

@@ -100,7 +100,15 @@ export const api: MoyuApi = {
     setAddressOpen: (input) => {
       ipcRenderer.send(SEND.setAddressOpen, input)
     },
-    setBallCorner: (input) => ipcRenderer.invoke(INVOKE.winSetBallCorner, input) as Promise<void>,
+    // 顶栏 / 右侧栏的显隐与地址栏同类，走同一条路
+    setChrome: (input) => {
+      ipcRenderer.send(SEND.setChrome, input)
+    },
+    // 球的位置是渲染进程量出来的，报给主进程用于「缩到球身上」
+    setBallRect: (rect) => {
+      ipcRenderer.send(SEND.setBallRect, rect)
+    },
+    openBallMenu: () => ipcRenderer.invoke(INVOKE.winOpenBallMenu) as Promise<void>,
     setSize: (input: { preset: SizePreset } | { width: number; height: number }) =>
       ipcRenderer.invoke(INVOKE.winSetSize, input) as Promise<void>,
     toggleMini: (input) => ipcRenderer.invoke(INVOKE.winToggleMini, input) as Promise<void>,

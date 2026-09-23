@@ -13,8 +13,6 @@
  */
 import { computed } from 'vue'
 import { ADDRESS_H, BALL_MARGIN, BALL_SIZE, RAIL_W, TOP_BAR_H } from '@shared/constants'
-import { effectiveBallSize } from '@shared/ball'
-import type { BallCorner } from '@shared/types'
 import TopBar from './TopBar.vue'
 import AddressBar from './AddressBar.vue'
 import Rail from './Rail.vue'
@@ -29,13 +27,19 @@ const { state, collapse, expand } = useWindowState()
 
 const collapsed = computed(() => state.value?.mode === 'collapsed')
 const addressOpen = computed(() => state.value?.addressOpen ?? false)
-const ballSize = computed(() => config.value?.stealth.ballSize ?? BALL_SIZE)
-const ballCorner = computed<BallCorner>(() => config.value?.stealth.ballCorner ?? 'bottom-right')
+const topBarOpen = computed(() => state.value?.topBarOpen ?? true)
+/** 右侧栏是否占位。顶栏藏起来时它会被强制保留——那是球的落脚处 */
+const railVisible = computed(() => state.value?.railVisible ?? true)
 
 /** 同一个球，点一下收起或展开 */
-function toggle(): void {
+function toggleBall(): void {
   if (collapsed.value) expand()
   else collapse()
+}
+
+/** 球的右键菜单。原生菜单，在顶栏之外也能弹（chrome 层画不出的地方它照画） */
+function openBallMenu(): void {
+  void window.moyu.win.openBallMenu()
 }
 
 /**
@@ -43,38 +47,32 @@ function toggle(): void {
  *
  * 正文的宽度与高度都是主进程按这些值算出来、直接设在标签页视图上的；
  * 这里若另写一份，两边迟早会差几个像素，网页就会被栏压住一条。
+ *
+ * 球的直径与留白同样下发：收起时主进程要把窗口缩到球身上，而那个矩形
+ * 由 Ball 量出来上报，两边用的是同一组数字。
  */
 const geometryVars = {
   '--moyu-top-h': `${TOP_BAR_H}px`,
   '--moyu-address-h': `${ADDRESS_H}px`,
-  '--moyu-rail-w': `${RAIL_W}px`
+  '--moyu-rail-w': `${RAIL_W}px`,
+  '--moyu-ball-size': `${BALL_SIZE}px`,
+  '--moyu-ball-margin': `${BALL_MARGIN}px`
 }
-
-/**
- * 球的槽位。
- *
- * 球浮在界面之上，不预留空间就会压住它停靠的那条栏里的控件。
- * 只给球实际所在的那条栏留：三条栏各给一份的话，
- * 顶栏会平白空出一截，右下角那颗球还会在顶栏留下一个永远用不上的缺口。
- */
-const gutter = computed(
-  () => `${effectiveBallSize(ballSize.value, ballCorner.value) + BALL_MARGIN * 2}px`
-)
-const ballVars = computed(() => ({
-  '--ball-gutter-left': ballCorner.value === 'top-left' ? gutter.value : '0px',
-  '--ball-gutter-right': ballCorner.value === 'top-right' ? gutter.value : '0px',
-  '--ball-gutter-bottom': ballCorner.value === 'bottom-right' ? gutter.value : '0px'
-}))
 </script>
 
 <template>
-  <div class="root" :style="[geometryVars, ballVars]">
+  <div class="root" :style="geometryVars">
     <template v-if="!collapsed">
+      <!-- 顶栏里就排着悬浮球，它是这一栏的第三个按钮 -->
       <TopBar
+        v-if="topBarOpen"
         :tabs="tabs"
         :active-tab-id="activeTabId"
         :active-tab="activeTab"
         :address-open="addressOpen"
+        :rail-visible="railVisible"
+        @toggle-ball="toggleBall"
+        @ball-menu="openBallMenu"
       />
 
       <div class="middle">
@@ -85,12 +83,24 @@ const ballVars = computed(() => ({
           <div class="spacer" />
         </div>
 
-        <Rail :config="config" :active-tab="activeTab" @patch="patch" />
+        <Rail
+          v-if="railVisible"
+          :config="config"
+          :active-tab="activeTab"
+          :ball-gap-top="!topBarOpen"
+          @patch="patch"
+        />
       </div>
     </template>
 
-    <!-- 悬浮球常驻：展开时贴在窗口的角上，收起时就是整扇窗 -->
-    <Ball :size="ballSize" :corner="ballCorner" :collapsed="collapsed" @toggle="toggle" />
+    <!-- 球的另外两种形态：顶栏藏起来时浮在右上角，收起时就是整扇窗 -->
+    <Ball
+      v-if="collapsed || !topBarOpen"
+      :collapsed="collapsed"
+      :floating="!collapsed"
+      @toggle="toggleBall"
+      @menu="openBallMenu"
+    />
   </div>
 </template>
 
