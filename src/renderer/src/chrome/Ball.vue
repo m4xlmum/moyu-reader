@@ -19,6 +19,7 @@
  */
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { BALL_SIZE } from '@shared/constants'
+import { useWindowDrag } from '../composables/useWindowDrag'
 
 const props = defineProps<{
   /** 收起态：球铺满整扇窗 */
@@ -31,47 +32,14 @@ const emit = defineEmits<{ toggle: []; menu: [] }>()
 
 const el = ref<HTMLButtonElement | null>(null)
 
-/** 位移小于这个距离就当作点击，而不是拖动 */
-const CLICK_SLOP = 5
-
 /**
- * 按下时的屏幕坐标。
+ * 球既能点（收起 / 展开），也能拖（移动整个窗口）。
  *
- * 必须用屏幕坐标而不是页面坐标：拖动时窗口跟着光标走，光标在页面里
- * 几乎不动，用页面坐标算位移会恒为零，点击与拖动就分不开了。
+ * 这两件事必须由同一套按下处理分开：拖动时窗口跟着光标走，光标位置其实
+ * 几乎没变，所以判据只能是「按下到松开的位移」——由 useWindowDrag 提供，
+ * 它同时负责在位移足够大时走拖动那条路，位移小就回报一次点击。
  */
-let pressAt: { x: number; y: number } | null = null
-let dragging = false
-
-function onPointerDown(event: PointerEvent): void {
-  if (event.button !== 0) return
-  pressAt = { x: event.screenX, y: event.screenY }
-  dragging = true
-  // 捕获指针：窗口移动过程中指针短暂离开球面也能继续收到事件
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-  window.moyu.win.dragStart()
-}
-
-function onPointerUp(event: PointerEvent): void {
-  if (!dragging) return
-  dragging = false
-  window.moyu.win.dragEnd()
-
-  const start = pressAt
-  pressAt = null
-  if (!start) return
-
-  const moved = Math.hypot(event.screenX - start.x, event.screenY - start.y)
-  // 没怎么动就是一次点击，切换收起 / 展开
-  if (moved < CLICK_SLOP) emit('toggle')
-}
-
-function onPointerCancel(): void {
-  if (!dragging) return
-  dragging = false
-  pressAt = null
-  window.moyu.win.dragEnd()
-}
+const drag = useWindowDrag(() => emit('toggle'))
 
 /**
  * 把球当前的矩形报给主进程。
@@ -115,9 +83,9 @@ watch(
     :style="collapsed ? undefined : { width: 'var(--moyu-ball-size)', height: 'var(--moyu-ball-size)' }"
     :title="collapsed ? '展开摸鱼阅读（右键更多）' : '收起成悬浮球（右键更多，拖动可移动窗口）'"
     :aria-label="collapsed ? '展开摸鱼阅读' : '收起成悬浮球'"
-    @pointerdown="onPointerDown"
-    @pointerup="onPointerUp"
-    @pointercancel="onPointerCancel"
+    @pointerdown="drag.onPointerDown"
+    @pointerup="drag.onPointerUp"
+    @pointercancel="drag.onPointerCancel"
     @contextmenu.prevent="emit('menu')"
   >
     <svg
@@ -150,7 +118,6 @@ watch(
   opacity: 0.55;
   box-shadow: 0 2px 8px rgba(17, 24, 39, 0.28);
   transition: opacity 140ms ease-out, box-shadow 140ms ease-out;
-  -webkit-app-region: no-drag;
   /* 拖动是自己实现的，所以光标形状也要自己给 */
   cursor: grab;
   z-index: 10;

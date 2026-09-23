@@ -18,12 +18,16 @@ import AddressBar from './AddressBar.vue'
 import Rail from './Rail.vue'
 import Ball from './Ball.vue'
 import { useConfig } from '../composables/useConfig'
+import { useBackgroundAlpha } from '../composables/useBackgroundAlpha'
 import { useTabs } from '../composables/useTabs'
 import { useWindowState } from '../composables/useWindowState'
 
 const { config, patch } = useConfig()
 const { tabs, activeTabId, activeTab } = useTabs()
 const { state, collapse, expand } = useWindowState()
+
+/** 底板透明度写在文档根上，理由见 useBackgroundAlpha */
+useBackgroundAlpha(config)
 
 const collapsed = computed(() => state.value?.mode === 'collapsed')
 const addressOpen = computed(() => state.value?.addressOpen ?? false)
@@ -71,8 +75,10 @@ const geometryVars = {
         :active-tab="activeTab"
         :address-open="addressOpen"
         :rail-visible="railVisible"
+        :always-on-top="config?.window.alwaysOnTop ?? false"
         @toggle-ball="toggleBall"
         @ball-menu="openBallMenu"
+        @patch="patch"
       />
 
       <div class="middle">

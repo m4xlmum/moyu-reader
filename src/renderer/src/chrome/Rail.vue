@@ -2,17 +2,27 @@
 /**
  * 右侧功能栏。
  *
- * 手机模式、置顶、站点、历史、书签、缩放、透明度、设置这些原本摊在底栏的功能都收在这里。
+ * 站点、历史、书签、缩放、两条透明度滑块、设置这些原本摊在底栏的功能都收在这里。
  * 横屏下纵向空间最贵，而底栏那条横带子要吃掉整个宽度；换成一条竖栏，
  * 代价只是正文窄了 48px。
+ *
+ * 手机与置顶原本也是这里的两个按钮（写着汉字，一格一个），现在搬去了顶栏的图标组：
+ * 它们改的是「这一页怎么显示」，与阅读本身无关，占着功能位不如让给滑块。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed } from 'vue'
+import {
+  BACKGROUND_OPACITY_MAX,
+  BACKGROUND_OPACITY_MIN,
+  OPACITY_MAX,
+  OPACITY_MIN
+} from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
 import type { AppConfig, TabState } from '@shared/types'
 import Icon from './Icon.vue'
 import OpacitySlider from './OpacitySlider.vue'
+import { useWindowDrag } from '../composables/useWindowDrag'
 
 const props = defineProps<{
   config: AppConfig | null
@@ -23,9 +33,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{ patch: [patch: ConfigPatch] }>()
 
+/** 整条栏可拖动。按在按钮与滑块上是操作，其余地方（格子之间、分隔线、栏底空白）都是拖窗口 */
+const drag = useWindowDrag()
+
 type PopoverKind = 'sites' | 'history' | 'bookmarks' | 'uaZoom'
 
-const uaMode = computed(() => props.activeTab?.uaMode ?? 'desktop')
 const zoomPercent = computed(() => Math.round((props.activeTab?.zoom ?? 1) * 100))
 
 /** 面板锚点取自按钮自身的位置，主进程据此把它摆在按钮附近 */
@@ -43,26 +55,20 @@ function openPopover(kind: PopoverKind, event: MouseEvent): void {
   })
 }
 
-function toggleUa(): void {
-  const tabId = props.activeTab?.id
-  if (!tabId) return
-  void window.moyu.page.setUa({ tabId, mode: uaMode.value === 'mobile' ? 'desktop' : 'mobile' })
-}
-
-function togglePin(): void {
-  const cfg = props.config
-  if (!cfg) return
-  emit('patch', { window: { alwaysOnTop: !cfg.window.alwaysOnTop } })
-}
-
 function zoom(op: 'in' | 'out' | 'reset'): void {
   const tabId = props.activeTab?.id
   if (!tabId) return
   void window.moyu.page.setZoom({ tabId, op })
 }
 
+/** 整扇窗的透明度，含网页 */
 function setOpacity(value: number): void {
   void window.moyu.win.setOpacity({ value })
+}
+
+/** 界面底板（顶栏、本栏、弹出面板）的透明度，网页不受影响 */
+function setBackgroundOpacity(value: number): void {
+  emit('patch', { ui: { backgroundOpacity: value } })
 }
 
 // 模板里的 window 指向组件实例而非全局对象，因此全局调用都要包一层方法
@@ -72,27 +78,14 @@ function openSettings(): void {
 </script>
 
 <template>
-  <aside class="rail moyu-drag" :class="{ 'ball-top': ballGapTop }">
-    <div class="stack moyu-no-drag">
-      <button
-        class="item"
-        :class="{ on: uaMode === 'mobile' }"
-        title="手机 / 电脑模式"
-        @click="toggleUa"
-      >
-        手机
-      </button>
-      <button
-        class="item"
-        :class="{ on: config?.window.alwaysOnTop }"
-        title="窗口置顶"
-        @click="togglePin"
-      >
-        置顶
-      </button>
-
-      <div class="sep" />
-
+  <aside
+    class="rail"
+    :class="{ 'ball-top': ballGapTop }"
+    @pointerdown="drag.onPointerDown"
+    @pointerup="drag.onPointerUp"
+    @pointercancel="drag.onPointerCancel"
+  >
+    <div class="stack">
       <button class="item" title="我的站点 / 热门站点" @click="openPopover('sites', $event)">
         站点
       </button>
@@ -107,12 +100,28 @@ function openSettings(): void {
 
       <div class="sep" />
 
-      <OpacitySlider :model-value="config?.window.opacity ?? 1" @update:model-value="setOpacity" />
+      <OpacitySlider
+        label="整体"
+        hint="整扇窗，含网页"
+        :model-value="config?.window.opacity ?? 1"
+        :min="OPACITY_MIN"
+        :max="OPACITY_MAX"
+        @update:model-value="setOpacity"
+      />
+
+      <OpacitySlider
+        label="背景"
+        hint="只影响界面底板，网页不受影响"
+        :model-value="config?.ui.backgroundOpacity ?? 1"
+        :min="BACKGROUND_OPACITY_MIN"
+        :max="BACKGROUND_OPACITY_MAX"
+        @update:model-value="setBackgroundOpacity"
+      />
     </div>
 
     <!-- 设置固定在栏底：它是最常走的一个出口，不该被滚出视野。
          按钮上是简称——栏宽 48px 放不下「系统设置」，全名给 tooltip -->
-    <button class="item foot moyu-no-drag" title="系统设置" @click="openSettings">设置</button>
+    <button class="item foot" title="系统设置" @click="openSettings">设置</button>
   </aside>
 </template>
 

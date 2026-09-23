@@ -17,10 +17,25 @@
   --moyu-radius: 6px;
   --moyu-radius-sm: 4px;
 
-  /* 面 */
-  --moyu-surface: #ffffff;
-  --moyu-surface-hover: #f3f4f6;
-  --moyu-surface-active: #e8eaee;
+  /*
+   * 界面底板透明度 0–1。默认 1（不透明），由「背景透明度」那条滑块改，
+   * ChromeApp 与 PopoverApp 各在自己的**文档根**上写一次（见 useBackgroundAlpha：
+   * 必须写在同一层，否则下面这几条在 :root 上就把 var() 替换定死了）。
+   *
+   * 跟着它一起变淡的只有**底板**：面、悬停态、当前态、分隔线。
+   * 字、图标、强调色不跟着变——因此拉到 0 剩下的是「浮在桌面上的一排按钮」，
+   * 仍然看得见、点得到，不会把自己锁在外面（不像整扇窗的透明度，
+   * 拉到 0 连字都没了，所以那个下限必须锁在 5%）。
+   */
+  --moyu-alpha: 1;
+
+  /*
+   * 面。写成 rgb 三通道 + 一个 alpha，才能让同一个颜色整体变淡；
+   * 写成 #ffffff 或 rgba(..., 1) 都没法再被一个变量整体调淡。
+   */
+  --moyu-surface: rgb(255 255 255 / var(--moyu-alpha));
+  --moyu-surface-hover: rgb(243 244 246 / var(--moyu-alpha));
+  --moyu-surface-active: rgb(232 234 238 / var(--moyu-alpha));
 
   /* 文字。次级文字同样满足 4.5:1 */
   --moyu-ink: #111827;
@@ -28,11 +43,11 @@
   --moyu-text-dim: #5b6472;
   --moyu-text-faint: #6f7683;
 
-  /* 线 */
-  --moyu-border: #d1d5db;
-  --moyu-hairline: #e5e7eb;
+  /* 线。分隔线也是画在底板上的，底板淡了它不淡就会剩下几条浮空的线 */
+  --moyu-border: rgb(209 213 219 / var(--moyu-alpha));
+  --moyu-hairline: rgb(229 231 235 / var(--moyu-alpha));
 
-  /* 强调色只用于焦点、当前与主操作 */
+  /* 强调色只用于焦点、当前与主操作。它是「状态」，不跟着底板变淡 */
   --moyu-accent: #2563eb;
   --moyu-accent-hover: #1d4ed8;
   --moyu-accent-soft: rgba(37, 99, 235, 0.1);

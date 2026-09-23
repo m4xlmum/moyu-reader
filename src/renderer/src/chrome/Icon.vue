@@ -24,6 +24,8 @@ defineProps<{
     | 'settings'
     | 'chevron-down'
     | 'panel-right'
+    | 'mobile'
+    | 'pin'
   size?: number
 }>()
 </script>
@@ -72,6 +74,20 @@ defineProps<{
     <template v-else-if="name === 'panel-right'">
       <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
       <path d="M15 4.5v15" />
+    </template>
+    <!--
+      手机版网页：一台竖着的手机。不用「手机 + 显示器」两个图元来表达
+      「手机 / 电脑」——顶栏里每个图标只有 15px，两个图元挤在一起只剩糊。
+      按钮的高亮状态已经说明了「现在是哪一边」，图标只需要指出这件事是什么。
+    -->
+    <template v-else-if="name === 'mobile'">
+      <rect x="7" y="3" width="10" height="18" rx="2.5" />
+      <path d="M10.5 17.5h3" />
+    </template>
+    <!-- 置顶：一枚图钉。头朝上、针朝下，与「钉在最上面」是同一个意思 -->
+    <template v-else-if="name === 'pin'">
+      <path d="M9 3.5h6v3.2l2.2 2.6v1.4H6.8v-1.4L9 6.7z" />
+      <path d="M12 10.7v9.8" />
     </template>
     <template v-else-if="name === 'search'">
       <circle cx="11" cy="11" r="6.5" />

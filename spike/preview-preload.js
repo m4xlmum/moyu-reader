@@ -72,7 +72,7 @@ let activeTabId = 't1'
 const tabListeners = new Set()
 
 const config = {
-  version: 8,
+  version: 9,
   window: {
     x: null,
     y: null,
@@ -82,7 +82,12 @@ const config = {
     alwaysOnTop: true,
     showInTaskbar: false
   },
-  ui: { topBarOpen, railOpen: true, homeTheme: opts.theme },
+  ui: {
+    topBarOpen,
+    railOpen: true,
+    homeTheme: opts.theme,
+    backgroundOpacity: opts.bgAlpha ?? 1
+  },
   stealth: {
     autoCollapse: false,
     hideDelayMs: 700,
@@ -164,6 +169,19 @@ const noop = () => () => {}
 const ok = () => Promise.resolve()
 const list = () => Promise.resolve([])
 
+/**
+ * 拖动信号的记账本。
+ *
+ * 「界面上哪一块能拖窗口」是这一版改动里最容易悄悄坏掉的一环：上一版整条顶栏
+ * 都被 no-drag 的子元素盖满，于是只剩悬浮球拖得动，而从代码上看不出来。
+ * 探针按一下、读这里的计数，就能问出「这个位置按下去到底起没起拖动」。
+ *
+ * dragLog 只存在于这份假桥里（真实的 preload 没有它，界面也不需要它），
+ * 它是给 spike/preview.js 的 --drag-probe 用的。
+ */
+let dragStarts = 0
+let dragEnds = 0
+
 /** 标签页的对外快照。isActive 跟着当前那一格算，不另存一份，免得两处说法对不上 */
 function tabsState() {
   return {
@@ -240,8 +258,13 @@ contextBridge.exposeInMainWorld('moyu', {
     setOpacity: ok,
     collapse: ok,
     expand: ok,
-    dragStart: () => {},
-    dragEnd: () => {},
+    dragStart: () => {
+      dragStarts += 1
+    },
+    dragEnd: () => {
+      dragEnds += 1
+    },
+    dragLog: () => ({ starts: dragStarts, ends: dragEnds }),
     setAddressOpen: () => {},
     setChrome: () => {},
     setBallRect: (rect) => ipcRenderer.send('preview:ballRect', rect),

@@ -48,6 +48,15 @@ export interface UiConfig {
   railOpen: boolean
   /** 起始页主题。只在起始页生效，不影响阅读网页时的观感 */
   homeTheme: HomeTheme
+  /**
+   * 界面底板透明度 0–1。
+   *
+   * 与 window.opacity（整扇窗连带网页一起变淡）不同，这只影响界面自己画的底板：
+   * 顶栏、地址栏、右侧栏与弹出面板。字与图标始终不透明，因此拉到 0
+   * 也只是「底板没了，按钮浮在桌面上」，不会把自己锁在外面。
+   * 网页与自家页面不受影响。
+   */
+  backgroundOpacity: number
 }
 
 export interface HotkeyConfig {

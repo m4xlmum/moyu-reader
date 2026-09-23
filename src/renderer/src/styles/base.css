@@ -63,14 +63,12 @@ input {
   user-select: text;
 }
 
-/* 可拖动区域。整条栏位可拖动，其中的交互控件需显式声明 no-drag */
-.moyu-drag {
-  -webkit-app-region: drag;
-}
-
-.moyu-no-drag {
-  -webkit-app-region: no-drag;
-}
+/*
+ * 这里原先有 .moyu-drag / .moyu-no-drag 两个工具类（-webkit-app-region 那套）。
+ * 已经取消：可拖动区域改由 useWindowDrag 在按下时判定——「按在控件上是操作，
+ * 按在别处都是拖窗口」。那套 CSS 判断法有个看不见的坑，栏位只要被 no-drag 的
+ * 子元素铺满就整体拖不动了，而这件事从 CSS 上读不出来（见 useWindowDrag 的说明）。
+ */
 
 /* 滚动条也属于这套配色。
    这里曾经写的是深色主题的白，在浅色工具栏上几乎看不见；

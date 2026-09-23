@@ -18,6 +18,9 @@
  *   npx electron spike/preview.js --home --themes # 起始页三套主题各截一张（走真实换主题那条路）
  *   npx electron spike/preview.js --home --theme crt-green --width 448 --height 297
  *   npx electron spike/preview.js --settings --width 560 --height 400
+ *   npx electron spike/preview.js --bg 0.35        # 界面底板透明度：底板该淡，字不该淡
+ *   npx electron spike/preview.js --drag-probe     # 逐个位置按一下，问「这里按下去起没起拖动」
+ *   npx electron spike/preview.js --popover --bg 0.35   # 弹出面板也是另一份文档，同样要问一遍
  * 产物写在 spike/out/ 下：preview-<名字>.png 与 preview-<名字>.json
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -39,13 +42,31 @@ const MODES = { '--no-topbar': 'no-topbar', '--collapsed': 'collapsed' }
 const modeFlag = Object.keys(MODES).find(has)
 const mode = modeFlag ? MODES[modeFlag] : 'default'
 
-const page = has('--home') ? 'home' : has('--settings') ? 'settings' : 'chrome'
-const PAGE_FILE = { chrome: 'index.html', home: 'home.html', settings: 'settings.html' }
+const page = has('--home')
+  ? 'home'
+  : has('--settings')
+    ? 'settings'
+    : has('--popover')
+      ? 'popover'
+      : 'chrome'
+const PAGE_FILE = {
+  chrome: 'index.html',
+  home: 'home.html',
+  settings: 'settings.html',
+  popover: 'popover.html'
+}
 
 const WIDTH = num('--width', 960)
 const HEIGHT = num('--height', 540)
 /** 只留前 N 个标签页。标签条放不放得下是算出来的，得能用少几张试出「放得下」那一态 */
 const TABS = num('--tabs', 0)
+/**
+ * --bg 0.35：把界面底板透明度设成这个值。
+ *
+ * 这一项要验的是「底板淡、字不淡」这一对关系，光看截图说不清到底是哪一层淡了，
+ * 因此 MEASURE 里除了截图还回报顶栏的实测底色与图标的实测字色。
+ */
+const BG = Math.min(1, Math.max(0, num('--bg', 1)))
 /**
  * --resize 1100x700：截完第一张之后把窗口改到这么大，再截一张。
  *
@@ -72,7 +93,7 @@ ipcMain.on('preview:ballRect', (_event, rect) => {
   reportedBallRect = rect
 })
 ipcMain.on('preview:options', (event) => {
-  event.returnValue = { mode, theme, tabs: TABS }
+  event.returnValue = { mode, theme, tabs: TABS, bgAlpha: BG }
 })
 
 /** 量一圈关键元素。数字比眼睛靠谱，而且能直接和主进程的版面常量对照 */
@@ -140,10 +161,75 @@ const MEASURE = `(() => {
           w: Math.round(el.getBoundingClientRect().width)
         }))
       : null,
+    /*
+     * 顶栏那几个图标按钮的「亮没亮」。
+     *
+     * 手机与置顶是这一版新搬进来的两个，它们的高亮各有一处真值来源：
+     * 手机跟着当前标签页的 uaMode，置顶跟着 config.window.alwaysOnTop。
+     * 截图里那点淡淡的强调色背景看不出是「亮了」还是配色本来如此，
+     * 因此连实测颜色一起报出来。
+     */
+    topIcons: [...document.querySelectorAll('.topbar .group:last-of-type > button')].map((el) => ({
+      title: el.getAttribute('title'),
+      on: el.classList.contains('on'),
+      color: getComputedStyle(el).color,
+      background: getComputedStyle(el).backgroundColor
+    })),
     // 右栏里都有哪些功能，按上下顺序——顶栏藏起来时它是唯一的功能入口
     railButtons: [...document.querySelectorAll('.rail button')].map(
       (el) => el.getAttribute('title') ?? el.className
     ),
+    /*
+     * 背景透明度要看的三件事，各问各的：
+     *   alpha —— 界面根上的那个变量，滑块拉出来的原始值
+     *   底板 —— 顶栏/右栏的实测底色，应当带上这个 alpha
+     *   字   —— 图标与文字的实测颜色，必须是不带 alpha 的实色：
+     *           拉到 0 也要看得见、点得到，否则就是把自己锁在外面
+     */
+    surfaces: (() => {
+      const root = document.querySelector('.root')
+      const bar = document.querySelector('.topbar') ?? document.querySelector('.rail')
+      const inkEl = document.querySelector('.topbar .icon') ?? document.querySelector('.rail button')
+      if (!bar) return null
+      const s = getComputedStyle(bar)
+      return {
+        alpha: root ? getComputedStyle(root).getPropertyValue('--moyu-alpha').trim() : null,
+        bar: s.backgroundColor,
+        // 顶栏的分隔线在下面，右栏的在左边
+        hairline: bar.classList.contains('topbar') ? s.borderBottomColor : s.borderLeftColor,
+        ink: inkEl ? getComputedStyle(inkEl).color : null
+      }
+    })(),
+    /*
+     * 右栏那两条透明度滑块，以及功能栈有没有被撑出滚动区。
+     *
+     * 这一栏刚做过一次「去掉两个 26px 的按钮、换进一条 56px 的滑块」，
+     * 净空是否够用是算出来的，得实测一遍：scrollHeight 大于 clientHeight
+     * 就意味着有控件被裁在可视区外，那一栏的功能就点不到了。
+     */
+    sliders: [...document.querySelectorAll('.opacity')].map((el) => {
+      const track = el.querySelector('input')
+      return {
+        label: el.querySelector('.label')?.textContent?.trim() ?? null,
+        value: el.querySelector('.value')?.textContent?.trim() ?? null,
+        min: track?.getAttribute('min') ?? null,
+        max: track?.getAttribute('max') ?? null,
+        hint: el.getAttribute('title'),
+        box: (() => {
+          const r = el.getBoundingClientRect()
+          return { y: Math.round(r.y), h: Math.round(r.height) }
+        })(),
+        track: track && (() => {
+          const r = track.getBoundingClientRect()
+          return { w: Math.round(r.width), h: Math.round(r.height) }
+        })()
+      }
+    }),
+    stackScroll: (() => {
+      const el = document.querySelector('.rail .stack')
+      if (!el) return null
+      return { scrollH: el.scrollHeight, clientH: el.clientHeight, overflow: el.scrollHeight - el.clientHeight }
+    })(),
     bodySample: box('.rest')
   }
 })()`
@@ -194,8 +280,125 @@ const PAGE_MEASURE = `(() => {
   }
 })()`
 
-/** 从主题选择器里取全部主题 id——不在脚本里另抄一份名单 */
-const THEME_IDS = `[...document.querySelectorAll('.theme-menu .panel .chips')].map((el) => el.dataset.theme)`
+/**
+ * 弹出面板：另一扇窗、另一份文档。
+ *
+ * 要问的和 chrome 一样——底板淡了、字没淡——但这里还得额外确认一件事：
+ * 面板窗口是透明的，底板真的淡下去时露出来的是桌面，因此这一份的数据
+ * 必须来自面板这份文档自己写下的 --moyu-alpha，而不是从别处继承来的。
+ */
+const POPOVER_MEASURE = `(() => {
+  const box = (sel) => {
+    const el = document.querySelector(sel)
+    if (!el) return null
+    const r = el.getBoundingClientRect()
+    return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }
+  }
+  const panel = document.querySelector('.panel')
+  const row = document.querySelector('.row')
+  const s = panel ? getComputedStyle(panel) : null
+  return {
+    window: { w: window.innerWidth, h: window.innerHeight },
+    kind: new URLSearchParams(location.search).get('kind'),
+    // 写在文档根上的那个值；空串就意味着这份文档没写，底板不会淡
+    alpha: document.documentElement.style.getPropertyValue('--moyu-alpha'),
+    panel: box('.panel'),
+    panelBg: s?.backgroundColor ?? null,
+    panelBorder: s?.borderTopColor ?? null,
+    rowColor: row ? getComputedStyle(row).color : null,
+    rowCount: document.querySelectorAll('.row').length,
+    title: document.querySelector('.title')?.textContent?.trim() ?? null
+  }
+})()`
+
+/** 从主题选择器里取全部主题 id——不在脚本里另抄一份名单 */const THEME_IDS = `[...document.querySelectorAll('.theme-menu .panel .chips')].map((el) => el.dataset.theme)`
+
+/**
+ * 拖动探针：在一组**有名有姓**的位置上按一下再松开，问这一下起没起拖动。
+ *
+ * 这是这一版里最容易悄悄坏掉的一环：上一版整条顶栏与右栏都被 no-drag 的子元素
+ * 铺满，于是只剩悬浮球拖得动——而这件事从代码上看不出来，截图上也看不出。
+ * 判据不问代码，问界面自己：在目标点上派发一个会冒泡的 pointerdown、再派发
+ * pointerup，然后读假桥里的拖动计数（dragLog，只存在于 spike 的假桥里）。
+ *
+ * 用合成的 PointerEvent 而不是 webContents.sendInputEvent：后者走真实输入通道，
+ * 会把鼠标真的按下去并抢走焦点，而这具窗口是隐藏的，落点也说不清楚。
+ * 合成事件的 setPointerCapture 会抛 NotFoundError——界面自己兜住了（见
+ * useWindowDrag 里的 try），不影响这里要问的问题。
+ *
+ * 合成事件不会合成出 click，因此按在按钮上的那些点没有副作用；悬浮球那一下会
+ * 走到「收起」上，而假桥里收起是空操作，界面也不会因此换形。
+ */
+const DRAG_PROBE = `(() => {
+  const boxOf = (sel) => document.querySelector(sel)?.getBoundingClientRect() ?? null
+  const centerOf = (sel) => {
+    const r = boxOf(sel)
+    return r ? { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) } : null
+  }
+
+  const bar = boxOf('.topbar')
+  const rail = boxOf('.rail')
+  const nav = boxOf('.topbar .group')
+  const items = [...document.querySelectorAll('.rail .stack .item')]
+  const firstItem = items[0]?.getBoundingClientRect() ?? null
+  const railMidX = rail ? Math.round(rail.x + rail.width / 2) : 0
+
+  const POINTS = [
+    ['顶栏左端留白', bar ? { x: Math.round(bar.x + 3), y: Math.round(bar.y + bar.height / 2) } : null],
+    ['顶栏：导航组与地址栏之间的缝', nav ? { x: Math.round(nav.right + 2), y: Math.round(bar.y + bar.height / 2) } : null],
+    ['顶栏：标签条右侧的空白（.rest）', centerOf('.zone > .rest')],
+    ['顶栏：第一格标签（控件，不该拖）', centerOf('.zone .tab')],
+    ['顶栏：地址栏开关（控件，不该拖）', centerOf('.address-toggle')],
+    ['顶栏：手机（控件，不该拖）', centerOf('.topbar button[title*="手机"]')],
+    ['顶栏：置顶（控件，不该拖）', centerOf('.topbar button[title*="置顶"]')],
+    ['顶栏：最小化（控件，不该拖）', centerOf('.topbar button[title*="最小化"]')],
+    ['顶栏：悬浮球（它自己就是拖动面）', centerOf('.ball')],
+    ['右栏顶端留白', rail ? { x: Math.round(rail.x + 2), y: Math.round(rail.y + 2) } : null],
+    ['右栏：两个功能格之间的缝', firstItem ? { x: railMidX, y: Math.round(firstItem.bottom + 1) } : null],
+    ['右栏：分隔线', centerOf('.rail .sep')],
+    ['右栏：滑块的小字（不该拖）', centerOf('.rail .opacity .label')],
+    ['右栏：滑块的轨道（控件，不该拖）', centerOf('.rail .opacity input')],
+    ['右栏：设置（控件，不该拖）', centerOf('.rail .foot')]
+  ]
+
+  const results = []
+  for (const [name, p] of POINTS) {
+    if (!p) {
+      results.push({ name, at: null, hit: null, started: null, why: '这一点算不出来' })
+      continue
+    }
+    const hit = document.elementFromPoint(p.x, p.y)
+    if (!hit) {
+      results.push({ name, at: p, hit: null, started: null, why: '这一点上没有元素' })
+      continue
+    }
+    const classes = typeof hit.className === 'string' ? hit.className.trim().split(/\\s+/).filter(Boolean) : []
+    const before = window.moyu.win.dragLog().starts
+    const base = {
+      bubbles: true, cancelable: true, composed: true,
+      button: 0, pointerId: 1, pointerType: 'mouse', isPrimary: true,
+      clientX: p.x, clientY: p.y, screenX: p.x, screenY: p.y
+    }
+    hit.dispatchEvent(new PointerEvent('pointerdown', { ...base, buttons: 1 }))
+    hit.dispatchEvent(new PointerEvent('pointerup', { ...base, buttons: 0 }))
+    results.push({
+      name,
+      at: p,
+      hit: hit.tagName.toLowerCase() + classes.map((c) => '.' + c).join(''),
+      started: window.moyu.win.dragLog().starts > before
+    })
+  }
+
+  /*
+   * 收尾对账：每个点都按下去又松开了，起停次数应当相等。
+   * starts > ends 意味着有一次拖动没被收掉——那正是「窗口黏在光标上」的前身，
+   * 界面给这类漏网准备了四道兜底（松手、窗口失焦、页面失焦、下一次按下重新锚定），
+   * 而这里能把它查出来。
+   */
+  const log = window.moyu.win.dragLog()
+  return { points: results, starts: log.starts, ends: log.ends, balanced: log.starts === log.ends }
+})()`
+
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -212,11 +415,18 @@ app.whenReady().then(async () => {
     }
   })
 
-  await win.loadFile(pagePath)
+  /*
+   * 面板是带 ?kind= 打开的（五种面板共用一份 popover.html），
+   * 不带参数时它自己是默认的「站点」那一张。
+   */
+  await win.loadFile(pagePath, page === 'popover' ? { search: '?kind=sites' } : undefined)
   // 渲染进程是异步拉状态再渲染的，等它把首帧摆好
   await wait(1200)
 
   fs.mkdirSync(outDir, { recursive: true })
+
+  /** --drag-probe 的结果。截一次图顺带量一次，写进 JSON，也在终端打一份 */
+  let dragProbe = null
 
   const shoot = async (name) => {
     /*
@@ -241,11 +451,15 @@ app.whenReady().then(async () => {
     const png = path.join(outDir, `${name}.png`)
     fs.writeFileSync(png, image.toPNG())
     const measured = await win.webContents.executeJavaScript(
-      page === 'chrome' ? MEASURE : PAGE_MEASURE
+      page === 'chrome' ? MEASURE : page === 'popover' ? POPOVER_MEASURE : PAGE_MEASURE
     )
     fs.writeFileSync(
       path.join(outDir, `${name}.json`),
-      JSON.stringify({ page, mode, theme, reportedBallRect, measured }, null, 2),
+      JSON.stringify(
+        { page, mode, theme, bg: BG, reportedBallRect, measured, dragProbe },
+        null,
+        2
+      ),
       'utf8'
     )
     console.log(`WROTE ${png}`)
@@ -256,6 +470,24 @@ app.whenReady().then(async () => {
   // 尺寸与非默认的标签数都写进名字：同一台机器上跑几档下来，别互相覆盖
   const size = WIDTH !== 960 || HEIGHT !== 540 ? `-${WIDTH}x${HEIGHT}` : ''
   const tabs = TABS ? `-${TABS}tabs` : ''
+  // 底板透明度同理：跑了 0.35 那一档之后，默认那一档的图不该被它盖掉
+  const bg = BG !== 1 ? `-bg${BG}` : ''
+
+  /*
+   * --drag-probe：先按一遍，再照第一张。
+   *
+   * 放在截图之前：探针会派发几次 pointerdown/pointerup，虽然不含 click、
+   * 按道理不改动界面，但把「量」放在「照」前头更稳妥——将来探针万一长出
+   * 副作用，也不至于污染后面所有的图。
+   */
+  if (page === 'chrome' && has('--drag-probe')) {
+    dragProbe = await run(DRAG_PROBE)
+    for (const p of dragProbe.points) {
+      const mark = p.started ? '拖' : p.started === false ? '不拖' : '？'
+      console.log(`DRAG ${mark} ${p.name} → ${p.hit ?? p.why ?? '?'}`)
+    }
+    console.log(`DRAG_LOG ${JSON.stringify({ starts: dragProbe.starts, ends: dragProbe.ends, balanced: dragProbe.balanced })}`)
+  }
 
   if (page === 'home' && has('--themes')) {
     /*
@@ -274,7 +506,7 @@ app.whenReady().then(async () => {
     // 主题名单从面板里读，不在脚本里另抄一份
     const ids = await run(THEME_IDS)
     console.log(`THEMES ${JSON.stringify(ids)}`)
-    await shoot(`home-picker${size}`)
+    await shoot(`home-picker${size}${bg}`)
 
     for (let i = 0; i < ids.length; i += 1) {
       /*
@@ -284,15 +516,15 @@ app.whenReady().then(async () => {
        */
       await run(`document.querySelectorAll('.theme-menu .panel .item')[${i}].click()`)
       await wait(400)
-      await shoot(`home-${ids[i]}${size}`)
+      await shoot(`home-${ids[i]}${size}${bg}`)
       await run(openMenu)
       await wait(250)
     }
   } else {
     const name =
       page !== 'chrome'
-        ? `${page}${page === 'home' ? `-${theme}` : ''}${size}${tabs}`
-        : `preview-${mode}${size}${tabs}`
+        ? `${page}${page === 'home' ? `-${theme}` : ''}${size}${tabs}${bg}`
+        : `preview-${mode}${size}${tabs}${bg}`
     await shoot(name)
 
     /*

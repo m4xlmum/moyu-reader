@@ -7,6 +7,8 @@ import path from 'node:path'
 import {
   CONFIG_VERSION,
   DEFAULT_BOSS_HIDE,
+  BACKGROUND_OPACITY_MAX,
+  BACKGROUND_OPACITY_MIN,
   DEFAULT_BOSS_MINIMIZE,
   DEFAULT_HOME_THEME,
   DEFAULT_SEARCH_TEMPLATE,
@@ -40,7 +42,9 @@ export function defaultConfig(): AppConfig {
       // 默认藏起来会把第一次打开的人挡在门外。
       topBarOpen: true,
       railOpen: true,
-      homeTheme: DEFAULT_HOME_THEME
+      homeTheme: DEFAULT_HOME_THEME,
+      // 默认不透明：底板是界面的一部分，一上来就是半透的会让人以为没画好
+      backgroundOpacity: 1
     },
     stealth: {
       // 默认关闭：收起与否由用户点悬浮球决定，不自动发生。
@@ -96,7 +100,8 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   const ui: UiConfig = {
     topBarOpen: input.ui?.topBarOpen ?? d.ui.topBarOpen,
     railOpen: input.ui?.railOpen ?? d.ui.railOpen,
-    homeTheme: input.ui?.homeTheme ?? d.ui.homeTheme
+    homeTheme: input.ui?.homeTheme ?? d.ui.homeTheme,
+    backgroundOpacity: input.ui?.backgroundOpacity ?? d.ui.backgroundOpacity
   }
 
   const s: StealthConfig = {
@@ -150,6 +155,12 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   if (!Array.isArray(ls.openUrls)) ls.openUrls = []
   if (typeof ui.topBarOpen !== 'boolean') ui.topBarOpen = d.ui.topBarOpen
   if (typeof ui.railOpen !== 'boolean') ui.railOpen = d.ui.railOpen
+  // 非数值先回落默认再夹取：clamp 对非有限值给的是**下限**，
+  // 而这里下限是 0——一个写坏的值不该让整个界面底板透掉。
+  if (typeof ui.backgroundOpacity !== 'number' || !Number.isFinite(ui.backgroundOpacity)) {
+    ui.backgroundOpacity = d.ui.backgroundOpacity
+  }
+  ui.backgroundOpacity = clamp(ui.backgroundOpacity, BACKGROUND_OPACITY_MIN, BACKGROUND_OPACITY_MAX)
   if (!HOME_THEMES.some((t) => t.id === ui.homeTheme)) {
     ui.homeTheme = d.ui.homeTheme as HomeTheme
   }

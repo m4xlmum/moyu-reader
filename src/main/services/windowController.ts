@@ -101,8 +101,25 @@ export class WindowController {
   private ballFloor = BALL_SIZE
   private layout: Layout = computeLayout(960, 540, TOP_BAR_H, 0, RAIL_W)
 
-  /** 拖动中的锚点：按下那一刻的光标位置与窗口位置 */
-  private dragAnchor: { cursorX: number; cursorY: number; winX: number; winY: number } | null = null
+  /**
+   * 拖动中的锚点：按下那一刻的光标位置与窗口位置，外加「上一次请求到的位置」。
+   *
+   * lastX / lastY 记的是**我们自己请求过的**位置，不是从窗口读回来的。
+   * 读回要过一次窗口管理器——实测单次 setPosition 就要 2.5ms 中位数、p90 6ms
+   * （spike/dragTicks.js），而这一个系统时钟滴答里还要留出余量给真正的移动，
+   * 每帧再多一次同步往返就是在拿流畅度换一个我们并不需要的信息。
+   *
+   * 位置一律按锚点**绝对**算，不做增量累加：平台若卡住过某一次
+   * （窗口被顶到屏幕边缘之类），绝对算法下一帧就把误差抹掉了，增量累加会越拖越偏。
+   */
+  private dragAnchor: {
+    cursorX: number
+    cursorY: number
+    winX: number
+    winY: number
+    lastX: number
+    lastY: number
+  } | null = null
   private dragTimer: NodeJS.Timeout | null = null
   /** 窗口移动停止的判定计时器，见 scheduleMoveSettle() */
   private moveSettleTimer: NodeJS.Timeout | null = null
@@ -176,13 +193,18 @@ export class WindowController {
     win.on('move', () => {
       // 拖动窗口时每次 setPosition 都会触发本事件。这时绝不能 reassert()：
       // 它会重放整套窗口属性（置顶、焦点、任务栏、阴影、透明度），
-      // 每 16ms 来一遍就是持续闪烁。拖动只需移动位置，属性一个都不用碰。
+      // 每帧来一遍就是持续闪烁。拖动只需移动位置，属性一个都不用碰。
       if (this.dragAnchor) return
 
-      // 顶栏是系统拖动区，用鼠标拖窗口时每帧都会到这里来（约 8ms 一次）。
       // 位置要立刻记住，但落盘与重放都得等窗口停下来，见 scheduleMoveSettle()。
       if (this.mode === 'expanded') this.expandedBounds = win.getBounds()
       this.scheduleMoveSettle()
+    })
+    win.on('blur', () => {
+      // 松开鼠标那一下若没送到（界面卡了一下、指针被别的窗口截走），
+      // 拖动会一直挂着：窗口从此黏在光标上，整个程序没法再用。
+      // 失焦是这一类「卡住」最可靠的信号——那一刻用户已经在别处按下了。
+      if (this.dragAnchor) this.endDrag()
     })
     win.on('restore', () => {
       if (this.mode === 'minimized') this.transitionTo('expanded')
@@ -191,7 +213,7 @@ export class WindowController {
     win.on('closed', () => {
       this.deps.registry.remove(winId)
       // 窗口已经没了，剩下两样还在按时碰它的东西必须停下来：
-      // 收起轮询每 50ms 读一次窗口 id，拖动定时器每 16ms 读一次矩形。
+      // 收起轮询每 50ms 读一次窗口 id，拖动定时器每个滴答挪一次窗口位置。
       // 它们各自的 try/catch 能让异常不冒出去，但会一路刷日志，
       // 而且是「对着一个不存在的窗口工作」——没有意义。
       this.watcher?.stop()
@@ -653,21 +675,34 @@ export class WindowController {
    * 拖动窗口。
    *
    * 不用 `-webkit-app-region: drag`：那个原生拖动会吞掉点击，而悬浮球正是靠
-   * 点击来切换收起与展开的，两者不能共存。
+   * 点击来切换收起与展开的，两者不能共存。因此整块界面都走这一条路——
+   * 顶栏、地址栏、右侧栏、悬浮球，全是在渲染进程按下、由这里移动窗口，
+   * 于是「哪儿能拖」只由界面上挂了哪个处理器决定，不受「有没有空白像素
+   * 露在 no-drag 元素外面」摆布。
    *
-   * 因此自己实现，并且**由主进程驱动**：主进程读得到全局光标位置，
-   * 每 16ms 把窗口挪到「光标位移」对应的位置上。窗口跟着光标走，
-   * 光标就一直停在球上，松开事件也就不会丢失——这是渲染进程自己
-   * 跟踪 mousemove 做不到的（指针一旦离开窗口，渲染进程就收不到事件了，
-   * 窗口会僵在原地，拖动当场断掉）。
+   * 由主进程驱动而不是渲染进程自己跟：主进程读得到全局光标位置，
+   * 每帧把窗口挪到「光标位移」对应的位置上。窗口跟着光标走，光标就一直停在
+   * 原来那一处，松开事件也就不会丢失——这是渲染进程自己跟踪 mousemove
+   * 做不到的（指针一旦离开窗口，渲染进程就收不到事件了，窗口会僵在原地，
+   * 拖动当场断掉）。
    */
   beginDrag(): void {
     const win = this.win
-    if (!win || this.dragAnchor) return
+    if (!win) return
     const cursor = screen.getCursorScreenPoint()
     const b = win.getBounds()
-    this.dragAnchor = { cursorX: cursor.x, cursorY: cursor.y, winX: b.x, winY: b.y }
-    this.dragTimer = setInterval(() => this.tickDrag(), DRAG_TICK_MS)
+    // 已经挂着一次拖动时（上一次的松开事件丢了）不忽略这一下，而是**重新锚定**：
+    // 从当前窗口位置重新起算，于是用户再按一下就能把黏住的拖动接回来，
+    // 不必重启程序。位置按锚点绝对算，重新锚定不会让窗口跳一下。
+    this.dragAnchor = {
+      cursorX: cursor.x,
+      cursorY: cursor.y,
+      winX: b.x,
+      winY: b.y,
+      lastX: b.x,
+      lastY: b.y
+    }
+    if (!this.dragTimer) this.dragTimer = setInterval(() => this.tickDrag(), DRAG_TICK_MS)
   }
 
   endDrag(): void {
@@ -688,14 +723,14 @@ export class WindowController {
     const cursor = screen.getCursorScreenPoint()
     const x = anchor.winX + (cursor.x - anchor.cursorX)
     const y = anchor.winY + (cursor.y - anchor.cursorY)
+    if (x === anchor.lastX && y === anchor.lastY) return
 
-    const b = win.getBounds()
-    if (b.x === x && b.y === y) return
-
-    // 拖动期间光标在球上（窗口跟着它走），但仍要清掉「离开计时」，
+    // 拖动期间光标在窗口自己身上（窗口跟着它走），但仍要清掉「离开计时」，
     // 免得自动收起在一个拖动刚结束时被触发
     this.watcher?.rearm()
 
+    anchor.lastX = x
+    anchor.lastY = y
     try {
       win.setPosition(x, y)
     } catch {

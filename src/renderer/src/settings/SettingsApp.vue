@@ -139,7 +139,7 @@ function setSizePreset(preset: SizePreset): void {
 
         <div class="card">
           <div class="field">
-            <label>默认透明度</label>
+            <label>整体透明度</label>
             <div class="control">
               <input
                 type="range"
@@ -156,8 +156,35 @@ function setSizePreset(preset: SizePreset): void {
             </div>
           </div>
           <p class="hint">
-            无极调节。下限为 5%：0% 会让窗口不可见却仍可交互，容易把自己锁在外面。
-            真正要藏起来请用老板键或托盘。
+            无极调节，整扇窗一起淡，网页也跟着淡。下限为 5%：0% 会让窗口不可见却仍可交互，
+            容易把自己锁在外面。真正要藏起来请用老板键或托盘。
+          </p>
+
+          <div class="field">
+            <label>背景透明度</label>
+            <div class="control">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                :value="Math.round(config.ui.backgroundOpacity * 100)"
+                @input="
+                  patch({
+                    ui: {
+                      backgroundOpacity: Number(($event.target as HTMLInputElement).value) / 100
+                    }
+                  })
+                "
+              />
+              <span class="value">{{ Math.round(config.ui.backgroundOpacity * 100) }}%</span>
+            </div>
+          </div>
+          <p class="hint">
+            只淡界面自己画的底板：顶栏、地址栏、右侧栏与弹出面板。字与图标始终不透明，
+            因此下限可以给到 0%——那时剩下的是浮在桌面上的一排按钮，仍然点得到，
+            不会把自己锁在外面。<b>网页与这一页都不受影响</b>：它们是被读的内容，
+            不是窗口的边框。两条滑块配合着用：整体管「连网页一起淡」，
+            背景只管「窗口自己的边框」。
           </p>
 
           <div class="field">

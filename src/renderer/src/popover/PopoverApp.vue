@@ -6,10 +6,20 @@
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { Bookmark, HistoryEntry, PresetSite, SiteRecord, TabState } from '@shared/types'
+import { useConfig } from '../composables/useConfig'
+import { useBackgroundAlpha } from '../composables/useBackgroundAlpha'
 
 type Kind = 'sites' | 'history' | 'bookmarks' | 'uaZoom' | 'tabs'
 
 const kind = (new URLSearchParams(location.search).get('kind') ?? 'sites') as Kind
+
+/**
+ * 面板是另一扇窗、另一份文档，顶栏那棵树上写的 --moyu-alpha 传不过来，
+ * 因此这里自己把背景透明度读一遍。面板窗口是透明的，底板变淡就真的透出桌面。
+ * 写在哪一层有讲究，见 useBackgroundAlpha。
+ */
+const { config } = useConfig()
+useBackgroundAlpha(config)
 
 const mySites = ref<SiteRecord[]>([])
 const presets = ref<PresetSite[]>([])

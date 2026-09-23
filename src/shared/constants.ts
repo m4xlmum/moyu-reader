@@ -57,8 +57,16 @@ export const BALL_MARGIN = (RAIL_W - BALL_SIZE) / 2
 
 /** 主进程鼠标位置轮询间隔（毫秒） */
 export const POLL_MS = 50
-/** 拖动窗口时跟踪光标的间隔（毫秒）。比普通轮询快得多，拖动才跟手 */
-export const DRAG_TICK_MS = 16
+/**
+ * 拖动窗口时跟踪光标的间隔（毫秒）。
+ *
+ * 这个值必须**小于** Windows 的系统时钟滴答（约 15.6ms）——不是「越小越流畅」，
+ * 而是「不小于它就会翻倍」：定时器间隔会被向上取整到滴答的整数倍。实测
+ * （spike/dragTicks.js）请求 16ms 得到的是 p50 30.2ms，也就是两个滴答；
+ * 请求 8ms 得到 15.1ms，一个滴答，这已经是 setInterval 在 Windows 上能给到的
+ * 最快值。一个被取整成 30ms 的间隔，眼睛看到的就是拖动时画面一顿一顿。
+ */
+export const DRAG_TICK_MS = 8
 /** 光标离开后多久才收起成球（毫秒）。收起慢、展开靠点击，避免误触 */
 export const HIDE_DELAY_MS = 700
 /** 淡入淡出时长（毫秒） */
@@ -68,15 +76,27 @@ export const FADE_TICK_MS = 16
 /**
  * 窗口停止移动多久后才落盘位置、重放表面状态（毫秒）。
  *
- * 顶栏是 `-webkit-app-region: drag`，用系统拖动窗口时每帧都会发一次 move，
- * 约 8ms 一次。若每次都写配置并重放整套窗口属性，就是持续闪烁加持续落盘。
- * 位置本身立即记在内存里，只有这两件有副作用的事要等它停下来。
+ * 自己实现的拖动每帧都会发一次 move（一个系统滴答一次）。若每次都写配置并重放
+ * 整套窗口属性，就是持续闪烁加持续落盘。位置本身立即记在内存里，
+ * 只有这两件有副作用的事要等它停下来。
  */
 export const MOVE_SETTLE_MS = 200
 
 /** 透明度下限。0 会让窗口不可见却仍可交互，形成自我锁定，故不允许 */
 export const OPACITY_MIN = 0.05
 export const OPACITY_MAX = 1
+
+/**
+ * 界面底板透明度范围。
+ *
+ * 与窗口透明度（OPACITY_MIN）不同，这里下限可以是 0：它作用的是界面自己画的
+ * 底板（顶栏、地址栏、右栏、弹出面板），字与图标始终不透明。于是拉到 0
+ * 剩下的是「浮在桌面上的几个按钮」，设置项本身仍然看得见、点得到，
+ * 不会把自己锁在外面。网页与自家页面（起始页、系统设置）不受它影响——
+ * 网页要给的是可读的纸，透过去的是底板，两者不是一回事。
+ */
+export const BACKGROUND_OPACITY_MIN = 0
+export const BACKGROUND_OPACITY_MAX = 1
 
 /** 窗口尺寸预设（DIP）。四个都严格 16:9，换尺寸不会让版面在两个方向上各自重排 */
 export const SIZE_PRESETS = {
@@ -103,8 +123,9 @@ export const DEFAULT_BOSS_HIDE = 'Alt+X'
  *    顶栏与右侧栏改为可各自隐藏（ui.topBarOpen / ui.railOpen）。
  * 7：右侧栏去掉迷你与收藏；系统设置由独立窗口改为窗口内的一页（ui.homeTheme 同时加入）。
  * 8：起始页主题由七个收到三个，并且主题开始决定界面形态（卡片 / 命令行）。
+ * 9：新增 ui.backgroundOpacity（界面底板透明度），默认 1（与旧行为一致）。
  */
-export const CONFIG_VERSION = 8
+export const CONFIG_VERSION = 9
 
 /** 1 版时代的竖屏尺寸；命中这些值说明是「没改过尺寸」的旧配置，迁移时重置 */
 export const LEGACY_PORTRAIT_SIZES: ReadonlyArray<{ width: number; height: number }> = [

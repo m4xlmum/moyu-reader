@@ -142,11 +142,12 @@ function hideBrokenIcon(event: Event): void {
 
 <template>
   <!--
-    整块是 no-drag：标签格挨着排，若留出可拖动的缝，拖窗口就会误伤成拖标签。
-    可拖动的地方在两侧（导航栏那一头与窗口操作那一头）足够多了。
+    标签格自己声明 data-drag-ignore：按住一格拖动是「这一格的事」，
+    不该顺手把窗口拖走。格子以外的空白（右端那一大块、格子之间的缝）
+    仍然可以拖窗口——而且它正是顶栏里最大的一块可拖区域。
   -->
-  <div ref="zone" class="zone moyu-no-drag">
-    <div ref="strip" class="strip" :data-fits="fits" role="tablist" aria-label="标签页">
+  <div ref="zone" class="zone">
+    <div ref="strip" class="strip" data-drag-ignore :data-fits="fits" role="tablist" aria-label="标签页">
       <div
         v-for="tab in tabs"
         :key="tab.id"

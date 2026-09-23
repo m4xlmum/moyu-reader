@@ -11,11 +11,15 @@
 import { onMounted, ref, watch } from 'vue'
 import { isOwnUrl } from '@shared/url'
 import type { TabState } from '@shared/types'
+import { useWindowDrag } from '../composables/useWindowDrag'
 
 const props = defineProps<{
   activeTabId: string | null
   activeTab: TabState | null
 }>()
+
+/** 这一行也能拖窗口：输入框以外的部分（上下那几像素、两端的留白）都是拖动的落点 */
+const drag = useWindowDrag()
 
 const input = ref('')
 const editing = ref(false)
@@ -56,8 +60,13 @@ function submit(): void {
 </script>
 
 <template>
-  <div class="address-row moyu-drag">
-    <form class="field moyu-no-drag" @submit.prevent="submit">
+  <div
+    class="address-row"
+    @pointerdown="drag.onPointerDown"
+    @pointerup="drag.onPointerUp"
+    @pointercancel="drag.onPointerCancel"
+  >
+    <form class="field" @submit.prevent="submit">
       <input
         ref="field"
         v-model="input"

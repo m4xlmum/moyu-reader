@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 顶部功能栏：导航、地址栏开关、标签页、悬浮球、窗口操作。
+ * 顶部功能栏：导航、地址栏开关、标签页、手机 / 置顶、窗口操作。
  *
  * 地址栏本身不在这里——它默认折叠，展开时是顶栏下方独立的一行。
  * 这里只留一个开关，兼作「当前在哪」的一眼可见处。
@@ -8,17 +8,18 @@
  * 标签条与它的让位（窗口窄时退回下拉清单）都在 TabStrip 里，
  * 那一条要按实测宽度决定自己让不让位，是顶栏里唯一需要知道自己有多宽的东西。
  *
- * 整条可拖动（-webkit-app-region: drag），其中的控件需标记 no-drag，
- * 否则点击会被当成拖动窗口起手。
+ * 整条可拖动，按在控件上是操作。判据在 useWindowDrag 里，这里不必逐个标记。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed } from 'vue'
 import { isOwnUrl } from '@shared/url'
+import type { ConfigPatch } from '@shared/ipc'
 import type { TabState } from '@shared/types'
 import Icon from './Icon.vue'
 import Ball from './Ball.vue'
 import TabStrip from './TabStrip.vue'
+import { useWindowDrag } from '../composables/useWindowDrag'
 
 const props = defineProps<{
   tabs: TabState[]
@@ -28,9 +29,18 @@ const props = defineProps<{
   addressOpen: boolean
   /** 右侧栏当前是否占位，同时决定开关按钮的高亮 */
   railVisible: boolean
+  /** 窗口是否置顶，决定置顶按钮的高亮 */
+  alwaysOnTop: boolean
 }>()
 
-const emit = defineEmits<{ toggleBall: []; ballMenu: [] }>()
+const emit = defineEmits<{
+  toggleBall: []
+  ballMenu: []
+  patch: [patch: ConfigPatch]
+}>()
+
+/** 整条栏可拖动。按在按钮、地址栏开关、标签条上是操作，其余地方都是拖窗口 */
+const drag = useWindowDrag()
 
 /**
  * 当前页的域名，显示在地址栏开关上。
@@ -69,6 +79,19 @@ function toggleRail(): void {
   window.moyu.win.setChrome({ rail: !props.railVisible })
 }
 
+/** 手机 / 电脑模式。跟着当前标签页走，换一页就跟着那一页的状态 */
+const mobile = computed(() => props.activeTab?.uaMode === 'mobile')
+
+function toggleUa(): void {
+  const tabId = props.activeTabId
+  if (!tabId) return
+  void window.moyu.page.setUa({ tabId, mode: mobile.value ? 'desktop' : 'mobile' })
+}
+
+function togglePin(): void {
+  emit('patch', { window: { alwaysOnTop: !props.alwaysOnTop } })
+}
+
 // 模板里的 window 指向组件实例而非全局对象，因此全局调用都要包一层方法
 function navBack(): void {
   const id = props.activeTabId
@@ -99,9 +122,14 @@ function goHome(): void {
 </script>
 
 <template>
-  <header class="topbar moyu-drag">
+  <header
+    class="topbar"
+    @pointerdown="drag.onPointerDown"
+    @pointerup="drag.onPointerUp"
+    @pointercancel="drag.onPointerCancel"
+  >
     <!-- 导航 -->
-    <div class="group moyu-no-drag">
+    <div class="group">
       <button class="icon" title="回到起始页" @click="goHome"><Icon name="home" /></button>
       <button class="icon" title="后退" :disabled="!activeTab?.canGoBack" @click="navBack">
         <Icon name="back" />
@@ -114,7 +142,7 @@ function goHome(): void {
 
     <!-- 地址栏开关。地址栏默认折叠，这里是唤出它的入口 -->
     <button
-      class="address-toggle moyu-no-drag"
+      class="address-toggle"
       :class="{ on: addressOpen }"
       :title="addressOpen ? '收起地址栏' : '展开地址栏'"
       @mousedown="toggleAddress"
@@ -133,8 +161,28 @@ function goHome(): void {
       </button>
     </TabStrip>
 
-    <!-- 窗口操作。顺序：最小化、关闭、悬浮球、收起右侧栏 -->
-    <div class="group moyu-no-drag">
+    <!--
+      窗口操作。顺序：手机 · 置顶 · 最小化 · 关闭 · 悬浮球 · 收起右侧栏。
+      手机与置顶原本是右栏里两个写着汉字的格子，改作图标搬到这里——
+      顶栏里放得下图标，而它们改的是「这一页怎么显示」，不是阅读本身。
+    -->
+    <div class="group">
+      <button
+        class="icon"
+        :class="{ on: mobile }"
+        :title="mobile ? '切回电脑版网页' : '切换到手机版网页'"
+        @click="toggleUa"
+      >
+        <Icon name="mobile" />
+      </button>
+      <button
+        class="icon"
+        :class="{ on: alwaysOnTop }"
+        :title="alwaysOnTop ? '取消窗口置顶' : '窗口置顶'"
+        @click="togglePin"
+      >
+        <Icon name="pin" />
+      </button>
       <button class="icon" title="最小化（老板键 1）" @click="winMinimize">
         <Icon name="minimize" />
       </button>
