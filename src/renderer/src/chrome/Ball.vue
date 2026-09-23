@@ -119,18 +119,17 @@ const positionStyle = computed(() => {
   color: #ffffff;
   opacity: 0.55;
   box-shadow: 0 2px 8px rgba(17, 24, 39, 0.28);
-  transition:
-    opacity 140ms ease-out,
-    transform 140ms ease-out,
-    box-shadow 140ms ease-out;
+  transition: opacity 140ms ease-out, box-shadow 140ms ease-out;
   -webkit-app-region: no-drag;
   /* 拖动是自己实现的，所以光标形状也要自己给 */
   cursor: grab;
   z-index: 10;
-}
-
-.ball:active {
-  cursor: grabbing;
+  /*
+   * 关键：任何状态下都不能画出这个盒子。
+   * 收起后窗口正好是球的尺寸，一旦放大哪怕百分之几，圆就会被窗口边界切出方角。
+   * 因此反馈只用透明度与阴影——它们不会改变球的占位。
+   */
+  transform: none;
 }
 
 .ball.docked {
@@ -140,12 +139,16 @@ const positionStyle = computed(() => {
 
 .ball:hover {
   opacity: 1;
-  transform: scale(1.06);
   box-shadow: 0 3px 12px rgba(17, 24, 39, 0.34);
 }
 
+/* 按下时向内收，而不是向外扩 */
 .ball:active {
-  transform: scale(0.96);
+  cursor: grabbing;
+  opacity: 1;
+  box-shadow:
+    0 1px 4px rgba(17, 24, 39, 0.3),
+    inset 0 0 0 2px rgba(255, 255, 255, 0.45);
 }
 
 .ball:focus-visible {

@@ -130,9 +130,12 @@ export class WindowController {
       this.recomputeLayout()
     })
     win.on('move', () => {
-      // 展开态的移动（拖标题栏、系统移动）也要记下来；
-      // 拖动悬浮球时由 tickDrag 直接 setPosition，结束时统一 sync
-      if (this.mode === 'expanded' && !this.dragAnchor) {
+      // 拖动窗口时每次 setPosition 都会触发本事件。这时绝不能 reassert()：
+      // 它会重放整套窗口属性（置顶、焦点、任务栏、阴影、透明度），
+      // 每 16ms 来一遍就是持续闪烁。拖动只需移动位置，属性一个都不用碰。
+      if (this.dragAnchor) return
+
+      if (this.mode === 'expanded') {
         this.expandedBounds = win.getBounds()
         this.persistExpandedBounds()
       }
