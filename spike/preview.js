@@ -21,6 +21,9 @@
  *   npx electron spike/preview.js --bg 0.35        # 界面底板透明度：底板该淡，字不该淡
  *   npx electron spike/preview.js --drag-probe     # 逐个位置按一下，问「这里按下去起没起拖动」
  *   npx electron spike/preview.js --popover --bg 0.35   # 弹出面板也是另一份文档，同样要问一遍
+ *   npx electron spike/preview.js --popover --kind tabs # 面板有五张，换一张看
+ *   npx electron spike/preview.js --desktop        # 界面背后垫一层模拟桌面：截图用
+ *   npx electron spike/preview.js --collapsed --alpha --out spike/out/readme   # 带透明通道的球
  * 产物写在 spike/out/ 下：preview-<名字>.png 与 preview-<名字>.json
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -84,7 +87,55 @@ const theme = (() => {
   return i >= 0 ? args[i + 1] : 'paper'
 })()
 
-const outDir = path.join(__dirname, 'out')
+/**
+ * --out spike/out/readme：换个输出目录。
+ *
+ * README 的截图走的就是这条：生成的图要进仓库，而 spike/out 是 gitignore 的，
+ * 因此得能把原图写到别处去，再另行合成。
+ */
+const OUT = (() => {
+  const i = args.indexOf('--out')
+  return i >= 0 && args[i + 1] ? path.resolve(args[i + 1]) : path.join(__dirname, 'out')
+})()
+
+/**
+ * --desktop [light|dark|<css 颜色>]：在界面**背后**垫一层模拟桌面。
+ *
+ * 窗口是逐像素透明的，界面自己只画顶栏、右栏这些底板，其余部分是空的——
+ * 平时那些位置透出来的是真实桌面，而在不显示的窗口里截图时，透出来的是
+ * 窗口自己的 backgroundColor（一块深灰）。截图要给人看「它浮在桌面上是什么样」，
+ * 就得把那层桌面**画进这份文档**（写在 html 上，界面自己的底板盖在它上面）。
+ *
+ * 垫进来的桌面是假的，但它只影响截图，不影响界面自己的任何判断：
+ * 因此这个开关默认关着，验证版面时不要开。
+ */
+const DESKTOP_PRESETS = {
+  light: 'radial-gradient(130% 100% at 18% 0%, #fbfcfd 0%, #eef1f5 45%, #dde2e8 100%)',
+  dark: 'radial-gradient(130% 100% at 18% 0%, #232a31 0%, #161a1f 45%, #0a0d10 100%)'
+}
+const DESKTOP = (() => {
+  const i = args.indexOf('--desktop')
+  if (i < 0) return null
+  const next = args[i + 1]
+  const value = next && !next.startsWith('--') ? next : 'light'
+  return DESKTOP_PRESETS[value] ?? value
+})()
+
+/**
+ * --alpha：把窗口做成真正透明的，于是 capturePage 抓到的图**带透明通道**。
+ *
+ * 悬浮球那类产物需要这个：球是圆的，四周必须是透明的，才能贴到别的底上合成。
+ * 不透明窗口抓出来的图，四周会被窗口自己的 backgroundColor 填满。
+ */
+const ALPHA = has('--alpha')
+
+/** 面板有五种，默认看「站点」那一张；--kind uaZoom 能换一张看 */
+const KIND = (() => {
+  const i = args.indexOf('--kind')
+  return i >= 0 && args[i + 1] ? args[i + 1] : 'sites'
+})()
+
+const outDir = OUT
 const pagePath = path.join(__dirname, '..', 'out', 'renderer', PAGE_FILE[page])
 
 /** 渲染进程上报的悬浮球矩形——「收起时窗口落到哪」全靠它 */
@@ -407,7 +458,14 @@ app.whenReady().then(async () => {
     width: WIDTH,
     height: HEIGHT,
     show: false,
-    backgroundColor: '#1b1f24',
+    /*
+     * 无边框，与真实窗口一致。带上系统边框时 --width 给的是**外框**尺寸，
+     * 视口会比它小一圈（1280×720 请求到的是 1264×655），于是
+     * --width 480 --height 270 量到的并不是迷你档那个 480×270 的视口。
+     */
+    frame: false,
+    // 要透明通道时不能给底色：给了底色，球四周那圈透明就被填成一块灰
+    ...(ALPHA ? { transparent: true } : { backgroundColor: '#1b1f24' }),
     webPreferences: {
       preload: path.join(__dirname, 'preview-preload.js'),
       contextIsolation: true,
@@ -419,9 +477,19 @@ app.whenReady().then(async () => {
    * 面板是带 ?kind= 打开的（五种面板共用一份 popover.html），
    * 不带参数时它自己是默认的「站点」那一张。
    */
-  await win.loadFile(pagePath, page === 'popover' ? { search: '?kind=sites' } : undefined)
+  await win.loadFile(pagePath, page === 'popover' ? { search: `?kind=${KIND}` } : undefined)
   // 渲染进程是异步拉状态再渲染的，等它把首帧摆好
   await wait(1200)
+
+  /*
+   * 模拟桌面垫在 html 上：界面自己的底板画在它上面，而界面留白的地方透出来
+   * 就成了「桌面」。关掉这个开关时什么都不做，验证版面拿到的还是那块默认灰底。
+   */
+  if (DESKTOP) {
+    await win.webContents.executeJavaScript(
+      `document.documentElement.style.background = ${JSON.stringify(DESKTOP)}`
+    )
+  }
 
   fs.mkdirSync(outDir, { recursive: true })
 
@@ -523,7 +591,7 @@ app.whenReady().then(async () => {
   } else {
     const name =
       page !== 'chrome'
-        ? `${page}${page === 'home' ? `-${theme}` : ''}${size}${tabs}${bg}`
+        ? `${page}${page === 'home' ? `-${theme}` : page === 'popover' ? `-${KIND}` : ''}${size}${tabs}${bg}`
         : `preview-${mode}${size}${tabs}${bg}`
     await shoot(name)
 
