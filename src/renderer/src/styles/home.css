@@ -133,7 +133,9 @@ input {
 
 ::-webkit-scrollbar-thumb {
   background: var(--divider-strong);
-  border-radius: 4px;
+  /* 用变量而不是 4px：终端世界把圆角整组归零，写死的字面量会漏在那一组之外，
+     于是磷绿下别的都是直角、只有这条滚动条还带着圆角 */
+  border-radius: var(--radius-sm);
 }
 
 ::-webkit-scrollbar-thumb:hover {
