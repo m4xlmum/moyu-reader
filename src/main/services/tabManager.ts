@@ -57,6 +57,15 @@ export interface TabManagerDeps {
   }
   onStateChange: () => void
   onNavigated: (entry: { url: string; title: string; faviconUrl?: string }) => void
+  /**
+   * 刚刚有一个标签页视图被加到最上层。
+   *
+   * 界面层（chrome 视图）有时必须压在网页之上——最大化时右上角那组控件、
+   * 光标贴到窗口边框时左 / 下两条边的手柄（见 WindowController.syncChromeOrder）。
+   * 而新建视图永远是加到最上层的，那一下就会把界面层盖住；改次序的只可能是
+   * 界面层那一侧（它拿着 chrome 视图），于是这里只负责通知一声。
+   */
+  onViewAdded: () => void
 }
 
 let seq = 0
@@ -165,6 +174,8 @@ export class TabManager {
     win.contentView.addChildView(view)
     this.layoutTab(entry)
     this.wireEvents(entry)
+    // 新视图压在最上层，界面层若正需要待在上面就得重新抬一次（见 deps.onViewAdded）
+    this.deps.onViewAdded()
 
     if (own) {
       view.webContents.loadURL(rendererUrl(own.page)).catch((err) => {
@@ -428,6 +439,26 @@ export class TabManager {
       entry.view.setBounds({ x: r.x, y: r.y, width: r.width, height: r.height })
     } catch (err) {
       log.warn('摆放标签页视图失败', err)
+    }
+  }
+
+  // ------------------------------------------------------------ 叠放次序
+
+  /**
+   * 把当前标签页的视图重新加到最上层。
+   *
+   * 界面层压到网页之上之后要让回去（见 WindowController.syncChromeOrder），
+   * 而「场上有哪些视图、哪个是当前标签页」只有这一侧知道，因此由这里代劳。
+   * 重新 addChildView 就是把它重排到最上层，不会多出一份（spike/vieworder.js Q1）。
+   */
+  raiseActive(): void {
+    const win = this.deps.getWindow()
+    const entry = this.activeId ? this.tabs.get(this.activeId) : null
+    if (!win || !entry) return
+    try {
+      win.contentView.addChildView(entry.view)
+    } catch {
+      // 窗口可能已在销毁中
     }
   }
 

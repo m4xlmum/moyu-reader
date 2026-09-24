@@ -26,6 +26,8 @@ defineProps<{
     | 'panel-right'
     | 'mobile'
     | 'pin'
+    | 'maximize'
+    | 'restore'
   size?: number
 }>()
 </script>
@@ -88,6 +90,22 @@ defineProps<{
     <template v-else-if="name === 'pin'">
       <path d="M9 3.5h6v3.2l2.2 2.6v1.4H6.8v-1.4L9 6.7z" />
       <path d="M12 10.7v9.8" />
+    </template>
+    <!--
+      最大化：一个空心方框，Windows 这一代的画法。
+      它必须与下面的「还原」（两个错位方框）一眼分得开——两枚图标就挨着放
+      （同一个按钮的两个状态），认错就等于点错。
+    -->
+    <template v-else-if="name === 'maximize'">
+      <rect x="4.5" y="4.5" width="15" height="15" rx="2.5" />
+    </template>
+    <!--
+      还原：一大一小两个错位方框。后面那个只露出上面的边与右边的边——
+      两条完整的方框挤在 24 视框里会糊成一片，露个拐角反而更像「一叠」。
+    -->
+    <template v-else-if="name === 'restore'">
+      <rect x="4" y="9" width="11" height="11" rx="2" />
+      <path d="M9 9V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
     </template>
     <template v-else-if="name === 'search'">
       <circle cx="11" cy="11" r="6.5" />

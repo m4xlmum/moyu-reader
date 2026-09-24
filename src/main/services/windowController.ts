@@ -9,6 +9,10 @@
  * 这样屏幕上不会存在「看不见却仍占着一大块」的区域，
  * 原先那套靠裁剪命中区域实现的点击穿透因此不再需要。
  *
+ * 展开态之上还有一个临时的形态：**最大化**（铺满当前显示器的工作区，不保 16:9）。
+ * 它不是一次原生窗口操作（透明窗口不能最大化），而是我们自己摆的一块矩形，
+ * 见 maximize()。
+ *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { BaseWindow, WebContentsView, screen } from 'electron'
@@ -26,7 +30,15 @@ import {
 import type { ChromePatch } from '@shared/ipc'
 import type { AppConfig, Rect, ResizeEdge, WindowMode, WindowRuntime } from '@shared/types'
 import type { ConfigStore } from './configStore'
-import { computeLayout, resizeRect, sameRect, type Layout, type ResizeLimits } from './geometry'
+import { EdgeWatcher } from './edgeWatcher'
+import {
+  computeLayout,
+  floatBox,
+  resizeRect,
+  sameRect,
+  type Layout,
+  type ResizeLimits
+} from './geometry'
 import { log } from './logger'
 import { WindowLeaveWatcher } from './windowLeaveWatcher'
 import { WindowSurface } from './windowSurface'
@@ -55,6 +67,15 @@ export interface ControllerDeps {
    */
   onLayoutChange: () => void
   onStateChange: () => void
+  /**
+   * 把当前标签页的视图重新抬到最上层。
+   *
+   * 界面层有时要压到网页之上（最大化时的还原键与悬浮球、光标贴到窗口边框时的
+   * 左 / 下手柄，见 syncChromeOrder），让回去时就得有人把网页抬回来——
+   * 而「场上有哪些视图、哪个是当前标签页」只有标签页那一侧知道，
+   * 因此这一步交给它代劳，界面层这一侧不必认识标签页。
+   */
+  raiseActivePage: () => void
 }
 
 export class WindowController {
@@ -62,6 +83,7 @@ export class WindowController {
   private chrome: WebContentsView | null = null
   private surface: WindowSurface | null = null
   private watcher: WindowLeaveWatcher | null = null
+  private edgeWatcher: EdgeWatcher | null = null
 
   private mode: WindowMode = 'expanded'
   /**
@@ -99,6 +121,36 @@ export class WindowController {
    * applyCollapsedBounds() 会把它抬到实测尺寸，之后一步到位。
    */
   private ballFloor = BALL_SIZE
+
+  /**
+   * 是否已最大化（铺满当前显示器的整个工作区）。
+   *
+   * 「最大化」在这个程序里不是一次原生窗口操作（透明窗口不能最大化，
+   * 见 create()），而是我们自己摆的一块矩形，因此它是一个普通字段，
+   * 而不是去问窗口——窗口只会告诉我们「现在多大」，说不出「是不是最大化中」：
+   * 在 16:9 的显示器上，一个恰好等于屏幕宽度的 16:9 窗口与最大化的样子分不清。
+   */
+  private maximized = false
+  /**
+   * 最大化之前那块 16:9 矩形，还原时回到它。
+   *
+   * 与 expandedBounds 分开记：最大化期间 expandedBounds 记的是**眼前**这块
+   * 铺满工作区的矩形（它要与窗口的实际尺寸一致，收起、拖动都要读它），
+   * 而「回到哪里去」是另一件事，只有还原时才用得上。
+   */
+  private restoreBounds: Rect | null = null
+  /**
+   * 界面层此刻是否压在网页之上（见 syncChromeOrder）。
+   *
+   * 这是「我们上一次做了什么」，不是「问窗口谁在上面」——views 的叠放次序
+   * 读不回来，只能自己记着。新建标签页会把视图加到最上面，那时这个记号会
+   * 与事实不符，因此 TabManager 每次新建视图都会叫我们再对齐一次
+   * （deps.onViewAdded → syncChromeOrder(true)）。
+   */
+  private chromeOnTop = false
+  /** 光标此刻是否贴在窗口边框上（见 EdgeWatcher 与 setEdgeHot） */
+  private edgeHot = false
+
   private layout: Layout = computeLayout(960, 540, TOP_BAR_H, 0, RAIL_W)
 
   /**
@@ -201,6 +253,23 @@ export class WindowController {
       onCollapse: () => this.collapse()
     })
 
+    this.edgeWatcher = new EdgeWatcher({
+      /*
+       * 只有展开、未最大化、且真的露在屏幕上时，窗口才有那四条可拖的边框
+       * （收起态是一颗球、最大化时四边贴着屏幕、最小化与托盘里根本没有指针）。
+       * 因此把这三种情况一并在这里滤掉，轮询器那一侧只管几何。
+       *
+       * 读的是 win.getBounds() 而不是 expandedBounds：这里问的是「窗口**此刻**
+       * 在哪」，而要拿它跟屏幕上的光标比。记忆里的矩形在拖动的那几帧可能还差着
+       * 一次赋值，差出来的几像素正好落在 8px 的判定带里，就会漏判。
+       */
+      getBounds: () =>
+        this.mode === 'expanded' && !this.maximized && this.isOnScreen()
+          ? (this.win?.getBounds() ?? null)
+          : null,
+      onHotChange: (hot) => this.setEdgeHot(hot)
+    })
+
     this.deps.registry.add(win, { blocksAutoHide: false })
 
     win.on('resize', () => {
@@ -239,6 +308,7 @@ export class WindowController {
       // 它们各自的 try/catch 能让异常不冒出去，但会一路刷日志，
       // 而且是「对着一个不存在的窗口工作」——没有意义。
       this.watcher?.stop()
+      this.edgeWatcher?.stop()
       if (this.dragTimer) {
         clearInterval(this.dragTimer)
         this.dragTimer = null
@@ -259,6 +329,7 @@ export class WindowController {
     // 而标签页是另一层视图，所以「网页能显示」会掩盖这个问题。
     this.recomputeLayout()
     this.watcher.start()
+    this.edgeWatcher.start()
   }
 
   private loadChrome(): void {
@@ -297,14 +368,20 @@ export class WindowController {
 
     const cfg = this.deps.config.get()
     const previous = this.layout
+    /*
+     * 最大化时两栏与地址栏一起让位：整个工作区都归网页，界面在窗口里
+     * 只剩下右上角那一小块（chromeBounds）。三者都按同一个条件收起来——
+     * 少收一个，正文就少一块、而那块位置又没有任何东西画在上面。
+     */
+    const chromeHidden = this.maximized
     this.layout = computeLayout(
       width,
       height,
-      cfg.ui.topBarOpen ? TOP_BAR_H : 0,
-      this.addressOpen ? ADDRESS_H : 0,
-      railVisible(cfg) ? RAIL_W : 0
+      cfg.ui.topBarOpen && !chromeHidden ? TOP_BAR_H : 0,
+      this.addressOpen && !chromeHidden ? ADDRESS_H : 0,
+      railVisible(cfg, chromeHidden) ? RAIL_W : 0
     )
-    this.chrome?.setBounds({ x: 0, y: 0, width, height })
+    this.chrome?.setBounds(this.chromeBounds(width, height))
     this.applySurface()
 
     // 正文让位必须落到标签页视图上，那一层是原生视图，不跟着 CSS 走
@@ -324,7 +401,8 @@ export class WindowController {
       opacity: cfg.window.opacity,
       addressOpen: this.addressOpen,
       topBarOpen: cfg.ui.topBarOpen,
-      railVisible: railVisible(cfg)
+      railVisible: railVisible(cfg, this.maximized),
+      maximized: this.maximized
     }
   }
 
@@ -363,7 +441,14 @@ export class WindowController {
 
   /** 悬浮球在窗口内的矩形变化（渲染进程量好后上报） */
   setBallRect(rect: Rect): void {
-    this.ballRect = rect
+    /*
+     * 渲染进程量到的是**界面层内**的矩形，而这里要的是窗口坐标系里的矩形
+     * （收起时按它把窗口缩到球身上）。两者在最大化期间差着界面层的原点——
+     * 那时界面层缩在右上角那一小块里。换算放在这一侧做：界面那一侧不必知道
+     * 自己被摆在了哪里，它只管量自己文档里的坐标。
+     */
+    const c = this.chrome?.getBounds()
+    this.ballRect = c ? { ...rect, x: rect.x + c.x, y: rect.y + c.y } : rect
   }
 
   transitionTo(next: WindowMode): void {
@@ -405,7 +490,7 @@ export class WindowController {
 
     this.transitionTo('collapsed')
     this.applyCollapsedBounds(cfg.window.opacity)
-    this.resizeChromeToWindow()
+    this.syncChromeBounds()
     this.watcher?.rearm()
   }
 
@@ -423,12 +508,126 @@ export class WindowController {
     })
 
     this.recomputeLayout()
-    this.resizeChromeToWindow()
+    this.syncChromeBounds()
     // 重新开始计时，避免刚展开就被判定为「光标在外」而立刻收起
     this.watcher?.rearm()
 
     win.showInactive()
     this.reassert()
+  }
+
+  // ------------------------------------------------------------ 最大化 / 还原
+
+  /**
+   * 最大化：铺满当前显示器的整个工作区，不保 16:9。
+   *
+   * 为什么是「自己摆一块矩形」而不是 win.maximize()：透明窗口不能最大化
+   * （见 create()），这条路根本走不通。所幸本质相同——最大化本来就是
+   * 「把窗口摆成工作区那块矩形」，只是顺带让平台记住还原尺寸而已，
+   * 而还原尺寸我们自己记（restoreBounds）。
+   *
+   * 随之让位的是顶栏、地址栏与右侧栏（见 recomputeLayout）：整扇窗归网页，
+   * 界面只剩右上角那一组控件。那一组之所以还看得见、点得到，靠的是把界面层
+   * 抬到网页之上（syncChromeOrder）。
+   */
+  maximize(): void {
+    this.setMaximized(true)
+  }
+
+  /** 还原：回到最大化之前那块 16:9 矩形。 */
+  restore(): void {
+    this.setMaximized(false)
+  }
+
+  isMaximized(): boolean {
+    return this.maximized
+  }
+
+  private setMaximized(next: boolean): void {
+    const win = this.win
+    if (!win || next === this.maximized) return
+
+    if (next) {
+      // 记住「从哪儿来」：此刻的展开矩形正是回去的地方
+      this.restoreBounds = this.expandedBounds ?? win.getBounds()
+      this.maximized = true
+      this.applyBounds(this.workArea(win.getBounds()))
+      // 读回实测矩形。工作区那块不一定被平台原样接受，而这个字段从此刻起
+      // 代表「窗口现在在哪」，后面的收起、拖动都要按它算——
+      // applyCollapsedBounds() 出于同一个理由也要读回一次。
+      this.expandedBounds = win.getBounds()
+    } else {
+      this.maximized = false
+      if (this.mode === 'expanded') {
+        const target = this.restoreBounds ?? defaultExpandedBounds(this.deps.config.get())
+        this.restoreBounds = null
+        this.applyBounds(target)
+        this.expandedBounds = win.getBounds()
+      } else {
+        /*
+         * 收起态下还原：窗口得继续是一颗球，不能在这里长大。于是只把记忆改成
+         * 「按球心反推出来的一块 16:9」——这正是 syncBoundsMemory() 在收起态下
+         * 做的事（它是 collapsedBounds() 的逆运算）。球因此一动不动，
+         * 而下次展开会落到一块正常的 16:9 上，而不是回到铺满工作区的那块。
+         */
+        this.restoreBounds = null
+        this.syncBoundsMemory()
+      }
+    }
+
+    this.syncChromeOrder()
+    this.recomputeLayout()
+    this.deps.onStateChange()
+  }
+
+  /** 某块矩形所在显示器的工作区。取所在显示器而不是主显示器：窗口在哪块屏上就该铺满哪块 */
+  private workArea(bounds: Rect): Rect {
+    return screen.getDisplayMatching(bounds).workArea
+  }
+
+  /**
+   * 界面层此刻是否**应当**压在网页之上。
+   *
+   * 两件事靠它：最大化时右上角那组控件（还原键 + 悬浮球）要看得见、点得到；
+   * 光标贴到窗口边框时，左边缘与下边缘的缩放手柄要收得到按下（那两处的像素
+   * 本来归网页，见 EdgeWatcher）。两个条件都满足时，界面层必须留在最上面。
+   */
+  private chromeMustBeOnTop(): boolean {
+    return this.maximized || this.edgeHot
+  }
+
+  /**
+   * 把界面层的叠放次序对齐到「此刻该不该压在上面」。
+   *
+   * 抬上去是**重加一次子视图**：`View.addChildView` 对一个已经在场的子视图
+   * 就是把它重排到最上层，不会出现两份（spike/vieworder.js Q1/Q5 验过，
+   * 这里整套做法都架在那条文档上）。让回去要动标签页那一层，交给
+   * deps.raiseActivePage()——界面层这一侧不认识标签页。
+   *
+   * force：新建标签页的视图永远是加到最上层的，于是界面层会被盖住，
+   * 而我们记的「我在上面」这一刻仍然是 true。这种情况必须无条件重抬一次，
+   * 否则新开的网页会把还原键和球一起盖掉——窗口就没有出口了。
+   */
+  syncChromeOrder(force = false): void {
+    const win = this.win
+    const chrome = this.chrome
+    if (!win || !chrome) return
+    const want = this.chromeMustBeOnTop()
+    if (want === this.chromeOnTop && !force) return
+
+    if (want) {
+      win.contentView.addChildView(chrome)
+    } else if (this.chromeOnTop) {
+      this.deps.raiseActivePage()
+    }
+    this.chromeOnTop = want
+  }
+
+  /** 光标贴到窗口边框上了 / 离开了（EdgeWatcher 报上来的） */
+  private setEdgeHot(hot: boolean): void {
+    if (hot === this.edgeHot) return
+    this.edgeHot = hot
+    this.syncChromeOrder()
   }
 
   /**
@@ -486,7 +685,7 @@ export class WindowController {
         `悬浮球下限抬到 ${floor}`
     )
     this.surface?.apply({ mode: 'collapsed', windowRect: this.collapsedBounds(), opacity })
-    this.resizeChromeToWindow()
+    this.syncChromeBounds()
   }
 
   /**
@@ -506,12 +705,30 @@ export class WindowController {
     }
   }
 
-  /** 隐藏窗口时，chrome 视图要铺满当前窗口尺寸 */
-  private resizeChromeToWindow(): void {
+  /** 隐藏、展开、收起时，界面层都要按当前形态重新摆一次 */
+  private syncChromeBounds(): void {
     const win = this.win
     if (!win || !this.chrome) return
     const b = win.getBounds()
-    this.chrome.setBounds({ x: 0, y: 0, width: b.width, height: b.height })
+    this.chrome.setBounds(this.chromeBounds(b.width, b.height))
+  }
+
+  /**
+   * 界面层此刻该占的窗口内矩形。
+   *
+   * 三种形态：
+   *   - 收起态：铺满。窗口这时就是一颗球，球是铺满窗口画的，界面层必须跟着它。
+   *   - 最大化：只占右上角那一小块（floatBox）。**这是整套做法里唯一的解法**——
+   *     界面层与网页叠在一起时，只有最上面那一层收得到指针事件，CSS 的
+   *     pointer-events 管不着（views 的命中测试在原生那一侧，见 spike/vieworder.js），
+   *     于是「既浮在网页上、又不吃掉网页的点击」只能靠把界面层**真的缩小**到
+   *     那一小块，而不是铺满窗口再声明自己透明。
+   *   - 其余情况：铺满。这时界面层在网页之下，它盖住哪里都不影响点击。
+   */
+  private chromeBounds(width: number, height: number): Rect {
+    if (this.mode === 'collapsed') return { x: 0, y: 0, width, height }
+    if (this.maximized) return floatBox(width, height)
+    return { x: 0, y: 0, width, height }
   }
 
   // ------------------------------------------------------------ 动作
@@ -635,10 +852,27 @@ export class WindowController {
   setSize(input: { preset: SizePreset } | { width: number; height: number }): void {
     const win = this.win
     if (!win || this.mode !== 'expanded') return
+    /*
+     * 选一个尺寸预设 = 「我要回到这个 16:9 大小」，因此顺手退出最大化：
+     * 不退出的话，用户点了「中」却什么也没发生（窗口仍铺满工作区）。
+     *
+     * 这里不调 restore()：它会先把窗口摆回还原矩形，而我们紧接着就要把它摆成
+     * 预设档——中间那次 setBounds 是多余的，在屏幕上就是一闪。
+     * 清掉两个标记即可，界面靠下面那次 onStateChange 换回还原图标。
+     */
+    const wasMaximized = this.maximized
+    if (wasMaximized) {
+      this.maximized = false
+      this.restoreBounds = null
+      this.syncChromeOrder()
+    }
+
     const { width, height } = 'preset' in input ? SIZE_PRESETS[input.preset] : input
     const b = win.getBounds()
     win.setBounds({ x: b.x, y: b.y, width, height })
+    this.expandedBounds = win.getBounds()
     this.recomputeLayout()
+    if (wasMaximized) this.deps.onStateChange()
   }
 
   reassert(): void {
@@ -672,6 +906,7 @@ export class WindowController {
   destroy(): void {
     // 先停轮询与拖动跟踪，再拆窗口：反过来的话定时器会在窗口销毁后继续 tick
     this.watcher?.stop()
+    this.edgeWatcher?.stop()
     if (this.dragTimer) {
       clearInterval(this.dragTimer)
       this.dragTimer = null
@@ -721,6 +956,16 @@ export class WindowController {
   beginDrag(): void {
     const win = this.win
     if (!win) return
+    /*
+     * 最大化状态下拖动窗口 = 先还原、再接着拖。这是 Windows 的手感，
+     * 也是这一态下最自然的一个出口（最大化时整块界面都归网页，
+     * 能拖的只有右上角那一组控件）。
+     *
+     * 还原之后才读锚点，于是拖动按「光标位移」走：窗口回到原来的 16:9 位置，
+     * 再跟着光标移动。不会是「窗口跳到光标上」——拖动是位移，与窗口此刻在哪无关。
+     * 收起态下拖球同样走这里：还原只改记忆，球不会跳一下。
+     */
+    if (this.maximized) this.setMaximized(false)
     const cursor = screen.getCursorScreenPoint()
     const b = win.getBounds()
     // 已经挂着一次拖动时（上一次的松开事件丢了）不忽略这一下，而是**重新锚定**：
@@ -786,7 +1031,10 @@ export class WindowController {
   beginResize(edge: ResizeEdge): void {
     const win = this.win
     // 收起态下窗口就是一颗球，没有「边缘」可言；最小化 / 托盘里更谈不上。
-    if (!win || this.mode !== 'expanded') return
+    // 最大化时也不行：窗口铺满整个工作区，四边都贴着屏幕边，那四条手柄
+    // 根本没画出来（界面按同一个条件收起 ResizeFrame），到这里只可能是
+    // 一次迟到的消息（比如按下手柄与最大化赶在同一帧里）。
+    if (!win || this.mode !== 'expanded' || this.maximized) return
 
     const cursor = screen.getCursorScreenPoint()
     const b = win.getBounds()
@@ -884,7 +1132,12 @@ export class WindowController {
 
   /** 把展开态矩形落盘 */
   private persistExpandedBounds(): void {
-    const target = this.expandedBounds
+    /*
+     * 最大化期间落盘的必须是**还原回去的那块 16:9**，而不是眼前铺满工作区的
+     * 矩形：否则「最大化 → 收起 → 退出」会把满屏的矩形写进配置，
+     * 下次启动窗口就是满屏的。最大化是一个临时的窗口状态，不该跟着退出走。
+     */
+    const target = this.restoreBounds ?? this.expandedBounds
     if (!target) return
     this.deps.config.set((cfg) => ({
       ...cfg,
@@ -935,7 +1188,19 @@ function delay(ms: number): Promise<void> {
  * 而 chrome 层位于标签页视图**之下**，落在正文区里的球会被网页整个盖住，
  * 既看不见也点不到。因此这时无论用户怎么选，这一栏都必须保留。
  */
-function railVisible(cfg: AppConfig): boolean {
+/**
+ * 右侧栏此刻是否占位。
+ *
+ * 顶栏藏起来之后悬浮球就停在右栏顶端——那是它唯一的落脚处，
+ * 而 chrome 层位于标签页视图**之下**，落在正文区里的球会被网页整个盖住，
+ * 既看不见也点不到。因此这时无论用户怎么选，这一栏都必须保留。
+ *
+ * 最大化是这条规则的一个例外：那时整扇窗都归网页，球改停在右上角那一小块里，
+ * 不靠右栏落脚，因此两栏一起收起来（界面的右上角那一组控件是铺在网页上的，
+ * 不占正文位置）。
+ */
+function railVisible(cfg: AppConfig, maximized: boolean): boolean {
+  if (maximized) return false
   return cfg.ui.railOpen || !cfg.ui.topBarOpen
 }
 

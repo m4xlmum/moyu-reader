@@ -57,6 +57,15 @@ export const INVOKE = {
   winSetOpacity: 'window:setOpacity',
   winCollapse: 'window:collapse',
   winExpand: 'window:expand',
+  /**
+   * 最大化 / 还原。
+   *
+   * 走 invoke 而不是 SEND（与 collapse/expand 一样）：两者都会改版面，
+   * 界面要等主进程排完再按回传的状态绘制。托盘菜单与悬浮球菜单走的是
+   * 主进程内部同一个入口，因此三条路的结果必然一致。
+   */
+  winMaximize: 'window:maximize',
+  winRestore: 'window:restore',
   winOpenBallMenu: 'window:openBallMenu',
   winSetSize: 'window:setSize',
   winMinimize: 'window:minimize',
@@ -219,6 +228,16 @@ export interface MoyuApi {
     collapse(): Promise<void>
     /** 从悬浮球展开回完整界面 */
     expand(): Promise<void>
+    /**
+     * 铺满当前显示器的整个工作区。
+     *
+     * 不保 16:9（形状随显示器），随之隐藏顶栏、地址栏与右侧栏，只在右上角
+     * 浮出「还原键 + 悬浮球」。还原回到最大化之前的那块 16:9 矩形，
+     * 而不是回到某个预设档。
+     */
+    maximize(): Promise<void>
+    /** 从最大化回到之前的 16:9 矩形 */
+    restore(): Promise<void>
     /**
      * 开始拖动窗口。定位由主进程计算——它读得到全局光标位置，
      * 因此即使指针短暂移出窗口也不会丢失跟踪。

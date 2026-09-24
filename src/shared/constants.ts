@@ -78,6 +78,34 @@ export const BALL_MARGIN = (RAIL_W - BALL_SIZE) / 2
 export const RESIZE_EDGE = 4
 export const RESIZE_CORNER = 8
 
+/**
+ * 「光标离窗口边框多近就算贴上了」的那条带子（DIP）。
+ *
+ * 比手柄本身宽一倍：界面层要抬到网页之上，左边缘与下边缘的手柄才收得到那一下
+ * 按下（那两处的像素本来归网页，见 ResizeFrame 与 edgeWatcher）。抬起来要点
+ * 时间（一次轮询，最长 POLL_MS），因此带子得比手柄先一步起反应——
+ * 光标走到边上时，界面层必须已经抬好了。
+ */
+export const EDGE_HOT_BAND = RESIZE_CORNER
+
+/**
+ * 最大化时浮在窗口右上角的那一组控件：一枚还原键 + 悬浮球。
+ *
+ * 两栏都被藏起来了，界面在窗口里没有自己的地盘，因此这组控件画在一个
+ * **缩到右上角那一小块**的 chrome 视图里，并抬到网页之上（见 setChromeOnTop）。
+ * 尺寸写在这里是因为主进程要按它设 chrome 视图的矩形，而界面要按同一组数字
+ * 把两枚控件摆进那一块里——两边对不上就会出现「控件画在视图外面」。
+ *
+ * 高度取 BALL_SIZE + 两侧留白、宽度取两枚控件加间距与留白，于是球落在
+ * 距窗口右边和下边各 BALL_MARGIN 处，与「顶栏藏起来时球的落点」完全一致。
+ * 键的 26 与顶栏里那些图标按钮同一个数（那里是 CSS 的 26px，这里是常量，
+ * 两处指的是同一件事：一枚图标键的大小）。
+ */
+export const FLOAT_KEY_SIZE = 26
+export const FLOAT_GAP = 6
+export const FLOAT_H = BALL_SIZE + BALL_MARGIN * 2
+export const FLOAT_W = FLOAT_KEY_SIZE + FLOAT_GAP + BALL_SIZE + BALL_MARGIN * 2
+
 /** 主进程鼠标位置轮询间隔（毫秒） */
 export const POLL_MS = 50
 /**

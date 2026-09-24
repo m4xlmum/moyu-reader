@@ -18,6 +18,14 @@ const { contextBridge, ipcRenderer } = require('electron')
 const opts = ipcRenderer.sendSync('preview:options')
 const mode = opts.mode
 const topBarOpen = mode !== 'no-topbar'
+/**
+ * 是否最大化（铺满工作区）。
+ *
+ * 与 mode 是两件事：最大化时仍然可以收起成球、也可以展开——真实的主进程
+ * 也是这么分的（WindowRuntime 里 mode 与 maximized 各一个字段），
+ * 因此这里不把它并进 mode，否则会验出一个真实程序走不到的形状。
+ */
+const maximized = opts.maximized === true
 
 /**
  * 一枚内联图标，充作 favicon。
@@ -158,16 +166,47 @@ const BOOKMARKS = [
   }
 ]
 
+/**
+ * 窗口运行状态。真值都在主进程，这里只是把 getState 该回的东西照样摆一份。
+ *
+ * railVisible 与 topBarOpen 的算法**必须与 windowController 里的同名规则一致**
+ * （getRuntime / railVisible 那个模块级函数）：界面按它们决定画不画那两条栏，
+ * 假桥要是自己另定一套，预览里就会出现真实程序走不到的形状，看了也白看。
+ * 最大化那一态尤其要紧——右侧栏在这一态必须报 false，否则 Rail 会照画，
+ * 而真机上它已经让位了。
+ */
 const state = {
   mode: mode === 'collapsed' ? 'collapsed' : 'expanded',
   opacity: 1,
   addressOpen: false,
   topBarOpen,
-  // 顶栏藏起来时右栏必须保留——悬浮球停在那里
-  railVisible: true
+  railVisible: !maximized && (config.ui.railOpen || !topBarOpen),
+  maximized
 }
 
-const noop = () => () => {}
+/**
+ * 状态广播要真的发得出去。
+ *
+ * 「最大化之后点右上角那枚还原键，顶栏与右栏回来」是这一版最要紧的一条往返，
+ * 而它全靠「界面发意图 → 主进程改状态 → 广播回来 → 界面重画」这条路。
+ * 假桥若把 onState 当空操作吞掉（原先就是），这条路在预览里根本走不通：
+ * 点了那枚键什么都不会变，也就验不出往返通没通。
+ */
+const stateListeners = new Set()
+
+function emitState() {
+  const snapshot = { ...state }
+  for (const listener of stateListeners) listener(snapshot)
+}
+
+/** 最大化 / 还原只改这两个字段，其余照主进程的规则重算一遍 */
+function setMaximized(next) {
+  if (state.maximized === next) return
+  state.maximized = next
+  state.railVisible = !next && (config.ui.railOpen || !state.topBarOpen)
+  emitState()
+}
+
 const ok = () => Promise.resolve()
 const list = () => Promise.resolve([])
 
@@ -297,6 +336,14 @@ contextBridge.exposeInMainWorld('moyu', {
     setOpacity: ok,
     collapse: ok,
     expand: ok,
+    maximize: () => {
+      setMaximized(true)
+      return Promise.resolve()
+    },
+    restore: () => {
+      setMaximized(false)
+      return Promise.resolve()
+    },
     dragStart: () => {
       dragStarts += 1
     },
@@ -321,8 +368,11 @@ contextBridge.exposeInMainWorld('moyu', {
     hideToTray: ok,
     reassert: ok,
     close: ok,
-    getState: () => Promise.resolve(state),
-    onState: noop
+    getState: () => Promise.resolve({ ...state }),
+    onState: (listener) => {
+      stateListeners.add(listener)
+      return () => stateListeners.delete(listener)
+    }
   },
   ui: { openPopover: ok, closePopover: ok, openSettings: ok },
   hotkey: {

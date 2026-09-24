@@ -29,5 +29,15 @@ export function useWindowState() {
     void window.moyu.win.expand()
   }
 
-  return { state, collapse, expand }
+  /** 铺满当前显示器的整个工作区（两栏与地址栏随之让位） */
+  function maximize(): void {
+    void window.moyu.win.maximize()
+  }
+
+  /** 从最大化回到之前的 16:9 矩形 */
+  function restore(): void {
+    void window.moyu.win.restore()
+  }
+
+  return { state, collapse, expand, maximize, restore }
 }

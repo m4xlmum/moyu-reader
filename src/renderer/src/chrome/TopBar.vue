@@ -112,6 +112,17 @@ function winMinimize(): void {
   void window.moyu.win.minimize()
 }
 
+/**
+ * 最大化。铺满当前显示器的整个工作区，不保 16:9。
+ *
+ * 这一枚只画「最大化」这一态，不画「还原」：最大化之后整条顶栏都让位给网页
+ * （用户定的），它就跟着没了。退出改走右上角那一枚还原键，或球的右键菜单——
+ * 那两处都在最大化后仍在窗内的那一小块里。
+ */
+function winMaximize(): void {
+  void window.moyu.win.maximize()
+}
+
 function winClose(): void {
   void window.moyu.win.close()
 }
@@ -162,7 +173,7 @@ function goHome(): void {
     </TabStrip>
 
     <!--
-      窗口操作。顺序：手机 · 置顶 · 最小化 · 关闭 · 悬浮球 · 收起右侧栏。
+      窗口操作。顺序：手机 · 置顶 · 最大化/还原 · 最小化 · 关闭 · 悬浮球 · 收起右侧栏。
       手机与置顶原本是右栏里两个写着汉字的格子，改作图标搬到这里——
       顶栏里放得下图标，而它们改的是「这一页怎么显示」，不是阅读本身。
     -->
@@ -182,6 +193,14 @@ function goHome(): void {
         @click="togglePin"
       >
         <Icon name="pin" />
+      </button>
+      <!--
+        最大化：铺满当前显示器的工作区（不保 16:9）。
+        最大化之后这条顶栏整个让位给网页，这一枚也跟着消失——
+        退出那一步在右上角的还原键上（见 ChromeApp 的 .float）。
+      -->
+      <button class="icon" title="最大化（铺满工作区）" aria-label="最大化" @click="winMaximize">
+        <Icon name="maximize" />
       </button>
       <button class="icon" title="最小化（老板键 1）" @click="winMinimize">
         <Icon name="minimize" />

@@ -101,7 +101,9 @@ function bootstrap(): void {
     },
     onStateChange: () => {
       broadcast(BROADCAST.windowState, controller.getRuntime())
-    }
+    },
+    // 界面层让回网页之下时，把网页重新抬回来（「谁在场」只有标签页那一侧知道）
+    raiseActivePage: () => tabsRef?.raiseActive()
   })
 
   const tabs = new TabManager({
@@ -116,7 +118,9 @@ function bootstrap(): void {
     onStateChange: () => {
       broadcast(BROADCAST.tabsState, { tabs: tabs.list(), activeTabId: tabs.getActiveId() })
     },
-    onNavigated: (entry) => history.record(entry)
+    onNavigated: (entry) => history.record(entry),
+    // 新视图永远加在最上层，界面层若正需要待在上面就得重新抬一次
+    onViewAdded: () => controller.syncChromeOrder(true)
   })
   tabsRef = tabs
 

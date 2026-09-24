@@ -10,6 +10,8 @@
  *   npx electron spike/preview.js                 # 顶栏展开
  *   npx electron spike/preview.js --no-topbar     # 顶栏藏起来，球浮在右上角
  *   npx electron spike/preview.js --collapsed     # 已收起（只剩一颗球）
+ *   npx electron spike/preview.js --maximized     # 已最大化：右上角那一小块（还原键 + 球）
+ *   npx electron spike/preview.js --maximized --width 960 --height 540 --desktop  # 放大看它在桌面上的样子
  *   npx electron spike/preview.js --width 480 --height 270   # 迷你档多大，标签条就得让位
  *   npx electron spike/preview.js --tabs 3        # 只留前 3 个标签页：放得下那一态
  *   npx electron spike/preview.js --click-tab 0   # 点第 0 格标签，再截一张
@@ -48,6 +50,14 @@ const MODES = { '--no-topbar': 'no-topbar', '--collapsed': 'collapsed' }
 const modeFlag = Object.keys(MODES).find(has)
 const mode = modeFlag ? MODES[modeFlag] : 'default'
 
+/**
+ * --maximized：已最大化（铺满工作区）。
+ *
+ * 与 mode 正交——最大化时也可以收起成球，因此它单独一个开关，
+ * 而不是并进 MODES 里去。
+ */
+const MAXIMIZED = has('--maximized')
+
 const page = has('--home')
   ? 'home'
   : has('--settings')
@@ -62,8 +72,18 @@ const PAGE_FILE = {
   popover: 'popover.html'
 }
 
-const WIDTH = num('--width', 960)
-const HEIGHT = num('--height', 540)
+/*
+ * --maximized 时默认就按那一小块的尺寸开窗口（80×48，与主进程的 floatBox 同源）。
+ *
+ * 这一档是必需的，不是排版偏好：chrome 层在真实程序里最大化时**只剩这么一块**
+ * （见 WindowController.chromeBounds），拿 960×540 去渲染它，量到的坐标就不是
+ * 真机上的坐标了——「还原键与球各自落在哪几像素」正是这一档唯一要问的事。
+ *
+ * 想看图就自己给 --width / --height（配 --desktop 垫一层桌面），
+ * 那时量的数字不再代表真机，只有截图能看。
+ */
+const WIDTH = num('--width', MAXIMIZED ? 80 : 960)
+const HEIGHT = num('--height', MAXIMIZED ? 48 : 540)
 /** 只留前 N 个标签页。标签条放不放得下是算出来的，得能用少几张试出「放得下」那一态 */
 const TABS = num('--tabs', 0)
 /**
@@ -231,6 +251,7 @@ const BALL_IMAGE_DATA = (() => {
 ipcMain.on('preview:options', (event) => {
   event.returnValue = {
     mode,
+    maximized: MAXIMIZED,
     theme,
     tabs: TABS,
     bgAlpha: BG,
@@ -266,6 +287,17 @@ const MEASURE = `(() => {
     topbar: box('.topbar'),
     rail: box('.rail'),
     ball: box('.ball'),
+    /*
+     * 最大化时右上角那一小块里的两样东西（见 ChromeApp 的 .float）。
+     *
+     * 这一组是这一态**唯一**还能点的东西，因此它的位置不能靠截图判断
+     * （球是半透明的、键压在网页上，差几像素看不出来）：
+     * 还原键在左、球在右，两者竖直居中，球的右边缘离界面层右沿正好
+     * BALL_MARGIN（4）——与「顶栏藏起来时球浮在右上角」是同一个落点，
+     * 两态之间切换球不该跳。数字在这里，判据在窗口宽度上（80）。
+     */
+    floatBox: box('.float'),
+    floatKey: box('.float-key'),
     /*
      * 球面上画的是什么。
      *
@@ -564,6 +596,11 @@ const DRAG_PROBE = `(() => {
     ['顶栏：地址栏开关（控件，不该拖）', centerOf('.address-toggle')],
     ['顶栏：手机（控件，不该拖）', centerOf('.topbar button[title*="手机"]')],
     ['顶栏：置顶（控件，不该拖）', centerOf('.topbar button[title*="置顶"]')],
+    /*
+     * 最大化那一枚与左右邻居只隔 28px（按钮就是 28px 宽），而它紧贴着右上角——
+     * 8×8 的角手柄会不会啃掉它右下角那几像素，只能靠这个点问出来。
+     */
+    ['顶栏：最大化（控件，不该拖）', centerOf('.topbar button[title*="最大化"]')],
     ['顶栏：最小化（控件，不该拖）', centerOf('.topbar button[title*="最小化"]')],
     ['顶栏：悬浮球（它自己就是拖动面）', centerOf('.ball')],
     /*
@@ -749,10 +786,29 @@ app.whenReady().then(async () => {
     const measured = await win.webContents.executeJavaScript(
       page === 'chrome' ? MEASURE : page === 'popover' ? POPOVER_MEASURE : PAGE_MEASURE
     )
+    /*
+     * 这一份写的是**当下实测的**最大化状态，不是 --maximized 这个入参。
+     *
+     * 两者在那一轮还原往返里必然对不上：--maximized 起的窗口跑完一圈点过还原键，
+     * 盘面上已经不是最大化了。若这里照入参写一句 true，JSON 就与紧挨着它的
+     * topbar / rail 实测自相矛盾——而读这份 JSON 的人正是拿它当证据用的。
+     */
+    const live = await win.webContents
+      .executeJavaScript(`window.moyu.win.getState()`)
+      .catch(() => null)
     fs.writeFileSync(
       path.join(outDir, `${name}.json`),
       JSON.stringify(
-        { page, mode, theme, bg: BG, reportedBallRect, measured, dragProbe },
+        {
+          page,
+          mode,
+          maximized: live?.maximized ?? MAXIMIZED,
+          theme,
+          bg: BG,
+          reportedBallRect,
+          measured,
+          dragProbe
+        },
         null,
         2
       ),
@@ -763,6 +819,12 @@ app.whenReady().then(async () => {
       console.log(`BALL_RECT ${JSON.stringify(reportedBallRect)}`)
       // 球面上画的是哪一枚、实测多大：与截图对着看，比只看图确定得多
       console.log(`BALL_GLYPH ${JSON.stringify(measured.ballGlyph)}`)
+      // 最大化那一档：右上角两样东西的实测几何，判据见 MEASURE 里的说明
+      if (MAXIMIZED) {
+        console.log(
+          `FLOAT ${JSON.stringify({ box: measured.floatBox, key: measured.floatKey, ball: measured.ball })}`
+        )
+      }
     }
   }
 
@@ -778,6 +840,8 @@ app.whenReady().then(async () => {
    */
   const ball = BALL_IMAGE ? `-img${BALL_FIT}` : BALL_ICON !== 'book' ? `-icon${BALL_ICON}` : ''
   const zoom = BALL_ZOOM > 1 ? `-zoom${BALL_ZOOM}` : ''
+  // 最大化那一档与展开态是两张不同的图（一张是右上角一小块、一张是整扇窗），不能互相覆盖
+  const max = MAXIMIZED ? '-max' : ''
 
   /*
    * --drag-probe：先按一遍，再照第一张。
@@ -844,8 +908,22 @@ app.whenReady().then(async () => {
     const name =
       page !== 'chrome'
         ? `${page}${page === 'home' ? `-${theme}` : page === 'popover' ? `-${KIND}` : ''}${size}${tabs}${bg}${ball}${zoom}`
-        : `preview-${mode}${size}${tabs}${bg}${ball}${zoom}`
+        : `preview-${mode}${max}${size}${tabs}${bg}${ball}${zoom}`
     await shoot(name)
+
+    /*
+     * 最大化那一档：点一下右上角那枚还原键，再照一张。
+     *
+     * 这是「最大化 → 还原」这条往返的端到端验收：界面发意图 → 主进程改状态 →
+     * 广播回来 → 界面重画（假桥里那条广播是真的，见 preview-preload.js）。
+     * 第二张的 JSON 里必须重新出现 rightButtons 与 railButtons——顶栏与右栏回来了。
+     * 只看第一张只能证明「藏着」，证不了「回得来」，而这一态唯一的出口就是那枚键。
+     */
+    if (page === 'chrome' && MAXIMIZED) {
+      await run(`document.querySelector('.float-key')?.click()`)
+      await wait(400)
+      await shoot(`${name}-restored`)
+    }
 
     /*
      * 点一格标签，再截一张。

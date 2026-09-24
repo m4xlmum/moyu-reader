@@ -7,7 +7,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { ASPECT_RATIO } from '@shared/constants'
+import { ASPECT_RATIO, FLOAT_H, FLOAT_W } from '@shared/constants'
 import type { Rect, ResizeEdge } from '@shared/types'
 
 export interface Layout {
@@ -51,6 +51,62 @@ export function sameRect(a: Rect, b: Rect): boolean {
 
 export function pointInRect(px: number, py: number, r: Rect): boolean {
   return px >= r.x && px < r.x + r.width && py >= r.y && py < r.y + r.height
+}
+
+/**
+ * 光标是不是贴在窗口边框上了（左、右、上、下任一条）。
+ *
+ * 给「界面层要不要抬到网页之上」用（见 edgeWatcher）：窗口的正文视图从 x = 0
+ * 铺到窗口底部，因此左边缘与下边缘的缩放手柄平时压在网页底下，收不到按下。
+ * 光标走近边框时先把界面层抬起来，那两条边才拖得动。
+ *
+ * `r` 是窗口矩形，`px` / `py` 与它只要同一个坐标系就行——两边都用屏幕坐标也可以，
+ * 函数只用到差值（实际调用正是如此，见 edgeWatcher）。判据是**贴边**而不是
+ * 「进入某条边的矩形」：这里按 `r` 的整圈算，因此四个角天然被两条边同时覆盖，
+ * 不必再单独列一遍。
+ *
+ * 两侧的 `band` 宽度严格相等，写法看着不对称是有原因的：`pointInRect` 是
+ * 左闭右开的，右边与下边最里那一像素是 `r.x + r.width - 1`（`r.x + r.width`
+ * 已经在窗口外）。因此左边用 `< band`、右边用 `<= band`，两边的实际带宽
+ * 才都是 `band` 像素——写成一样的话，右边会比左边窄一像素。
+ */
+export function nearWindowEdge(px: number, py: number, r: Rect, band: number): boolean {
+  if (!pointInRect(px, py, r)) return false
+  return (
+    px - r.x < band ||
+    r.x + r.width - px <= band ||
+    py - r.y < band ||
+    r.y + r.height - py <= band
+  )
+}
+
+// ---------------------------------------------------------------- 最大化时的浮动控件
+
+/**
+ * 最大化之后，右上角那一小块留给「还原键 + 悬浮球」的地盘。
+ *
+ * 为什么是一小块而不是铺满窗口的一层：chrome 视图与标签页视图叠在一起时，
+ * **只有最上面那一层收得到指针事件，CSS 的 pointer-events 管不着**（views 之间
+ * 的命中测试在原生那一侧，见 spike/vieworder.js 文件头）。因此想「浮在网页之上
+ * 又能点到网页」，唯一可行的办法是让界面层**真的只占那一小块**，
+ * 而不是铺满窗口再声明自己透明。
+ *
+ * 于是它必须与渲染进程的版面严格对齐：界面把那两枚控件摆进这一块里
+ * （ChromeApp.vue 的 .float），主进程按同一组 FLOAT_* 常量设视图矩形。
+ */
+export function floatBox(clientWidth: number, clientHeight: number): Rect {
+  /*
+   * 两个方向都夹紧一次。正常路径上它们不会生效——最大化时窗口有整个工作区，
+   * 而这一组控件只有 80×48。留着是为了让返回值在任何输入下都不越出窗口：
+   * 右边越界会让球看不见，下边越界会把球推出窗外。这两件事都发生在
+   * chrome 层上，而 chrome 层看不见就是「窗口没有出口」。
+   */
+  return {
+    x: Math.max(0, clientWidth - FLOAT_W),
+    y: 0,
+    width: Math.min(FLOAT_W, Math.max(0, clientWidth)),
+    height: Math.min(FLOAT_H, Math.max(0, clientHeight))
+  }
 }
 
 // ---------------------------------------------------------------- 边缘缩放

@@ -25,6 +25,16 @@ export function registerWindowIpc(ctx: AppContext): void {
     ctx.controller.expand()
   })
 
+  // 最大化 / 还原：顶栏那枚图标、悬浮球菜单、网页里视频的全屏（第四批）
+  // 三条路都走主进程内部同一对入口，结果必然一致
+  ipcMain.handle(INVOKE.winMaximize, () => {
+    ctx.controller.maximize()
+  })
+
+  ipcMain.handle(INVOKE.winRestore, () => {
+    ctx.controller.restore()
+  })
+
   // 拖动走单向消息：高频且不需要回执
   ipcMain.on(SEND.dragStart, () => ctx.controller.beginDrag())
   ipcMain.on(SEND.dragEnd, () => ctx.controller.endDrag())
@@ -55,6 +65,7 @@ export function registerWindowIpc(ctx: AppContext): void {
       getWindow: () => ctx.controller.getWindow(),
       getRuntime: () => ctx.controller.getRuntime(),
       setChrome: (patch) => ctx.controller.setChrome(patch),
+      restoreWindow: () => ctx.controller.restore(),
       hideToTray: () => void ctx.controller.hideToTray(),
       openSettings: () => ctx.openSettings(),
       quit: () => ctx.quit()
