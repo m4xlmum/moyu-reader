@@ -20,6 +20,10 @@
  *    同时它的底、字、强调色必须逐条取自当前主题的令牌——写死一个白底的话，
  *    纸白下看着完全正常，夜与磷绿下当场就是一块白条。这一组单独加载：真机上
  *    提示条只在有新版时才占版面，一直挂着会让上面那几条基准漂移。
+ * 5. **停在自家那一屏上时界面没散架**。起始页与系统设置不再是标签页：它们不进
+ *    标签条，各有各的入口键。这一态也是一种**没有当前网页**的状态，因此单独加载
+ *    两次（Q13）：标签条一格不多、一格不亮，两颗入口键各亮各的，地址栏开关上
+ *    写着那一屏的名字。
  *
  * 颜色一律经 canvas 归一后比对：getPropertyValue 拿回来的是计算值，写法
  * （`rgb(255 255 255 / 1)` 还是 `#ffffff`）随主题层怎么写出入很大，比字符串
@@ -54,6 +58,19 @@ function constant(name) {
 
 const NOTICE_H = constant('NOTICE_H')
 
+/**
+ * 字符串常量同理（HOME_TITLE / SETTINGS_TITLE）。
+ *
+ * 这一版里「停在自家那一屏上时地址栏开关上写什么」是判据之一，而那两个字
+ * 正是从 constants.ts 来的。探针抄一份的话，改文案时两边一起错。
+ */
+function stringConstant(name) {
+  const text = fs.readFileSync(path.join(ROOT, 'src', 'shared', 'constants.ts'), 'utf8')
+  const m = new RegExp(`^export const ${name} = '([^']*)'$`, 'm').exec(text)
+  if (!m) throw new Error(`读不到常量 ${name}（constants.ts 的写法变了？）`)
+  return m[1]
+}
+
 const PAGES = {
   chrome: 'index.html',
   popover: 'popover.html',
@@ -75,7 +92,17 @@ const opts = {
   mode: 'default',
   maximized: false,
   theme: 'paper',
-  tabs: 6,
+  /*
+   * 5 个：与 spike/preview-preload.js 里 ALL_TABS 的条数一致。
+   * 标签条里现在**只有网页**——起始页与系统设置不进这一条了（它们是「屏」，
+   * 见 spike/own-screens.js），因此这个数就是网页标签的数。
+   */
+  tabs: 5,
+  /*
+   * 停在自家哪一屏上：null（看着网页）/ 'home' / 'settings'。
+   * 上面那些基准一律用 null；--screen 那一问单独加载两次，见 loadScreen。
+   */
+  screen: null,
   bgAlpha: 1,
   ballIcon: 'book',
   ballFit: 'cover',
@@ -529,6 +556,42 @@ const COLLECT_NOTICE = `(() => {
   }
 })()`
 
+/**
+ * 「停在自家那一屏上」那一态，在界面那一侧量一圈。
+ *
+ * 起始页与系统设置不是标签页：它们不进标签条，各有各的入口键（顶栏左上角那颗
+ * 与右栏栏底那格），停在其中一屏上时**没有哪一格是高亮的**。正文区那块原生
+ * 视图在预览里不存在，因此这一问能问的只有界面这一圈，而它恰好是这一版
+ * 改动最要紧的那一圈：
+ *
+ * - 标签条没有因为多了这一屏而多出一格（格子数 == 网页标签数）；
+ * - 没有哪一格是高亮的（对照 --click-screen：点进去之前是有一格亮的）；
+ * - 两颗入口键里该亮的那一颗真的亮了，另一颗没亮；
+ * - 地址栏开关上写的是这一屏的名字，不是某一页的域名，也不是一句「新标签页」。
+ *
+ * 少任何一条，就分不清「进去了」与「什么也没发生」。
+ */
+const COLLECT_SCREEN = `(async () => {
+  const lit = (sel) => {
+    const el = document.querySelector(sel)
+    return el ? el.classList.contains('on') : null
+  }
+  const tabs = await window.moyu.tabs.list()
+  const text = (sel) => document.querySelector(sel)?.textContent?.trim() ?? null
+  return {
+    screen: tabs.screen,
+    activeTabId: tabs.activeTabId,
+    网页标签数: tabs.tabs.length,
+    格子数: document.querySelectorAll('.zone .tab').length,
+    高亮的格数: document.querySelectorAll('.zone .tab.on').length,
+    /* 两颗入口键各自那份 title 是活的（'系统设置' / '回到刚才那张网页'），按前缀定位 */
+    起始页键亮着: lit('.topbar button[title="回到起始页"], .topbar button[title="回到刚才那张网页"]'),
+    设置格亮着: lit('.rail .foot'),
+    地址栏开关: text('.topbar .address-toggle .ellipsis'),
+    下拉按钮: text('.zone .fallback .title')
+  }
+})()`
+
 // ---------------------------------------------------------------- 判定
 
 const results = []
@@ -874,6 +937,49 @@ function checkNoticeProgress(withNotice) {
   else pass('Q12', `下载态下进度线画在 ${show(bar?.background)} 上、宽 ${bar?.box.w}px（42%），行高仍是 ${NOTICE_H}px，且不给按钮`)
 }
 
+/**
+ * 停在自家那一屏上时，界面这一圈对不对。
+ *
+ * 判据里那两条「格子数 == 网页标签数」与「没有哪一格高亮」是这一问的骨架：
+ * 起始页与系统设置曾经是**普通标签页**，各占一格、各带一枚 ✕，点进设置之后
+ * 想出来只能去点标签条上那一格。这一版把它们改成「屏」，这两条正是
+ * 「不再混在标签里」在界面上唯一看得见的凭据。
+ */
+function checkScreens(home, settings) {
+  const bad = []
+  for (const [screen, page, want] of [
+    ['home', home, stringConstant('HOME_TITLE')],
+    ['settings', settings, stringConstant('SETTINGS_TITLE')]
+  ]) {
+    if (page.screen !== screen) bad.push(`${screen} 那一态下 tabs.list().screen 是 ${page.screen}`)
+    if (page.activeTabId !== null) bad.push(`${screen} 那一态下 activeTabId 是 ${page.activeTabId}，该是 null`)
+    if (page.格子数 !== page.网页标签数) {
+      bad.push(`${screen} 那一态下标签条画了 ${page.格子数} 格，网页只有 ${page.网页标签数} 张`)
+    }
+    if (page.高亮的格数 !== 0) bad.push(`${screen} 那一态下还有 ${page.高亮的格数} 格是高亮的`)
+    if (page.起始页键亮着 !== (screen === 'home')) {
+      bad.push(`${screen} 那一态下左上角那颗键的亮灯是 ${page.起始页键亮着}`)
+    }
+    if (page.设置格亮着 !== (screen === 'settings')) {
+      bad.push(`${screen} 那一态下栏底那格「设置」的亮灯是 ${page.设置格亮着}`)
+    }
+    if (page.地址栏开关 !== want) {
+      bad.push(`${screen} 那一态下地址栏开关上写的是 ${JSON.stringify(page.地址栏开关)}，该是 ${want}`)
+    }
+    // 让位成下拉按钮时按钮上写的是这一屏的名字（那一档下没有格子可高亮）
+    if (page.下拉按钮 !== null && page.下拉按钮 !== want) {
+      bad.push(`${screen} 那一态下下拉按钮上写的是 ${JSON.stringify(page.下拉按钮)}，该是 ${want}`)
+    }
+  }
+  if (bad.length) fail('Q13', `停在自家那一屏上时界面没跟上 —— ${bad.join('；')}`)
+  else {
+    pass(
+      'Q13',
+      `停在起始页 / 系统设置上时（screen 各自对上、activeTabId 为 null）标签条一格不多、一格不亮，两颗入口键各亮各的，地址栏开关上写着那一屏的名字`
+    )
+  }
+}
+
 // ---------------------------------------------------------------- 跑
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
@@ -923,6 +1029,24 @@ app.whenReady().then(async () => {
     for (const t of THEMES) byPage[page][t.id] = await load(page, t.id)
   }
 
+  /**
+   * 停在自家那一屏上那一态，界面各加载一次。
+   *
+   * 单独加载而不是并进上面那个循环：这是**另一种状态**（没有当前网页），
+   * 与那十二问赖以成立的「正看着某张网页」是两回事，混在一起量，
+   * 上面那几条基准就会在一个没有当前页的版面上得出读数。
+   */
+  const loadScreen = async (screen) => {
+    opts.screen = screen
+    await win.loadFile(path.join(ROOT, 'out', 'renderer', PAGES.chrome))
+    await wait(1100)
+    const got = await win.webContents.executeJavaScript(COLLECT_SCREEN)
+    opts.screen = null
+    return got
+  }
+  const screenHome = await loadScreen('home')
+  const screenSettings = await loadScreen('settings')
+
   // 背景透明度那一档：只跑一次，用界面问
   const alphaProbe = await load('chrome', 'paper', 0.4)
 
@@ -942,6 +1066,7 @@ app.whenReady().then(async () => {
   checkNoticeDrawn(withNotice)
   checkNoticeTokens(withNotice)
   checkNoticeProgress(withNotice)
+  checkScreens(screenHome, screenSettings)
 
   for (const r of results) console.log(`[${r.id}] ${r.ok ? 'OK  ' : 'FAIL'} ${r.text}`)
 
@@ -998,7 +1123,7 @@ app.whenReady().then(async () => {
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.writeFileSync(
     path.join(OUT_DIR, 'theme-chrome.json'),
-    JSON.stringify({ results, painted, byPage, alphaProbe, withNotice }, null, 2)
+    JSON.stringify({ results, painted, byPage, alphaProbe, withNotice, screenHome, screenSettings }, null, 2)
   )
   console.log(`REPORT spike/out/theme-chrome.json`)
 

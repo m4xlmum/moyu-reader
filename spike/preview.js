@@ -13,9 +13,12 @@
  *   npx electron spike/preview.js --maximized     # 已最大化：右上角那一小块（还原键 + 球）
  *   npx electron spike/preview.js --maximized --width 960 --height 540 --desktop  # 放大看它在桌面上的样子
  *   npx electron spike/preview.js --width 480 --height 270   # 迷你档多大，标签条就得让位
- *   npx electron spike/preview.js --tabs 3        # 只留前 3 个标签页：放得下那一态
+ *   npx electron spike/preview.js --tabs 2        # 只留前 2 个标签页（标签条里只有网页）：放得下那一态
  *   npx electron spike/preview.js --click-tab 0   # 点第 0 格标签，再截一张
  *   npx electron spike/preview.js --click-rail-pause  # 点右栏那格开关，再截一张
+ *   npx electron spike/preview.js --screen settings   # 界面停在系统设置上：标签条哪一格都不高亮
+ *   npx electron spike/preview.js --screen home       # 停在起始页上：左上角那颗键亮着
+ *   npx electron spike/preview.js --click-screen      # 用两颗键各进出一次，打一行 SCREEN 再截两张
  *   npx electron spike/preview.js --resize 1100x700   # 改窗口尺寸再截一张：让位与回归
  *   npx electron spike/preview.js --home          # 起始页
  *   npx electron spike/preview.js --home --themes # 起始页三套主题各截一张（走真实换主题那条路）
@@ -23,6 +26,8 @@
  *   npx electron spike/preview.js --theme night    # 界面也跟主题走，换一套配色看顶栏与右栏
  *   npx electron spike/preview.js --settings --theme crt-green   # 设置页同理
  *   npx electron spike/preview.js --settings --width 560 --height 400
+ *   # 注意：--home / --settings 看的是**那一份文档**自己长什么样；
+ *   #      --screen home|settings 看的是**界面处在「停在它上面」那一态**（见上）
  *   npx electron spike/preview.js --bg 0.35        # 界面底板透明度：底板该淡，字不该淡
  *   npx electron spike/preview.js --notice 1.1.0    # 更新提示条：查到新版、可以下载
  *   npx electron spike/preview.js --notice 1.1.0 --notice-phase downloading --notice-percent 42
@@ -92,6 +97,21 @@ const WIDTH = num('--width', MAXIMIZED ? 80 : 960)
 const HEIGHT = num('--height', MAXIMIZED ? 48 : 540)
 /** 只留前 N 个标签页。标签条放不放得下是算出来的，得能用少几张试出「放得下」那一态 */
 const TABS = num('--tabs', 0)
+/**
+ * --screen home|settings：界面停在这一屏上。
+ *
+ * 与 --home / --settings 是两回事：那两个是把起始页 / 设置**那一份文档**单独
+ * 渲染出来看它自己长什么样；这个是「界面处在『停在那一屏上』那一态」——
+ * 正文区那块原生的视图在预览里根本不存在，要看的是界面这一圈：
+ * 标签条哪一格都不高亮、左上角那颗键 / 栏底那格亮着、地址栏开关上写着这一屏的名字。
+ *
+ * 想看见「点进去 / 再点一次回来」这一步，用 --click-screen。
+ */
+const SCREEN = (() => {
+  const i = args.indexOf('--screen')
+  const value = i >= 0 ? args[i + 1] : null
+  return value === 'home' || value === 'settings' ? value : null
+})()
 /**
  * --bg 0.35：把界面底板透明度设成这个值。
  *
@@ -292,6 +312,7 @@ ipcMain.on('preview:options', (event) => {
     maximized: MAXIMIZED,
     theme,
     tabs: TABS,
+    screen: SCREEN,
     bgAlpha: BG,
     ballIcon: BALL_ICON,
     ballFit: BALL_FIT,
@@ -942,6 +963,11 @@ app.whenReady().then(async () => {
    */
   const noticeTag =
     page === 'chrome' && NOTICE ? `-notice${NOTICE_PHASE === 'available' ? '' : `-${NOTICE_PHASE}`}` : ''
+  /*
+   * 停在哪一屏也写进名字：起始页与设置是两张不同的图，不能互相覆盖。
+   * 不给 --screen 时一个字都不加——默认那几张图的名字 README 在用。
+   */
+  const screenTag = SCREEN ? `-screen${SCREEN}` : ''
 
   /*
    * --drag-probe：先按一遍，再照第一张。
@@ -1008,7 +1034,7 @@ app.whenReady().then(async () => {
     const name =
       page !== 'chrome'
         ? `${page}${themeTag}${page === 'popover' ? `-${KIND}` : ''}${size}${tabs}${bg}${ball}${zoom}`
-        : `preview-${mode}${max}${themeTag}${noticeTag}${size}${tabs}${bg}${ball}${zoom}`
+        : `preview-${mode}${max}${themeTag}${noticeTag}${screenTag}${size}${tabs}${bg}${ball}${zoom}`
     await shoot(name)
 
     /*
@@ -1065,6 +1091,53 @@ app.whenReady().then(async () => {
       const after = await railPause()
       console.log(`RAIL_PAUSE ${JSON.stringify({ 点之前: before, 点之后: after })}`)
       await shoot(`${name}-railpause`)
+    }
+
+    /*
+     * 点「设置」那格进出一次，再点左上角那颗键进出一次，各截一张。
+     *
+     * 这两颗键是起始页与系统设置**仅有的两个入口**，而且各自都是开关：
+     * 不在那一屏上就进去，已经在那一屏上就原路返回进来之前那张网页。
+     * 标签条不再列这两屏，于是「此刻停在哪」只能从三处读出来——`screen`、
+     * 哪一格标签高亮、以及地址栏开关上写着什么。三处一起读，缺一处就分不清
+     * 「进去成功」与「什么也没发生」。
+     *
+     * 两次点击之间必须重新查一遍 DOM：Vue 的更新是下一帧的事，而且高亮的
+     * 类名与 title 都会随状态换掉。
+     */
+    if (page === 'chrome' && has('--click-screen')) {
+      const HOME_KEY = '.topbar button[title="回到起始页"], .topbar button[title="回到刚才那张网页"]'
+      const SETTINGS_CELL = '.rail .foot'
+      const readScreen = async () =>
+        run(`(async () => {
+          const s = await window.moyu.tabs.list()
+          const home = document.querySelector('${HOME_KEY}')
+          const cell = document.querySelector('${SETTINGS_CELL}')
+          return {
+            停在哪: s.screen,
+            当前网页: s.activeTabId,
+            高亮的格: s.tabs.filter((t) => t.isActive).map((t) => t.id),
+            起始页键亮着: home ? home.classList.contains('on') : null,
+            设置格亮着: cell ? cell.classList.contains('on') : null,
+            地址栏开关: document.querySelector('.topbar .address-toggle .ellipsis')?.textContent?.trim() ?? null
+          }
+        })()`)
+      const steps = [{ 动作: '起点', ...(await readScreen()) }]
+      await run(`document.querySelector('${SETTINGS_CELL}')?.click()`)
+      await wait(400)
+      steps.push({ 动作: '点栏底「设置」', ...(await readScreen()) })
+      await shoot(`${name}-settings`)
+      await run(`document.querySelector('${SETTINGS_CELL}')?.click()`)
+      await wait(400)
+      steps.push({ 动作: '再点一次「设置」', ...(await readScreen()) })
+      await run(`document.querySelector('${HOME_KEY}')?.click()`)
+      await wait(400)
+      steps.push({ 动作: '点左上角起始页键', ...(await readScreen()) })
+      await shoot(`${name}-home`)
+      await run(`document.querySelector('${HOME_KEY}')?.click()`)
+      await wait(400)
+      steps.push({ 动作: '再点一次起始页键', ...(await readScreen()) })
+      console.log(`SCREEN ${JSON.stringify({ 步骤: steps })}`)
     }
 
     /*

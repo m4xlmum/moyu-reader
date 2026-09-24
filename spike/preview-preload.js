@@ -44,7 +44,11 @@ const FAVICON =
   )
 
 /**
- * 标签页。默认 6 个、标题都很长，正好试标签条的让位与下拉按钮的截断。
+ * 标签页。默认 5 个、标题都很长，正好试标签条的让位与下拉按钮的截断。
+ *
+ * **只有网页**：起始页与系统设置不进这一条（它们是「屏」不是「标签」，
+ * 见 spike/own-screens.js 与 README 里那一版模型）。这里要是还留着
+ * `moyu://home` 那一格，预览里就会量出一个真实程序画不出来的标签条。
  *
  * 给其中一个配一枚 favicon：标签条上确实是「有图标画图标、没有画个点」，
  * 两条路都得看得见。其余留空——「还没有图标」本身也是线上最常见的状态。
@@ -53,7 +57,6 @@ const FAVICON =
  * 试出「放得下」那一态，否则永远只看得到它让位。
  */
 const ALL_TABS = [
-  ['起始页', 'moyu://home'],
   ['Claude Code 官方文档 · 快速开始与环境配置', 'https://docs.claude.com/en/docs/claude-code'],
   ['掘金 - 代码不止，掘金不停', 'https://juejin.cn/'],
   ['知乎 - 有问题，就会有答案', 'https://www.zhihu.com/'],
@@ -63,11 +66,10 @@ const ALL_TABS = [
   id: `t${i}`,
   url,
   title,
-  faviconUrl: i === 2 ? FAVICON : undefined,
+  faviconUrl: i === 1 ? FAVICON : undefined,
   isLoading: false,
   canGoBack: i > 0,
   canGoForward: false,
-  isActive: i === 1,
   uaMode: 'desktop',
   zoom: 1,
   muted: false
@@ -75,8 +77,24 @@ const ALL_TABS = [
 
 const TABS = opts.tabs > 0 ? ALL_TABS.slice(0, opts.tabs) : ALL_TABS
 
-/** 当前选中的那一格。点标签、关标签都要真的改掉它，见下面的 tabs 桥 */
-let activeTabId = 't1'
+/**
+ * 正文区此刻停在哪一屏——`'home' | 'settings' | null`（null = 正在看着某张网页）。
+ *
+ * 说法与真实主进程一致（见 shared/ipc.ts 的 TabsStatePayload）：`activeTabId`
+ * 只说「正在看着哪张网页」，停在自家那两屏上时它是 **null**——标签条因此哪一格
+ * 都不高亮，而标签条本身照旧把网页都列着；「原路返回」要回的那一张另记在
+ * `lastGuestId` 里。把 screen 与 activeTabId 混成一个字段，就画不出
+ * 「没有哪一格高亮」这一态了。
+ *
+ * --screen home|settings 摆的是「先开着网页、再进那一屏」那一态，
+ * 因此两张表都要照着填：停在那屏上、并且记得回来该回哪张。
+ */
+let screen = opts.screen ?? null
+/** 默认停在第二格（有 favicon 的那一格），--tabs 1 时退回第一格 */
+const FIRST_TAB = TABS[1]?.id ?? TABS[0]?.id ?? null
+let activeTabId = screen ? null : FIRST_TAB
+/** 「原路返回」要回的那一张。进自家那两屏不改它——这正是它记着来路的原因 */
+let lastGuestId = FIRST_TAB
 const tabListeners = new Set()
 
 const config = {
@@ -110,6 +128,8 @@ const config = {
     defaultZoom: 1,
     hideScrollbars: true,
     searchTemplate: 'https://www.bing.com/search?q=%s',
+    // 设置页「通用」那一节里「新标签页」那一格的底色，照 DEFAULT_NEW_TAB_URL 摆
+    newTabUrl: 'https://www.google.com',
     newWindowAsTab: true
   },
   update: {
@@ -289,11 +309,43 @@ let resizeEnds = 0
 /** 每次缩放开始时报上来的边名，按顺序记下来：拖的是不是那一条边，只能这么问 */
 const resizeEdges = []
 
+/**
+ * 进自家那一屏（起始页 / 系统设置）。
+ *
+ * 「正在看着的那张网页」就此变成没有——`activeTabId` 归 null，标签条上哪一格
+ * 都不高亮；`lastGuestId` 不动，它就是「再点一次原路返回」要回的那一张。
+ */
+function openScreen(kind) {
+  screen = kind
+  activeTabId = null
+  emitTabs()
+}
+
+/**
+ * 再点一次那颗键：原路返回。
+ *
+ * 回的是 `lastGuestId` 那一张；它已经不在了就落回起始页——正文区不能空着
+ * （与主进程同一条规矩，见 TabManager.close / leaveScreen）。
+ */
+function leaveScreen() {
+  if (!screen) return
+  const back = lastGuestId && TABS.some((t) => t.id === lastGuestId) ? lastGuestId : null
+  if (back) {
+    screen = null
+    activeTabId = back
+  } else {
+    screen = 'home'
+    activeTabId = null
+  }
+  emitTabs()
+}
+
 /** 标签页的对外快照。isActive 跟着当前那一格算，不另存一份，免得两处说法对不上 */
 function tabsState() {
   return {
     tabs: TABS.map((t) => ({ ...t, isActive: t.id === activeTabId })),
-    activeTabId
+    activeTabId,
+    screen
   }
 }
 
@@ -374,22 +426,41 @@ contextBridge.exposeInMainWorld('moyu', {
   bookmarks: { list: () => Promise.resolve(BOOKMARKS), remove: list, update: list },
   tabs: {
     create: () => Promise.resolve({ tabId: 't9' }),
-    home: () => Promise.resolve({ tabId: 't0' }),
     /*
-     * 切换与关闭要真的改掉这张表并广播出去。
+     * 切换、关闭、进出自家那两屏都要真的改掉这张表并广播出去。
      *
-     * 标签条是「点了就该有反应」的东西，假桥要是把这两步当空操作吞掉，
+     * 标签条是「点了就该有反应」的东西，假桥要是把这些当空操作吞掉，
      * 预览里点一下什么动静都没有，也就验不出点中的是不是那一格。
+     * 进出那两屏尤其要紧：--click-screen 要看的正是「点一下栏底那格，
+     * 标签条有没有变得哪一格都不高亮、那格自己有没有亮起来」。
      */
     close: (input) => {
       const at = TABS.findIndex((t) => t.id === input.tabId)
       if (at >= 0) TABS.splice(at, 1)
-      if (activeTabId === input.tabId) activeTabId = TABS[0]?.id ?? null
+      if (lastGuestId === input.tabId) lastGuestId = null
+      /*
+       * 关掉的是**正在看着的那一张**：还有网页就切到最后一张，一张都不剩就
+       * 落回起始页。停在自家那两屏上时「正在看着的那张」是 null（关谁都动不到
+       * 那一屏），因此这一段与主进程的 close() 走的是同一套判断。
+       */
+      if (activeTabId === input.tabId) {
+        const next = TABS[TABS.length - 1]
+        if (next) {
+          activeTabId = next.id
+          lastGuestId = next.id
+          screen = null
+        } else {
+          screen = 'home'
+          activeTabId = null
+        }
+      }
       emitTabs()
       return Promise.resolve()
     },
     activate: (input) => {
       activeTabId = input.tabId
+      screen = null
+      if (input.tabId) lastGuestId = input.tabId
       emitTabs()
       return Promise.resolve()
     },
@@ -444,7 +515,30 @@ contextBridge.exposeInMainWorld('moyu', {
       return () => stateListeners.delete(listener)
     }
   },
-  ui: { openPopover: ok, closePopover: ok, openSettings: ok },
+  /*
+   * 进出自家那两屏那几条路。
+   *
+   * 顶栏左上角那颗键发的是 openHome / leaveScreen，右栏栏底那格发的是
+   * openSettings / leaveScreen（判据在界面那一侧，主进程只认「进去」「退出来」
+   * 这两件事，见 shared/ipc.ts 里 uiLeaveScreen 的注释）。这三条要真的改状态
+   * 并广播，否则预览里点那颗键什么都不会变，也就验不出「再点一次原路返回」。
+   */
+  ui: {
+    openPopover: ok,
+    closePopover: ok,
+    openSettings: () => {
+      openScreen('settings')
+      return Promise.resolve()
+    },
+    openHome: () => {
+      openScreen('home')
+      return Promise.resolve()
+    },
+    leaveScreen: () => {
+      leaveScreen()
+      return Promise.resolve()
+    }
+  },
   update: {
     get: () => Promise.resolve({ ...updateState }),
     /*
