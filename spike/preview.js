@@ -17,7 +17,7 @@
  *   npx electron spike/preview.js --click-tab 0   # 点第 0 格标签，再截一张
  *   npx electron spike/preview.js --click-rail-pause  # 点右栏那格开关，再截一张
  *   npx electron spike/preview.js --screen settings   # 界面停在系统设置上：标签条哪一格都不高亮
- *   npx electron spike/preview.js --screen home       # 停在起始页上：左上角那颗键亮着
+ *   npx electron spike/preview.js --screen home       # 停在起始页上：起始页那颗键亮着
  *   npx electron spike/preview.js --click-screen      # 用两颗键各进出一次，打一行 SCREEN 再截两张
  *   npx electron spike/preview.js --resize 1100x700   # 改窗口尺寸再截一张：让位与回归
  *   npx electron spike/preview.js --home          # 起始页
@@ -103,7 +103,7 @@ const TABS = num('--tabs', 0)
  * 与 --home / --settings 是两回事：那两个是把起始页 / 设置**那一份文档**单独
  * 渲染出来看它自己长什么样；这个是「界面处在『停在那一屏上』那一态」——
  * 正文区那块原生的视图在预览里根本不存在，要看的是界面这一圈：
- * 标签条哪一格都不高亮、左上角那颗键 / 栏底那格亮着、地址栏开关上写着这一屏的名字。
+ * 标签条哪一格都不高亮、那颗键自己亮着、地址栏开关上写着这一屏的名字。
  *
  * 想看见「点进去 / 再点一次回来」这一步，用 --click-screen。
  */
@@ -324,7 +324,13 @@ ipcMain.on('preview:options', (event) => {
   }
 })
 
-/** 量一圈关键元素。数字比眼睛靠谱，而且能直接和主进程的版面常量对照 */
+/**
+ * 量一圈关键元素。数字比眼睛靠谱，而且能直接和主进程的版面常量对照。
+ *
+ * 这是**模板字符串**，整段原样发给渲染进程执行：里面写注释时别用反引号
+ * （`.icon.on` 那种写法会把模板提前收尾，剩下半段变成主进程里跑的真代码，
+ * 报出来的是「App threw an error during load」，跟渲染进程一点关系都没有）。
+ */
 const MEASURE = `(() => {
   const box = (sel) => {
     const el = document.querySelector(sel)
@@ -518,6 +524,29 @@ const MEASURE = `(() => {
       }
     })(),
     /*
+     * 两屏那两颗键各自的实测配色。
+     *
+     * 它们长什么样是**看不太出来的**：.icon.on 在纸白下是「淡蓝底 + 蓝字」，
+     * 到了暗夜，那块淡底是 0.14 的蓝叠在近黑的栏上——同一套令牌，肉眼在小图上
+     * 未必分得清「亮着」与「没亮」。而这两颗键现在各自代表一屏的进出口，
+     * 亮灯就是「你正停在这一屏上」的唯一凭据，不能靠猜。
+     * 于是把两份计算值都摆出来：亮着的那颗该是 accent 字 + accent-soft 底。
+     */
+    screenKeys: Object.fromEntries(
+      [
+        ['起始页', '.topbar button[aria-label="起始页"]'],
+        ['设置', '.topbar button[aria-label="系统设置"]']
+      ].map(([name, sel]) => {
+        const el = document.querySelector(sel)
+        if (!el) return [name, null]
+        const s = getComputedStyle(el)
+        return [
+          name,
+          { on: el.classList.contains('on'), color: s.color, background: s.backgroundColor }
+        ]
+      })
+    ),
+    /*
      * 右栏那两条透明度滑块，以及功能栈有没有被撑出滚动区。
      *
      * 这一栏刚做过一次「去掉两个 26px 的按钮、换进一条 56px 的滑块」，
@@ -655,7 +684,12 @@ const DRAG_PROBE = `(() => {
 
   const bar = boxOf('.topbar')
   const rail = boxOf('.rail')
-  const nav = boxOf('.topbar .group')
+  /*
+   * 顶栏里现在有三组 .group，第一组是「两屏的键」（起始页 / 设置）而不是导航。
+   * 因此导航那一组按内容认，不按次序认——次序是会变的，而「后退」这枚键跟着导航走。
+   */
+  const screens = boxOf('.topbar .group:has(button[aria-label="系统设置"])')
+  const nav = boxOf('.topbar .group:has(button[title="后退"])')
   const items = [...document.querySelectorAll('.rail .stack .item')]
   const firstItem = items[0]?.getBoundingClientRect() ?? null
   const railMidX = rail ? Math.round(rail.x + rail.width / 2) : 0
@@ -676,10 +710,23 @@ const DRAG_PROBE = `(() => {
      * 顶栏那 8px 内边距剩下的部分，那里按下去应当还是拖窗口。
      */
     ['顶栏左端留白', bar ? { x: Math.round(bar.x + 6), y: Math.round(bar.y + bar.height / 2) } : null],
+    /*
+     * 两屏那两颗键（起始页 / 设置）与导航组之间新留出的一道组间距。
+     * 它按「组间距」设计，也就是一处可拖的空白；两颗键挨得只有 1px，
+     * 而这 4px 要是也归了控件，顶栏左边就没有拖动面了。
+     */
+    ['顶栏：两屏键与导航组之间的缝', screens ? { x: Math.round(screens.right + 2), y: Math.round(bar.y + bar.height / 2) } : null],
     ['顶栏：导航组与地址栏之间的缝', nav ? { x: Math.round(nav.right + 2), y: Math.round(bar.y + bar.height / 2) } : null],
     ['顶栏：标签条右侧的空白（.rest）', centerOf('.zone > .rest')],
     ['顶栏：第一格标签（控件，不该拖）', centerOf('.zone .tab')],
     ['顶栏：地址栏开关（控件，不该拖）', centerOf('.address-toggle')],
+    /*
+     * 两屏那两颗键。它们原先一在左上、一在右栏栏底，现在并排摆在最左：
+     * 两枚都是控件（按下去是进 / 出那一屏，不是拖窗口），而它们与导航组
+     * 只隔一道组间距——这一条量的是「那 4px 的缝没被谁吃掉」。
+     */
+    ['顶栏：起始页（控件，不该拖）', centerOf('.topbar button[aria-label="起始页"]')],
+    ['顶栏：设置（控件，不该拖）', centerOf('.topbar button[aria-label="系统设置"]')],
     ['顶栏：手机（控件，不该拖）', centerOf('.topbar button[title*="手机"]')],
     ['顶栏：置顶（控件，不该拖）', centerOf('.topbar button[title*="置顶"]')],
     /*
@@ -709,7 +756,6 @@ const DRAG_PROBE = `(() => {
     ['右栏：收起时暂停（控件，不该拖）', centerOf('.rail button[title*="收起时暂停"]')],
     ['右栏：滑块的小字（不该拖）', centerOf('.rail .opacity .label')],
     ['右栏：滑块的轨道（控件，不该拖）', centerOf('.rail .opacity input')],
-    ['右栏：设置（控件，不该拖）', centerOf('.rail .foot')],
 
     // 四条边与四个角的中点各按一下：起缩放，且边名要对得上
     ['上边缘', { x: Math.round(W / 2), y: 1 }, 'resize:n'],
@@ -915,6 +961,8 @@ app.whenReady().then(async () => {
       console.log(`BALL_RECT ${JSON.stringify(reportedBallRect)}`)
       // 球面上画的是哪一枚、实测多大：与截图对着看，比只看图确定得多
       console.log(`BALL_GLYPH ${JSON.stringify(measured.ballGlyph)}`)
+      // 两屏那两颗键的实测配色：亮着的那颗是不是真的亮着，暗夜下靠肉眼分不清
+      console.log(`SCREEN_KEYS ${JSON.stringify(measured.screenKeys)}`)
       // 最大化那一档：右上角两样东西的实测几何，判据见 MEASURE 里的说明
       if (MAXIMIZED) {
         console.log(
@@ -1094,49 +1142,54 @@ app.whenReady().then(async () => {
     }
 
     /*
-     * 点「设置」那格进出一次，再点左上角那颗键进出一次，各截一张。
+     * 点「设置」那颗键进出一次，再点「起始页」那颗键进出一次，各截一张。
      *
-     * 这两颗键是起始页与系统设置**仅有的两个入口**，而且各自都是开关：
+     * 这两颗键是起始页与系统设置**仅有的两个入口**（设置那颗原先在右栏栏底，
+     * 用户要求搬到左上角并换成图标，现在与起始页并排），而且各自都是开关：
      * 不在那一屏上就进去，已经在那一屏上就原路返回进来之前那张网页。
      * 标签条不再列这两屏，于是「此刻停在哪」只能从三处读出来——`screen`、
      * 哪一格标签高亮、以及地址栏开关上写着什么。三处一起读，缺一处就分不清
      * 「进去成功」与「什么也没发生」。
      *
+     * 两颗键都按 aria-label 找，不按 title：title 会随状态在「进去」与「回来」
+     * 两种说法之间换（两屏都亮着时更是两颗键同一个说法），要靠它认键就得
+     * 先知道自己要问的是哪一态——那正是这一问要验的东西。
+     *
      * 两次点击之间必须重新查一遍 DOM：Vue 的更新是下一帧的事，而且高亮的
      * 类名与 title 都会随状态换掉。
      */
     if (page === 'chrome' && has('--click-screen')) {
-      const HOME_KEY = '.topbar button[title="回到起始页"], .topbar button[title="回到刚才那张网页"]'
-      const SETTINGS_CELL = '.rail .foot'
+      const HOME_KEY = '.topbar button[aria-label="起始页"]'
+      const SETTINGS_KEY = '.topbar button[aria-label="系统设置"]'
       const readScreen = async () =>
         run(`(async () => {
           const s = await window.moyu.tabs.list()
           const home = document.querySelector('${HOME_KEY}')
-          const cell = document.querySelector('${SETTINGS_CELL}')
+          const key = document.querySelector('${SETTINGS_KEY}')
           return {
             停在哪: s.screen,
             当前网页: s.activeTabId,
             高亮的格: s.tabs.filter((t) => t.isActive).map((t) => t.id),
             起始页键亮着: home ? home.classList.contains('on') : null,
-            设置格亮着: cell ? cell.classList.contains('on') : null,
+            设置键亮着: key ? key.classList.contains('on') : null,
             地址栏开关: document.querySelector('.topbar .address-toggle .ellipsis')?.textContent?.trim() ?? null
           }
         })()`)
       const steps = [{ 动作: '起点', ...(await readScreen()) }]
-      await run(`document.querySelector('${SETTINGS_CELL}')?.click()`)
+      await run(`document.querySelector('${SETTINGS_KEY}')?.click()`)
       await wait(400)
-      steps.push({ 动作: '点栏底「设置」', ...(await readScreen()) })
+      steps.push({ 动作: '点「设置」键', ...(await readScreen()) })
       await shoot(`${name}-settings`)
-      await run(`document.querySelector('${SETTINGS_CELL}')?.click()`)
+      await run(`document.querySelector('${SETTINGS_KEY}')?.click()`)
       await wait(400)
-      steps.push({ 动作: '再点一次「设置」', ...(await readScreen()) })
+      steps.push({ 动作: '再点一次「设置」键', ...(await readScreen()) })
       await run(`document.querySelector('${HOME_KEY}')?.click()`)
       await wait(400)
-      steps.push({ 动作: '点左上角起始页键', ...(await readScreen()) })
+      steps.push({ 动作: '点「起始页」键', ...(await readScreen()) })
       await shoot(`${name}-home`)
       await run(`document.querySelector('${HOME_KEY}')?.click()`)
       await wait(400)
-      steps.push({ 动作: '再点一次起始页键', ...(await readScreen()) })
+      steps.push({ 动作: '再点一次「起始页」键', ...(await readScreen()) })
       console.log(`SCREEN ${JSON.stringify({ 步骤: steps })}`)
     }
 

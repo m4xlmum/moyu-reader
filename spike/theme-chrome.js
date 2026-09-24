@@ -559,8 +559,8 @@ const COLLECT_NOTICE = `(() => {
 /**
  * 「停在自家那一屏上」那一态，在界面那一侧量一圈。
  *
- * 起始页与系统设置不是标签页：它们不进标签条，各有各的入口键（顶栏左上角那颗
- * 与右栏栏底那格），停在其中一屏上时**没有哪一格是高亮的**。正文区那块原生
+ * 起始页与系统设置不是标签页：它们不进标签条，各有各的入口键（顶栏最左并排的
+ * 那两颗），停在其中一屏上时**没有哪一格是高亮的**。正文区那块原生
  * 视图在预览里不存在，因此这一问能问的只有界面这一圈，而它恰好是这一版
  * 改动最要紧的那一圈：
  *
@@ -584,9 +584,9 @@ const COLLECT_SCREEN = `(async () => {
     网页标签数: tabs.tabs.length,
     格子数: document.querySelectorAll('.zone .tab').length,
     高亮的格数: document.querySelectorAll('.zone .tab.on').length,
-    /* 两颗入口键各自那份 title 是活的（'系统设置' / '回到刚才那张网页'），按前缀定位 */
-    起始页键亮着: lit('.topbar button[title="回到起始页"], .topbar button[title="回到刚才那张网页"]'),
-    设置格亮着: lit('.rail .foot'),
+    /* 两颗入口键各自那份 title 是活的（'系统设置' / '回到刚才那张网页'），按 aria-label 定位 */
+    起始页键亮着: lit('.topbar button[aria-label="起始页"]'),
+    设置键亮着: lit('.topbar button[aria-label="系统设置"]'),
     地址栏开关: text('.topbar .address-toggle .ellipsis'),
     下拉按钮: text('.zone .fallback .title')
   }
@@ -958,10 +958,10 @@ function checkScreens(home, settings) {
     }
     if (page.高亮的格数 !== 0) bad.push(`${screen} 那一态下还有 ${page.高亮的格数} 格是高亮的`)
     if (page.起始页键亮着 !== (screen === 'home')) {
-      bad.push(`${screen} 那一态下左上角那颗键的亮灯是 ${page.起始页键亮着}`)
+      bad.push(`${screen} 那一态下「起始页」那颗键的亮灯是 ${page.起始页键亮着}`)
     }
-    if (page.设置格亮着 !== (screen === 'settings')) {
-      bad.push(`${screen} 那一态下栏底那格「设置」的亮灯是 ${page.设置格亮着}`)
+    if (page.设置键亮着 !== (screen === 'settings')) {
+      bad.push(`${screen} 那一态下「设置」那颗键的亮灯是 ${page.设置键亮着}`)
     }
     if (page.地址栏开关 !== want) {
       bad.push(`${screen} 那一态下地址栏开关上写的是 ${JSON.stringify(page.地址栏开关)}，该是 ${want}`)

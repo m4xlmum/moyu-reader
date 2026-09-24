@@ -431,8 +431,8 @@ contextBridge.exposeInMainWorld('moyu', {
      *
      * 标签条是「点了就该有反应」的东西，假桥要是把这些当空操作吞掉，
      * 预览里点一下什么动静都没有，也就验不出点中的是不是那一格。
-     * 进出那两屏尤其要紧：--click-screen 要看的正是「点一下栏底那格，
-     * 标签条有没有变得哪一格都不高亮、那格自己有没有亮起来」。
+     * 进出那两屏尤其要紧：--click-screen 要看的正是「点一下那颗键，
+     * 标签条有没有变得哪一格都不高亮、那颗键自己有没有亮起来」。
      */
     close: (input) => {
       const at = TABS.findIndex((t) => t.id === input.tabId)
@@ -518,7 +518,7 @@ contextBridge.exposeInMainWorld('moyu', {
   /*
    * 进出自家那两屏那几条路。
    *
-   * 顶栏左上角那颗键发的是 openHome / leaveScreen，右栏栏底那格发的是
+   * 顶栏最左并排那两颗键：起始页发的是 openHome / leaveScreen，设置发的是
    * openSettings / leaveScreen（判据在界面那一侧，主进程只认「进去」「退出来」
    * 这两件事，见 shared/ipc.ts 里 uiLeaveScreen 的注释）。这三条要真的改状态
    * 并广播，否则预览里点那颗键什么都不会变，也就验不出「再点一次原路返回」。
