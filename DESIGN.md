@@ -135,7 +135,7 @@ Density is airy and single-column. A wordmark, one search field, one "continue l
 - No gradients, no glass/blur, no decorative motion, no second accent, no third hue.
 - System CJK type stack (Microsoft YaHei / PingFang SC / Segoe UI / system-ui); no display face, no webfont.
 - Flat by default; depth appears only as a response to state (hover, focus, current).
-- Two surfaces — page (`home.css`) and chrome (`tokens.css`) — share one palette and font by construction; they differ only in density (13px page vs 12px chrome base).
+- Two surfaces — page (`home.css`) and chrome (`tokens.css`) — share one palette and font by construction: both read the same theme layer (`themes.css`). They differ only in density (13px page vs 12px chrome base).
 
 ## Colors
 
@@ -146,7 +146,7 @@ A neutral white page lit by one cool blue. Everything that is not the accent is 
 - **Danger Red** (`#b91c1c`, `--moyu-danger`): chrome-only. Appears solely as the hover fill of the window close button and the hover color of a tab's close glyph. It is a destructive-affordance signal, not a palette color.
 
 ### Neutral
-- **Ground White** (`#ffffff`, `--ground` / `--moyu-surface`): the page and toolbar surface. The chrome's `--moyu-paper` (`#ffffff`) is a declared but unused alias of the same value.
+- **Ground White** (`#ffffff`, `--ground` / `--moyu-surface`): the page and toolbar surface, and the `paper` theme's ground.
 - **Hover Gray** (`#f3f4f6`, `--ground-hover` / `--moyu-surface-hover`): every interactive hover fill, and the address field's resting fill.
 - **Active Gray** (`#e8eaee`, `--ground-active` / `--moyu-surface-active`): pressed tiles, the active tab, the selected preset/zone, and the address field on hover.
 - **Tile Gray** (`#f1f3f5`, `--tile`, page-only): the circular well behind a site's favicon.
@@ -163,20 +163,22 @@ A neutral white page lit by one cool blue. Everything that is not the accent is 
 
 ### Themes
 
-The start page ships **seven palettes**, chosen with `html[data-theme]` (`home.css`); everything named above is the `paper` default, and every other theme keeps the same variable names and the same shape of the system.
+**Themes.** Three palettes ship — `paper`, `night`, `crt-green` — and they are selected with `html[data-theme]` plus `html[data-world]` (`themes.css`). Everything named above is the `paper` default, and every theme keeps the same variable names and the same shape of the system.
 
 - **Night** keeps the structure above — three ink steps, one blue accent, hairlines — and reads it against a near-black ground instead of a white one.
-- **The five phosphor screens** — `crt-green`, `crt-amber`, `crt-ice`, `crt-white`, `dos` — replace the neutral ground with a single luminous ink on a near-black (or, for `dos`, VGA-blue) ground. They add what a terminal has and a browser does not: zero radii, a monospace stack (with a CJK face in it, so a line of mixed text is still one typeface), a scanline-and-vignette overlay on `body::after`, and `text-shadow: 0 0 5px currentColor` so the whole screen glows rather than a few labels. The block cursor after the wordmark and the `>` prompt in the search row are the theme's only other marks.
+- **Phosphor green** (`crt-green`, the only terminal-world theme so far) replaces the neutral ground with a single luminous ink on a near-black ground. It adds what a terminal has and a browser does not: zero radii, a monospace stack (with a CJK face in it, so a line of mixed text is still one typeface), and `text-shadow: 0 0 5px currentColor` so the whole surface glows rather than a few labels. The block cursor after the wordmark and the `>` prompt in the search row are the theme's only other marks. Four further phosphor palettes (`crt-amber`, `crt-ice`, `crt-white`, `dos`) were cut in an earlier release; old configs migrate to `crt-green` (`LEGACY_HOME_THEMES`).
 
-A theme is a variable block and nothing more: no theme-specific selectors outside the shared `[data-theme^='crt-']` rules, so adding one is adding a palette, not a code path. The theme picker's swatches lean on the same property — a nested element carrying `data-theme` resolves that theme's variables inside itself, so the list shows real palettes with no second copy of the hex values anywhere.
+**Theme and world are orthogonal.** The palette and the shape are two separate variable groups on the same root: the theme block supplies colors, `html[data-world='terminal']` supplies radii and the font stack, and the mapping from theme to world lives in one table (`HOME_THEMES` in `@shared/constants`). Adding a terminal-world palette is adding a palette, not a code path.
 
-The theme belongs to the start page alone. The chrome keeps the paper palette, so reading a page looks the same whatever the start page happens to be wearing.
+**The theme belongs to the whole interface, not to the page.** All four renderer documents — chrome, popover, settings, start page — load the same theme layer and write the same attributes on their own root; there is no inheritance path between them, which is why the layer is a shared stylesheet rather than a set of selectors. A theme is a variable block and nothing more: no theme-specific selectors outside the shape rules, and the picker's swatches lean on the same property — a nested element carrying `data-theme` resolves that theme's variables inside itself, so the list shows real palettes with no second copy of the hex values anywhere.
+
+**One thing deliberately stays behind.** The scanline-and-vignette overlay (`body::after`) is a full-viewport layer, so it lives in `home.css` and applies to the start page only. On the chrome it would cover the transparent middle — the region that has to stay pixel-transparent so the desktop shows through. That is a mechanism constraint, not a taste call.
 
 ## Typography
 
 **Display Font:** system CJK stack — Microsoft YaHei, PingFang SC, Segoe UI, system-ui (`--font` / `--moyu-font`)
 **Body Font:** the same stack (there is only one family)
-**Label/Mono Font:** none; all text runs in the system stack.
+**Label/Mono Font:** none in the modern world; the terminal world swaps the whole interface — page and chrome alike — onto a monospace stack (`Cascadia Mono, Consolas, Sarasa Mono SC, Microsoft YaHei, monospace`).
 
 **Character:** deliberately invisible. This is the OS's own type, at the OS's usual sizes, so the surface reads as chrome rather than as a designed document. No display face, no webfont, no letterform personality. Letterspacing is used once — a widened 0.08em on the wordmark — and nowhere else.
 
@@ -279,9 +281,9 @@ The chrome's navigation is icon buttons (home / back / forward / reload) at the 
 
 ## Recorded drift (not repaired; the build wins)
 
-The page and chrome are one system by construction, and in the shipped code they **agree exactly on every color, on the font stack, and on the 4px small radius** — `home.css` and `tokens.css` define the same values under different names (e.g. `#2563eb` is both `--accent` and `--moyu-accent`). Four real drifts remain, recorded rather than papered over:
+The page and chrome are one system by construction, and in the shipped code they **agree exactly on every color, on the font stack, and on the 4px small radius** — the theme layer (`themes.css`) declares each value once under both the page's name and the chrome's (e.g. `#2563eb` is both `--accent` and `--moyu-accent`), so they cannot drift apart. Three real drifts remain, recorded rather than papered over:
 
 1. **Base size.** The page sets `html, body { font-size: 13px }`; the chrome sets `12px`. Both are inside the ≥12px accessibility floor; the chrome is the denser surface, so the split is defensible, but it is a split.
 2. **Medium radius.** The page's default radius is `8px`; the chrome's is `6px` (the 4px small step matches). Recorded as `{rounded.md-page}` vs `{rounded.md-chrome}`.
-3. **Scrollbars disagree.** The page's scrollbar thumb is the Hairline Strong gray (`#d1d5db`) with a 4px radius; the chrome's is a hard-coded `rgba(21, 23, 28, 0.42)` → `rgba(21, 23, 28, 0.72)` on hover, square, matching no declared chrome token. This is the `base.css` comment's "只用墨" scrollbar; its RGB value (`#15171c`) is unbacked by any token and coincides with the abandoned world's ink, so it is **not** canonized here as a system value — treat it as an in-flight literal, not a rule. `--moyu-paper` (`#ffffff`) is likewise a declared-but-unused alias of the surface color.
-4. **The color rules describe one theme out of seven.** The One Accent Rule and the Neutral Ground Rule above hold for `paper` and for the chrome, and are violated on purpose by the six other start-page themes — `dos` has a blue ground and a yellow accent, the phosphor screens have no neutral at all. The rules are still the right ones for the default and for the chrome; the theme block is the documented exception, not a hole in them. Likewise the type and shape rules ("never ship a display face", zero radii nowhere): the phosphor themes swap the stack for a monospace one and set every radius to 0 — inside `html[data-theme^='crt-']`, deliberately, and nowhere else.
+3. **Scrollbars.** Both surfaces draw the same 8px bar in the Hairline Strong gray (`--divider-strong` / `--moyu-border`) with the 4px small radius, so they agree today; the chrome reaches it through tokens and the page through its own variable names, which is two paths to one look. The chrome's earlier hard-coded `rgba(21, 23, 28, 0.42)` — unbacked by any token, and coinciding with the abandoned world's ink — is gone.
+4. **The color rules describe one theme out of three.** The One Accent Rule and the Neutral Ground Rule above hold for `paper`, and are violated on purpose by `night` (no white ground) and `crt-green` (no neutral at all, one luminous ink instead). The rules are still the right ones for the default; the theme block is the documented exception, not a hole in them. Likewise the type and shape rules ("never ship a display face", zero radii nowhere): the terminal world swaps the stack for a monospace one and sets every radius to 0 — and, since the theme now covers the whole interface, it does so on the chrome as well as on the page. The one thing it must not touch is the transparent middle, which is why the scanline overlay stays in `home.css` (see Themes).
