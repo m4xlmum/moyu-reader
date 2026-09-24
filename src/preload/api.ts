@@ -41,6 +41,12 @@ export const api: MoyuApi = {
     onChanged: (cb) => on<AppConfig>(BROADCAST.configChanged, cb)
   },
 
+  ballIcon: {
+    get: () => ipcRenderer.invoke(INVOKE.ballIconGet) as Promise<string | null>,
+    set: (input) => ipcRenderer.invoke(INVOKE.ballIconSet, input) as Promise<string | null>,
+    onChanged: (cb) => on<string | null>(BROADCAST.ballIconChanged, cb)
+  },
+
   sites: {
     list: () => ipcRenderer.invoke(INVOKE.sitesList) as Promise<SiteRecord[]>,
     add: (input) => ipcRenderer.invoke(INVOKE.sitesAdd, input) as Promise<SiteRecord[]>,

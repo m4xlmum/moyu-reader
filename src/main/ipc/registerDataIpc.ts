@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { ipcMain } from 'electron'
-import { INVOKE } from '@shared/ipc'
+import { BROADCAST, INVOKE } from '@shared/ipc'
 import type { ConfigPatch } from '@shared/ipc'
+import { CUSTOM_BALL_ICON, DEFAULT_BALL_ICON } from '@shared/constants'
 import { PRESET_SITES } from '@shared/presets'
 import type { AppContext } from '../context'
 
@@ -40,6 +41,24 @@ export function registerDataIpc(ctx: AppContext): void {
 
     ctx.broadcast('config:changed', after)
     return after
+  })
+
+  // ---------------------------------------------------------------- 悬浮球图标
+  ipcMain.handle(INVOKE.ballIconGet, () => ctx.ballIcon.get())
+
+  ipcMain.handle(INVOKE.ballIconSet, (_e, input: { dataUrl: string | null }) => {
+    const stored = ctx.ballIcon.set(input?.dataUrl ?? null)
+    /*
+     * 清除之后不能把 ballIcon 留在 'custom' 上——那样球会去取一张已经不存在的图，
+     * 画出来是一个空壳。退回内置的默认图标，用户至少还看得见球。
+     * 反过来（存进来一张新图）不动配置：选哪个图标是用户的选择，
+     * 设置界面里点「自定义」那一下才改它。
+     */
+    if (stored === null && ctx.config.get().ui.ballIcon === CUSTOM_BALL_ICON) {
+      ctx.config.patch({ ui: { ballIcon: DEFAULT_BALL_ICON } })
+    }
+    ctx.broadcast(BROADCAST.ballIconChanged, stored)
+    return stored
   })
 
   // ---------------------------------------------------------------- 我的站点

@@ -20,6 +20,9 @@ export const INVOKE = {
   configGet: 'config:get',
   configPatch: 'config:patch',
 
+  ballIconGet: 'ballIcon:get',
+  ballIconSet: 'ballIcon:set',
+
   sitesList: 'sites:list',
   sitesAdd: 'sites:add',
   sitesUpdate: 'sites:update',
@@ -74,6 +77,13 @@ export const INVOKE = {
 /** 主进程 → 渲染进程的广播通道（send/on） */
 export const BROADCAST = {
   configChanged: 'config:changed',
+  /**
+   * 自定义悬浮球图标变了。
+   *
+   * 图标不在配置里（见 `services/ballIconStore.ts`），因此它不走 configChanged；
+   * 而球与设置页是两个文档，各自持有一份图，改动必须让两边同时知道。
+   */
+  ballIconChanged: 'ballIcon:changed',
   tabsState: 'tabs:state',
   windowState: 'window:state'
 } as const
@@ -141,6 +151,18 @@ export interface MoyuApi {
     get(): Promise<AppConfig>
     patch(patch: ConfigPatch): Promise<AppConfig>
     onChanged(cb: (config: AppConfig) => void): () => void
+  }
+  /**
+   * 自定义的悬浮球图标（data URI），以及它的增删改。
+   *
+   * 与配置分开：这张图有几 KB，而配置一变就全量广播。`set(null)` 是清除，
+   * 返回的总是**真正存下来的值**——不合法（超限、不是图片）的输入会被主进程
+   * 挡下并回 null，界面据此把选择退回内置图标，而不是留着一个画不出来的选择。
+   */
+  ballIcon: {
+    get(): Promise<string | null>
+    set(input: { dataUrl: string | null }): Promise<string | null>
+    onChanged(cb: (dataUrl: string | null) => void): () => void
   }
   sites: {
     list(): Promise<SiteRecord[]>

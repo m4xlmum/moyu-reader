@@ -14,6 +14,7 @@ import { registerBrowserIpc } from './ipc/registerBrowserIpc'
 import { registerDataIpc } from './ipc/registerDataIpc'
 import { registerWindowIpc } from './ipc/registerWindowIpc'
 import { BookmarkStore } from './services/bookmarkStore'
+import { BallIconStore } from './services/ballIconStore'
 import { BossKeyService } from './services/bossKeyService'
 import { ConfigStore } from './services/configStore'
 import { HistoryStore } from './services/historyStore'
@@ -62,6 +63,7 @@ function bootstrap(): void {
   const sites = new SiteStore(userDataDir)
   const history = new HistoryStore(userDataDir)
   const bookmarks = new BookmarkStore(userDataDir)
+  const ballIcon = new BallIconStore(userDataDir)
   const bossKeys = new BossKeyService()
 
   // session.fromPartition 只能在 app ready 之后调用，
@@ -158,6 +160,7 @@ function bootstrap(): void {
     sites,
     history,
     bookmarks,
+    ballIcon,
     controller,
     tabs,
     bossKeys,

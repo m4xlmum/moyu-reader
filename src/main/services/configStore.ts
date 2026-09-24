@@ -5,7 +5,12 @@
  */
 import path from 'node:path'
 import {
+  BALL_ICONS,
+  BALL_CUSTOM_FITS,
   CONFIG_VERSION,
+  CUSTOM_BALL_ICON,
+  DEFAULT_BALL_CUSTOM_FIT,
+  DEFAULT_BALL_ICON,
   DEFAULT_BOSS_HIDE,
   BACKGROUND_OPACITY_MAX,
   BACKGROUND_OPACITY_MIN,
@@ -44,7 +49,9 @@ export function defaultConfig(): AppConfig {
       railOpen: true,
       homeTheme: DEFAULT_HOME_THEME,
       // 默认不透明：底板是界面的一部分，一上来就是半透的会让人以为没画好
-      backgroundOpacity: 1
+      backgroundOpacity: 1,
+      ballIcon: DEFAULT_BALL_ICON,
+      ballCustomFit: DEFAULT_BALL_CUSTOM_FIT
     },
     stealth: {
       // 默认关闭：收起与否由用户点悬浮球决定，不自动发生。
@@ -101,7 +108,9 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
     topBarOpen: input.ui?.topBarOpen ?? d.ui.topBarOpen,
     railOpen: input.ui?.railOpen ?? d.ui.railOpen,
     homeTheme: input.ui?.homeTheme ?? d.ui.homeTheme,
-    backgroundOpacity: input.ui?.backgroundOpacity ?? d.ui.backgroundOpacity
+    backgroundOpacity: input.ui?.backgroundOpacity ?? d.ui.backgroundOpacity,
+    ballIcon: input.ui?.ballIcon ?? d.ui.ballIcon,
+    ballCustomFit: input.ui?.ballCustomFit ?? d.ui.ballCustomFit
   }
 
   const s: StealthConfig = {
@@ -163,6 +172,15 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   ui.backgroundOpacity = clamp(ui.backgroundOpacity, BACKGROUND_OPACITY_MIN, BACKGROUND_OPACITY_MAX)
   if (!HOME_THEMES.some((t) => t.id === ui.homeTheme)) {
     ui.homeTheme = d.ui.homeTheme as HomeTheme
+  }
+  // 图标同理：表里没有的（旧配置、手改坏的、将来删掉的）回落默认。
+  // 'custom' 不在 BALL_ICONS 里，单独放行——它指的是用户上传的那张图，
+  // 而「有没有那张图」由 ballIconStore 说了算，不是配置该管的事。
+  if (ui.ballIcon !== CUSTOM_BALL_ICON && !BALL_ICONS.some((i) => i.id === ui.ballIcon)) {
+    ui.ballIcon = d.ui.ballIcon
+  }
+  if (!BALL_CUSTOM_FITS.some((f) => f.id === ui.ballCustomFit)) {
+    ui.ballCustomFit = d.ui.ballCustomFit
   }
 
   return {

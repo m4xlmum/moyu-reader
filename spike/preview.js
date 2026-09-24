@@ -24,6 +24,9 @@
  *   npx electron spike/preview.js --popover --kind tabs # 面板有五张，换一张看
  *   npx electron spike/preview.js --desktop        # 界面背后垫一层模拟桌面：截图用
  *   npx electron spike/preview.js --collapsed --alpha --out spike/out/readme   # 带透明通道的球
+ *   npx electron spike/preview.js --collapsed --ball-icon cat   # 球面上画哪个图标
+ *   npx electron spike/preview.js --collapsed --width 160 --height 160 --ball-zoom 4
+ *   npx electron spike/preview.js --collapsed --ball-image a.png --ball-fit glyph
  * 产物写在 spike/out/ 下：preview-<名字>.png 与 preview-<名字>.json
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -135,6 +138,52 @@ const KIND = (() => {
   return i >= 0 && args[i + 1] ? args[i + 1] : 'sites'
 })()
 
+/**
+ * --ball-image <路径>：把这张本地图当作「用户上传过的那张自定义图标」。
+ *
+ * 自定义图标是独立于配置的一份数据（userData/ball-icon.json），因此它也不能
+ * 混进 --ball-icon 里当第九个内置图标看——两种落法（铺满球面 / 中央图案）
+ * 要各自出一张图。
+ */
+const BALL_IMAGE = (() => {
+  const i = args.indexOf('--ball-image')
+  const next = i >= 0 ? args[i + 1] : null
+  return next && !next.startsWith('--') ? path.resolve(next) : null
+})()
+
+/**
+ * --ball-icon <id>：球面上画哪个图标（8 个内置之一，或 custom）。
+ *
+ * 没点名时：给了 --ball-image 就当作选中的是自定义那一张（这是最常见的用法），
+ * 否则回到内置的默认值。--ball-icon custom 却**不给**图也是一档要看的：
+ * 「选了自定义却没有图」必须退回内置图标，否则收起态的球会是一块空白——
+ * 而那一刻球就是窗口的全部。
+ */
+const BALL_ICON = (() => {
+  const i = args.indexOf('--ball-icon')
+  const next = i >= 0 ? args[i + 1] : null
+  if (next && !next.startsWith('--')) return next
+  return BALL_IMAGE ? 'custom' : 'book'
+})()
+
+/** --ball-fit cover|glyph：自定义图标落进球里的方式，默认与配置默认值一致 */
+const BALL_FIT = (() => {
+  const i = args.indexOf('--ball-fit')
+  const next = i >= 0 ? args[i + 1] : null
+  return next === 'glyph' ? 'glyph' : 'cover'
+})()
+
+/**
+ * --ball-zoom 4：把球面上的图形放大 4 倍再截图。
+ *
+ * 球上只有 18 像素画图标，八枚剪影长得成不成立，在 40×40 的截图里看不出来。
+ * 放大只加一条 CSS：球的直径、窗口的尺寸、任何布局数字都不动，因此这张图
+ * **不是真实比例**，它只回答一个问题——这几段路径本身立不立得住。
+ * 图形放大后不会撑开窗口，所以窗口要自己给大一点：
+ *   --collapsed --width 160 --height 160 --ball-zoom 4
+ */
+const BALL_ZOOM = Math.min(12, Math.max(1, num('--ball-zoom', 1)))
+
 const outDir = OUT
 const pagePath = path.join(__dirname, '..', 'out', 'renderer', PAGE_FILE[page])
 
@@ -143,8 +192,52 @@ let reportedBallRect = null
 ipcMain.on('preview:ballRect', (_event, rect) => {
   reportedBallRect = rect
 })
+
+/** 后缀 → MIME。与真实的那份校验一致：只认这四种，别的连球都进不去 */
+const MIME_BY_EXT = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp'
+}
+
+/**
+ * 把 --ball-image 那张图读成 data URI。
+ *
+ * 读文件这件事放在主进程这侧：preload 里的 console 落在渲染进程的调试台里，
+ * 无头跑一遍是看不见的——路径写错时会静悄悄退化成「没有图」，
+ * 而那正好也是另一档要看的形态，于是错的那一档与对的那一档长得一模一样。
+ * 因此这里读不出来就**直接退出**，并把话说清楚。
+ */
+const BALL_IMAGE_DATA = (() => {
+  if (!BALL_IMAGE) return null
+  const mime = MIME_BY_EXT[path.extname(BALL_IMAGE).toLowerCase()]
+  if (!mime) {
+    console.error(`PREVIEW --ball-image 只认 png/jpeg/webp：${BALL_IMAGE}`)
+    app.exit(1)
+    return null
+  }
+  try {
+    const bytes = fs.readFileSync(BALL_IMAGE)
+    console.log(`BALL_IMAGE ${BALL_IMAGE} (${Math.round(bytes.length / 1024)} KB)`)
+    return `data:${mime};base64,${bytes.toString('base64')}`
+  } catch (error) {
+    console.error(`PREVIEW --ball-image 读不了：${BALL_IMAGE}（${error.message}）`)
+    app.exit(1)
+    return null
+  }
+})()
+
 ipcMain.on('preview:options', (event) => {
-  event.returnValue = { mode, theme, tabs: TABS, bgAlpha: BG }
+  event.returnValue = {
+    mode,
+    theme,
+    tabs: TABS,
+    bgAlpha: BG,
+    ballIcon: BALL_ICON,
+    ballFit: BALL_FIT,
+    ballImage: BALL_IMAGE_DATA
+  }
 })
 
 /** 量一圈关键元素。数字比眼睛靠谱，而且能直接和主进程的版面常量对照 */
@@ -173,6 +266,45 @@ const MEASURE = `(() => {
     topbar: box('.topbar'),
     rail: box('.rail'),
     ball: box('.ball'),
+    /*
+     * 球面上画的是什么。
+     *
+     * 「内置的某一枚」与「用户上传的那张」是两条完全不同的渲染路径
+     * （一段 svg 路径 vs 一张图），截图看得出来，但「选了自定义却没有图」
+     * 该退回内置、以及两种落法各自的实测尺寸，都要实测数字才说得清。
+     * 内置那一枚还报第一段路径的开头几个字符：八个 id 各是一条不同的路径，
+     * 拿它跟 BallGlyph 的表对一下，就知道传进来的 id 有没有真的生效。
+     */
+    ballGlyph: (() => {
+      const el = document.querySelector('.ball')
+      if (!el) return null
+      const sizeOf = (node) => {
+        const r = node.getBoundingClientRect()
+        return { w: Math.round(r.width), h: Math.round(r.height) }
+      }
+      const img = el.querySelector('img.custom')
+      if (img) {
+        return {
+          kind: 'custom',
+          fit: img.classList.contains('cover')
+            ? 'cover'
+            : img.classList.contains('glyph')
+              ? 'glyph'
+              : null,
+          // 只报开头：整条 data URI 有几千字符，写进 JSON 没意义
+          src: String(img.getAttribute('src') ?? '').slice(0, 24),
+          box: sizeOf(img)
+        }
+      }
+      const svg = el.querySelector('svg')
+      if (!svg) return null
+      return {
+        kind: 'builtin',
+        paths: svg.querySelectorAll('path').length,
+        d0: (svg.querySelector('path')?.getAttribute('d') ?? '').slice(0, 20),
+        box: sizeOf(svg)
+      }
+    })(),
     zone,
     stripFits: document.querySelector('.strip')?.dataset.fits ?? null,
     // 逐格实测：左端、宽度，以及里面的文字有没有被省略号截掉
@@ -491,6 +623,19 @@ app.whenReady().then(async () => {
     )
   }
 
+  /*
+   * --ball-zoom：只放大**图形本身**。
+   *
+   * 用 insertCSS 而不是去改 svg 的 width/height：那两个属性归 Vue 管，
+   * 下一次重渲染会把它们改回去，而样式表不会。球自己的直径因此保持原样，
+   * 这张图只用来判断路径画得成不成立（见上面 BALL_ZOOM 的说明）。
+   */
+  if (BALL_ZOOM > 1) {
+    await win.webContents.insertCSS(
+      `.ball svg, .ball img.custom { transform: scale(${BALL_ZOOM}); transform-origin: center; }`
+    )
+  }
+
   fs.mkdirSync(outDir, { recursive: true })
 
   /** --drag-probe 的结果。截一次图顺带量一次，写进 JSON，也在终端打一份 */
@@ -531,7 +676,11 @@ app.whenReady().then(async () => {
       'utf8'
     )
     console.log(`WROTE ${png}`)
-    if (page === 'chrome') console.log(`BALL_RECT ${JSON.stringify(reportedBallRect)}`)
+    if (page === 'chrome') {
+      console.log(`BALL_RECT ${JSON.stringify(reportedBallRect)}`)
+      // 球面上画的是哪一枚、实测多大：与截图对着看，比只看图确定得多
+      console.log(`BALL_GLYPH ${JSON.stringify(measured.ballGlyph)}`)
+    }
   }
 
   const run = (js) => win.webContents.executeJavaScript(js)
@@ -540,6 +689,12 @@ app.whenReady().then(async () => {
   const tabs = TABS ? `-${TABS}tabs` : ''
   // 底板透明度同理：跑了 0.35 那一档之后，默认那一档的图不该被它盖掉
   const bg = BG !== 1 ? `-bg${BG}` : ''
+  /*
+   * 球面上画的是什么也写进名字：八枚内置图标是八张图，跑第二轮时彼此不能覆盖。
+   * 自定义那张用落法而不是文件名做标记——同一个落法同一张图，重跑就该盖掉旧的那张。
+   */
+  const ball = BALL_IMAGE ? `-img${BALL_FIT}` : BALL_ICON !== 'book' ? `-icon${BALL_ICON}` : ''
+  const zoom = BALL_ZOOM > 1 ? `-zoom${BALL_ZOOM}` : ''
 
   /*
    * --drag-probe：先按一遍，再照第一张。
@@ -591,8 +746,8 @@ app.whenReady().then(async () => {
   } else {
     const name =
       page !== 'chrome'
-        ? `${page}${page === 'home' ? `-${theme}` : page === 'popover' ? `-${KIND}` : ''}${size}${tabs}${bg}`
-        : `preview-${mode}${size}${tabs}${bg}`
+        ? `${page}${page === 'home' ? `-${theme}` : page === 'popover' ? `-${KIND}` : ''}${size}${tabs}${bg}${ball}${zoom}`
+        : `preview-${mode}${size}${tabs}${bg}${ball}${zoom}`
     await shoot(name)
 
     /*

@@ -3,9 +3,9 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import type { HomeTheme, SizePreset } from './constants'
+import type { BallCustomFit, BallIconChoice, HomeTheme } from './constants'
 
-export type { HomeTheme, SizePreset }
+export type { BallCustomFit, BallIcon, BallIconChoice, HomeTheme, SizePreset } from './constants'
 
 // ---------------------------------------------------------------- 配置
 
@@ -57,6 +57,17 @@ export interface UiConfig {
    * 网页与自家页面不受影响。
    */
   backgroundOpacity: number
+  /**
+   * 悬浮球画哪个图标。
+   *
+   * 内置的几个画在代码里（`chrome/BallGlyph.vue`），`'custom'` 指的是
+   * 用户上传的那一张——它不在配置里，存在 userData/ball-icon.json，
+   * 由 ballIcon 那组 IPC 单独读写。分开的理由是体积：配置一变就全量广播，
+   * 而这张图有几 KB，透明度滑块每动一格都会把它推一遍。
+   */
+  ballIcon: BallIconChoice
+  /** 自定义图标落进球里的方式。只在 ballIcon 为 'custom' 时有意义 */
+  ballCustomFit: BallCustomFit
 }
 
 export interface HotkeyConfig {

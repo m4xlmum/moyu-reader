@@ -72,7 +72,7 @@ let activeTabId = 't1'
 const tabListeners = new Set()
 
 const config = {
-  version: 9,
+  version: 10,
   window: {
     x: null,
     y: null,
@@ -86,7 +86,9 @@ const config = {
     topBarOpen,
     railOpen: true,
     homeTheme: opts.theme,
-    backgroundOpacity: opts.bgAlpha ?? 1
+    backgroundOpacity: opts.bgAlpha ?? 1,
+    ballIcon: opts.ballIcon,
+    ballCustomFit: opts.ballFit
   },
   stealth: {
     autoCollapse: false,
@@ -212,6 +214,20 @@ function patchConfig(input) {
   return Promise.resolve(config)
 }
 
+/**
+ * 自定义悬浮球图标那条桥。
+ *
+ * 与真实实现一样，图**不进 config**：它有几 KB，跟着每次 config 广播走不合适，
+ * 因此这里也单开一份。--ball-image <路径> 就是把一张本地图当作用户上传过的那张
+ * （读文件与编码都在主进程那侧做，见 preview.js），于是「铺满球面 / 中央图案」
+ * 两种落法、以及「选了自定义却没有图」那条退路，都能在无头预览里各出一张图。
+ *
+ * set 要真的记住并广播——设置页选图、清除之后球该跟着变，而这件事只有
+ * 桥真的动了才算验过。
+ */
+let ballImage = opts.ballImage ?? null
+const ballListeners = new Set()
+
 contextBridge.exposeInMainWorld('moyu', {
   config: {
     get: () => Promise.resolve(config),
@@ -219,6 +235,21 @@ contextBridge.exposeInMainWorld('moyu', {
     onChanged: (listener) => {
       configListeners.add(listener)
       return () => configListeners.delete(listener)
+    }
+  },
+  ballIcon: {
+    get: () => Promise.resolve(ballImage),
+    set: (input) => {
+      ballImage = input?.dataUrl ?? null
+      // 存下来的那一份也报给主进程：裁剪弹窗导出的到底是个什么东西，
+      // 只有把它捞出来存成文件看一眼才算验过（见 spike/ball-crop.js）
+      ipcRenderer.send('preview:ballImage', ballImage)
+      for (const listener of ballListeners) listener(ballImage)
+      return Promise.resolve(ballImage)
+    },
+    onChanged: (listener) => {
+      ballListeners.add(listener)
+      return () => ballListeners.delete(listener)
     }
   },
   sites: { list: () => Promise.resolve(SITES), add: list, update: list, remove: list, reorder: list, presets: list },

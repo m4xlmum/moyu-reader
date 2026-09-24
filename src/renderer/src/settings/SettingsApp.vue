@@ -8,9 +8,20 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { HOME_THEMES, SIZE_PRESETS, type SizePreset } from '@shared/constants'
+import {
+  BALL_CUSTOM_FITS,
+  BALL_ICONS,
+  CUSTOM_BALL_ICON,
+  HOME_THEMES,
+  SIZE_PRESETS,
+  type SizePreset
+} from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
 import type { AppConfig, HotkeyInfo } from '@shared/types'
+import BallGlyph from '../chrome/BallGlyph.vue'
+import Icon from '../chrome/Icon.vue'
+import BallIconCropper from './BallIconCropper.vue'
+import { useBallIcon } from '../composables/useBallIcon'
 
 type SectionKey = 'general' | 'stealth' | 'hotkey' | 'data' | 'about'
 
@@ -43,6 +54,61 @@ const APP_VERSION = __APP_VERSION__
 const themeHint = computed(
   () => HOME_THEMES.find((t) => t.id === config.value?.ui.homeTheme)?.hint ?? ''
 )
+
+/**
+ * 悬浮球图标。
+ *
+ * 它同时牵动两处：配置里的 ballIcon / ballCustomFit（内置图标与落法）与
+ * 单独一份的自定义图。两份来源的拼接规则写在 useBallIcon 里，这一页只负责画。
+ */
+const {
+  customSrc,
+  choice: ballChoice,
+  fit: ballFit,
+  custom: ballCustom,
+  setIcon,
+  setFit,
+  setImage
+} = useBallIcon()
+
+const cropperOpen = ref(false)
+
+const fitHint = computed(() => BALL_CUSTOM_FITS.find((f) => f.id === ballFit.value)?.hint ?? '')
+
+/** 图标选择器下面那一行说明。内置与自定义各说各的 */
+const ballIconHint = computed(() =>
+  ballChoice.value === CUSTOM_BALL_ICON
+    ? fitHint.value
+    : '球面上只有 18 像素画图形，所以每枚图标都只取剪影'
+)
+
+/**
+ * 点「自定义」那一格。
+ *
+ * 已经有图就直接选它；还没有图就把裁剪弹窗打开——否则这一格点下去毫无反应，
+ * 用户会以为它坏了。
+ */
+function pickCustom(): void {
+  if (ballCustom.value) void setIcon(CUSTOM_BALL_ICON)
+  else cropperOpen.value = true
+}
+
+/** 保存裁剪结果。存下来之后再把它选上，用户按「确定」的意图就是「用它」 */
+async function saveCustomIcon(dataUrl: string): Promise<void> {
+  cropperOpen.value = false
+  await setImage(dataUrl)
+  await setIcon(CUSTOM_BALL_ICON)
+}
+
+/**
+ * 清除自定义图。
+ *
+ * 只清图，不自己改 ballIcon——主进程在清除时会顺手把选择退回内置图标
+ * （见 ipc/registerDataIpc.ts），那一条规则只写在那一处。
+ */
+async function clearCustomIcon(): Promise<void> {
+  await setImage(null)
+}
 
 let offConfig: (() => void) | null = null
 
@@ -278,6 +344,75 @@ function setSizePreset(preset: SizePreset): void {
             它只作用在起始页上——那是「自己的一页」，换个样子不影响阅读网页时的观感。
             起始页最底下那条状态行里也能直接换。
           </p>
+
+          <div class="field">
+            <label>悬浮球图标</label>
+            <div class="control column">
+              <div class="ball-icons">
+                <button
+                  v-for="i in BALL_ICONS"
+                  :key="i.id"
+                  class="ball-chip"
+                  :class="{ on: ballChoice === i.id }"
+                  :title="i.label"
+                  :aria-label="i.label"
+                  @click="setIcon(i.id)"
+                >
+                  <span class="ball-face"><BallGlyph :name="i.id" /></span>
+                </button>
+
+                <!--
+                  最后一格是自定义。还没有图时点它直接开裁剪弹窗——
+                  否则这一格点下去毫无反应，看起来像是坏的。
+                -->
+                <button
+                  class="ball-chip"
+                  :class="{ on: ballChoice === CUSTOM_BALL_ICON }"
+                  :title="ballCustom ? '自定义图标' : '上传一张图当图标'"
+                  aria-label="自定义图标"
+                  @click="pickCustom"
+                >
+                  <span class="ball-face">
+                    <img
+                      v-if="ballCustom"
+                      :src="customSrc ?? undefined"
+                      alt=""
+                      draggable="false"
+                    />
+                    <Icon v-else name="plus" :size="16" />
+                  </span>
+                </button>
+              </div>
+
+              <span class="dim">{{ ballIconHint }}</span>
+
+              <div v-if="ballChoice === CUSTOM_BALL_ICON" class="ball-icon-ops">
+                <div class="themes">
+                  <button
+                    v-for="f in BALL_CUSTOM_FITS"
+                    :key="f.id"
+                    :class="{ on: ballFit === f.id }"
+                    @click="setFit(f.id)"
+                  >
+                    {{ f.label }}
+                  </button>
+                </div>
+                <div class="themes">
+                  <button @click="cropperOpen = true">
+                    {{ ballCustom ? '重新裁剪' : '上传图片' }}
+                  </button>
+                  <button class="danger" :disabled="!ballCustom" @click="clearCustomIcon">
+                    清除
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="hint">
+            自定义的图按 128×128 存下来，不跟着球的大小变；上传之后还能随时换回内置的
+            某一枚，图不会被删掉。这一排格子就是球本身那个尺寸，选中的那一格画的是
+            它在球上的样子。
+          </p>
         </div>
       </section>
 
@@ -447,6 +582,18 @@ function setSizePreset(preset: SizePreset): void {
         </div>
       </section>
     </main>
+
+    <!--
+      裁剪弹窗。它在 .layout 之内而不是之外：这一页本身就是窗口里的一份文档，
+      没有「页面之外」可放。定位是 fixed，所以与侧边栏、内容区互不影响。
+    -->
+    <BallIconCropper
+      v-if="cropperOpen"
+      :source="customSrc"
+      :fit="ballFit"
+      @save="saveCustomIcon"
+      @cancel="cropperOpen = false"
+    />
   </div>
 </template>
 
@@ -656,6 +803,63 @@ h2 {
   margin: 6px 0 0;
   color: var(--text-dim);
   line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------- 悬浮球图标 */
+
+/*
+ * 图标选择器：一排 40px 的球面——与真实的球同样大小。
+ * 选中的那一格直接画成球的样子（强调色底、白色图形），
+ * 于是「选中的是哪一个」和「它长什么样」是同一件事，不必再看第二眼。
+ *
+ * 这些规则写成 `.ball-icons .ball-chip` 而不是只用 `.ball-chip`：
+ * 上面那条 `.control button` 同样是「一个类 + 一个标签」的分量，
+ * 单靠类名压不过它，只能靠写法比它更具体。
+ */
+.ball-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ball-icons .ball-chip {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--text-dim);
+}
+
+.ball-icons .ball-chip.on {
+  border-color: transparent;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.ball-face {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.ball-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ball-icon-ops {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
 }
 
 code {

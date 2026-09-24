@@ -15,10 +15,16 @@
  * 平时半透明、悬停变清晰——既找得到，又不抢眼。反馈只用透明度、阴影这类
  * 不改变占位的属性：任何缩放都会让球在收起态顶出窗口边界，被切出四个方角。
  *
+ * 球面上的图形有两个来源：内置的那几枚（BallGlyph）与用户上传的那一张（<img>）。
+ * 该画哪一个由 useBallIcon 决定——「选了自定义却没有图」要退回内置图标这条规则
+ * 只写在那一处，这里只用它的结论。
+ *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { BALL_SIZE } from '@shared/constants'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { BALL_GLYPH_SIZE } from '@shared/constants'
+import BallGlyph from './BallGlyph.vue'
+import { useBallIcon } from '../composables/useBallIcon'
 import { useWindowDrag } from '../composables/useWindowDrag'
 
 const props = defineProps<{
@@ -31,6 +37,23 @@ const props = defineProps<{
 const emit = defineEmits<{ toggle: []; menu: [] }>()
 
 const el = ref<HTMLButtonElement | null>(null)
+
+/** 图形边长。取自 @shared/constants——球的这一份与设置页那排预览是同一个数 */
+const glyphSize = BALL_GLYPH_SIZE
+
+const { customSrc, custom, fit, builtinIcon } = useBallIcon()
+
+/**
+ * 自定义图的尺寸。铺满时交给 CSS（inset: 0），缩在球心时按球径算。
+ *
+ * 用行内样式而不是 CSS 类，是因为这个数字来自 @shared/constants 的
+ * BALL_GLYPH_SIZE——抄进样式表就多了一份要跟着改的常量。
+ */
+const customStyle = computed(() =>
+  fit.value === 'glyph'
+    ? { width: `${glyphSize}px`, height: `${glyphSize}px` }
+    : undefined
+)
 
 /**
  * 球既能点（收起 / 展开），也能拖（移动整个窗口）。
@@ -88,20 +111,16 @@ watch(
     @pointercancel="drag.onPointerCancel"
     @contextmenu.prevent="emit('menu')"
   >
-    <svg
-      :width="BALL_SIZE * 0.46"
-      :height="BALL_SIZE * 0.46"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.7"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 5.5h6a2.5 2.5 0 0 1 2 2.5v11a2 2 0 0 0-1.6-1.4H4z" />
-      <path d="M20 5.5h-6a2.5 2.5 0 0 0-2 2.5v11a2 2 0 0 1 1.6-1.4H20z" />
-    </svg>
+    <img
+      v-if="custom"
+      class="custom"
+      :class="fit"
+      :src="customSrc ?? undefined"
+      :style="customStyle"
+      alt=""
+      draggable="false"
+    />
+    <BallGlyph v-else :name="builtinIcon" :size="glyphSize" />
   </button>
 </template>
 
@@ -154,6 +173,33 @@ watch(
 .ball.docked {
   /* 展开态下它只是一个开关，不影响正文区域的观感 */
   opacity: 0.45;
+}
+
+/*
+ * 自定义图。两种落法只差尺寸与裁切：
+ * cover 铺满球面并圆裁（像一张头像），glyph 缩在球心（尺寸由行内样式给）。
+ *
+ * 两种都留着球的底色：图不透明时它整个被盖住，图的透明部分上它正好补底。
+ * 少了这层，一张透明底的图会让球在收起态下整颗消失——而那一刻球就是窗口的全部。
+ */
+.custom {
+  display: block;
+  /* 图不能被原生拖动：拖球是移动窗口，浏览器插手的图片拖动会把它顶掉 */
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.custom.cover {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.custom.glyph {
+  object-fit: contain;
 }
 
 .ball:hover {
