@@ -15,6 +15,7 @@
  *   npx electron spike/preview.js --width 480 --height 270   # 迷你档多大，标签条就得让位
  *   npx electron spike/preview.js --tabs 3        # 只留前 3 个标签页：放得下那一态
  *   npx electron spike/preview.js --click-tab 0   # 点第 0 格标签，再截一张
+ *   npx electron spike/preview.js --click-rail-pause  # 点右栏那格开关，再截一张
  *   npx electron spike/preview.js --resize 1100x700   # 改窗口尺寸再截一张：让位与回归
  *   npx electron spike/preview.js --home          # 起始页
  *   npx electron spike/preview.js --home --themes # 起始页三套主题各截一张（走真实换主题那条路）
@@ -611,6 +612,7 @@ const DRAG_PROBE = `(() => {
     ['右栏顶端留白', rail ? { x: Math.round(rail.x + 2), y: Math.max(6, Math.round(rail.y + 2)) } : null],
     ['右栏：两个功能格之间的缝', firstItem ? { x: railMidX, y: Math.round(firstItem.bottom + 1) } : null],
     ['右栏：分隔线', centerOf('.rail .sep')],
+    ['右栏：收起时暂停（控件，不该拖）', centerOf('.rail button[title*="收起时暂停"]')],
     ['右栏：滑块的小字（不该拖）', centerOf('.rail .opacity .label')],
     ['右栏：滑块的轨道（控件，不该拖）', centerOf('.rail .opacity input')],
     ['右栏：设置（控件，不该拖）', centerOf('.rail .foot')],
@@ -936,6 +938,35 @@ app.whenReady().then(async () => {
       await run(`document.querySelectorAll('.zone .tab')[${at}]?.click()`)
       await wait(400)
       await shoot(`${name}-click${at}`)
+    }
+
+    /*
+     * 点右栏最上面那一格「收起时暂停播放」，再截一张。
+     *
+     * 这一格是全栏唯一的开关：按下去就地改配置（stealth.muteMediaOnCollapse），
+     * 而不是打开面板。因此要问的是三件事——配置真的改了、高亮跟着改了、
+     * **旁边的项没有被带坏**（假桥的 patch 与真的 ConfigStore 一样逐个子对象合并，
+     * 见 preview-preload.js；它原先只对 `ui` 这么做，改一个 stealth 字段会把
+     * 整个 stealth 换掉）。高亮按 title 定位，不按 `.item.on`——后者是通用类名，
+     * 将来别的格子用上它就问到别处去了。
+     */
+    if (page === 'chrome' && has('--click-rail-pause')) {
+      const railPause = async () =>
+        run(`(async () => {
+          const cfg = await window.moyu.config.get()
+          const b = document.querySelector('.rail button[title*="收起时暂停"]')
+          return {
+            value: cfg.stealth.muteMediaOnCollapse,
+            高亮: b ? b.classList.contains('on') : null,
+            旁边的项: cfg.stealth.autoCollapse
+          }
+        })()`)
+      const before = await railPause()
+      await run(`document.querySelector('.rail button[title*="收起时暂停"]')?.click()`)
+      await wait(400)
+      const after = await railPause()
+      console.log(`RAIL_PAUSE ${JSON.stringify({ 点之前: before, 点之后: after })}`)
+      await shoot(`${name}-railpause`)
     }
 
     /*

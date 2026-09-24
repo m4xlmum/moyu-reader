@@ -71,6 +71,26 @@ function setBackgroundOpacity(value: number): void {
   emit('patch', { ui: { backgroundOpacity: value } })
 }
 
+/**
+ * 收起时是否暂停网页里正在播的媒体。
+ *
+ * 这一项在系统设置里也有（隐蔽 → 收起时暂停音视频），两处改的是同一份配置，
+ * 靠配置广播对齐——因此在设置里改完，这里那一格的高亮会跟着变。
+ * 摆在本栏最上面一格：小窗口下这条功能栈是**会滚的**（迷你档实测溢出 174px），
+ * 排在下面的东西等于藏起来了，而这一枚本来就是嫌设置里不好找才搬上来的。
+ */
+const pauseOnCollapse = computed(() => props.config?.stealth.muteMediaOnCollapse ?? false)
+
+const pauseHint = computed(() =>
+  pauseOnCollapse.value
+    ? '收起时暂停播放 · 开：收起成球、藏进托盘、最小化都会暂停网页里正在播的媒体'
+    : '收起时暂停播放 · 关：收起时网页继续在后台播放'
+)
+
+function togglePauseOnCollapse(): void {
+  emit('patch', { stealth: { muteMediaOnCollapse: !pauseOnCollapse.value } })
+}
+
 // 模板里的 window 指向组件实例而非全局对象，因此全局调用都要包一层方法
 function openSettings(): void {
   void window.moyu.ui.openSettings()
@@ -86,6 +106,21 @@ function openSettings(): void {
     @pointercancel="drag.onPointerCancel"
   >
     <div class="stack">
+      <!--
+        收起时暂停播放。全栏唯一一格「开关」：其余要么打开面板、要么是滑块，
+        它按下去就地切换一个状态，高亮即当前状态（.item.on）。
+      -->
+      <button
+        class="item"
+        :class="{ on: pauseOnCollapse }"
+        :title="pauseHint"
+        @click="togglePauseOnCollapse"
+      >
+        <Icon name="pause" :size="14" />
+      </button>
+
+      <div class="sep" />
+
       <button class="item" title="我的站点 / 热门站点" @click="openPopover('sites', $event)">
         站点
       </button>

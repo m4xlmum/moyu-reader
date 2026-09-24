@@ -473,7 +473,9 @@ function setSizePreset(preset: SizePreset): void {
                   })
                 "
               />
-              <span class="dim">收起成球、藏进托盘、最小化都算；回到展开态接着放</span>
+              <span class="dim">
+                收起成球、藏进托盘、最小化都算；回到展开态接着放。右栏最上面那一格是同一个开关
+              </span>
             </div>
           </div>
 

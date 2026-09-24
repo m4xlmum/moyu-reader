@@ -28,6 +28,7 @@ defineProps<{
     | 'pin'
     | 'maximize'
     | 'restore'
+    | 'pause'
   size?: number
 }>()
 </script>
@@ -106,6 +107,15 @@ defineProps<{
     <template v-else-if="name === 'restore'">
       <rect x="4" y="9" width="11" height="11" rx="2" />
       <path d="M9 9V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+    </template>
+    <!--
+      收起时暂停播放：两道竖条的暂停符。
+      全栏就它一个「开关」（其余要么打开面板、要么是滑块），高亮即当前状态，
+      开着时收起成球、藏进托盘、最小化都会暂停网页里正在播的媒体。
+      它挨着放大 / 缩小那两枚，尺寸取同一档，不为了好认而单独放大。
+    -->
+    <template v-else-if="name === 'pause'">
+      <path d="M9.5 5.5v13M14.5 5.5v13" />
     </template>
     <template v-else-if="name === 'search'">
       <circle cx="11" cy="11" r="6.5" />
