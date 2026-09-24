@@ -103,7 +103,9 @@ function bootstrap(): void {
       broadcast(BROADCAST.windowState, controller.getRuntime())
     },
     // 界面层让回网页之下时，把网页重新抬回来（「谁在场」只有标签页那一侧知道）
-    raiseActivePage: () => tabsRef?.raiseActive()
+    raiseActivePage: () => tabsRef?.raiseActive(),
+    // 网页退出全屏（还原、收起成球这两种情况），见 setPageFullscreen 的注释
+    onLeavePageFullscreen: () => tabsRef?.exitPageFullscreen()
   })
 
   const tabs = new TabManager({
@@ -120,7 +122,13 @@ function bootstrap(): void {
     },
     onNavigated: (entry) => history.record(entry),
     // 新视图永远加在最上层，界面层若正需要待在上面就得重新抬一次
-    onViewAdded: () => controller.syncChromeOrder(true)
+    onViewAdded: () => controller.syncChromeOrder(true),
+    /*
+     * 用户点了视频的全屏键（或页面自己 requestFullscreen）→ 软件窗口也最大化。
+     * 反向不在这里：用户自己按了还原键时，由 controller 那边叫回来退网页全屏
+     * （deps.onLeavePageFullscreen），否则「谁先动」会绕成一个圈。
+     */
+    onPageFullscreen: (active) => controller.setPageFullscreen(active)
   })
   tabsRef = tabs
 

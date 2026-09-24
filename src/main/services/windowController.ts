@@ -76,6 +76,17 @@ export interface ControllerDeps {
    * 因此这一步交给它代劳，界面层这一侧不必认识标签页。
    */
   raiseActivePage: () => void
+  /**
+   * 让停在网页全屏的标签页退出来。
+   *
+   * 窗口不再铺满工作区时（还原、收起成球），网页里那份全屏也留不住：
+   * 一个「网页以为自己在全屏」的窗口，表现是视频在还原后的窗口里继续铺满
+   * 整块正文区，用户按退出全屏又会被我们再缩一次窗口——来回打架。
+   * 因此这两处都由我们自己先退出网页全屏，走回正常路径。
+   *
+   * 「哪些标签页在全屏」只有标签页那一侧知道，因此这里同样是交给它代劳。
+   */
+  onLeavePageFullscreen: () => void
 }
 
 export class WindowController {
@@ -139,6 +150,14 @@ export class WindowController {
    * 而「回到哪里去」是另一件事，只有还原时才用得上。
    */
   private restoreBounds: Rect | null = null
+  /**
+   * 眼前这次最大化是不是「被网页全屏带进来的」。
+   *
+   * 决定退出网页全屏时要不要把窗口还原回去：用户自己按的最大化，看视频时
+   * 进了全屏又退出，不该把他手动选的大窗口缩回 16:9。只有我们替他最大化的
+   * 那一次才由我们替他还原。
+   */
+  private autoMaximized = false
   /**
    * 界面层此刻是否压在网页之上（见 syncChromeOrder）。
    *
@@ -492,6 +511,15 @@ export class WindowController {
     this.applyCollapsedBounds(cfg.window.opacity)
     this.syncChromeBounds()
     this.watcher?.rearm()
+    /*
+     * 收起成球时把网页里那份全屏也退掉：40×40 的窗里挂着一个「网页以为在
+     * 全屏」的视频没有意义（它照旧铺满整块正文区——也就是那颗球里），
+     * 而退出全屏这件事只有网页那一侧做得到。
+     *
+     * 放在最后：先把窗口收好，再让网页退全屏。反过来的话，退出全屏带来的一串
+     * 状态变化会先落在一块还没收起的窗口上，多一次没有意义的版面重排。
+     */
+    this.deps.onLeavePageFullscreen()
   }
 
   /** 展开回完整界面，恢复收起前的尺寸与位置。 */
@@ -531,11 +559,53 @@ export class WindowController {
    * 抬到网页之上（syncChromeOrder）。
    */
   maximize(): void {
+    // 用户自己按的：这次最大化与他有关，与网页全屏无关
+    this.autoMaximized = false
     this.setMaximized(true)
   }
 
   /** 还原：回到最大化之前那块 16:9 矩形。 */
   restore(): void {
+    this.autoMaximized = false
+    const was = this.maximized
+    this.setMaximized(false)
+    /*
+     * 还原之后网页里那份全屏也要退掉（见 deps.onLeavePageFullscreen）。
+     * 只有「刚才真的最大化着」才退：还原键在不曾最大化时什么都不该做，
+     * 而把一个正在看全屏视频的窗口判成「无需还原」却顺手退掉它的全屏，
+     * 是另一回事。
+     */
+    if (was) this.deps.onLeavePageFullscreen()
+  }
+
+  /**
+   * 网页进了 / 退出了全屏（视频右下角那枚键、或页面里的 requestFullscreen）。
+   *
+   * 用户要的就是这一条：点视频的最大化，软件窗口也跟着最大化。因此这里
+   * 不另设一套「网页全屏」状态，而是直接借用窗口最大化那一套——铺满工作区、
+   * 两栏让位、正文占满整窗。这样视频铺满的也确实是整块屏幕，而不是
+   * 一个「窗口没变、视频被拉伸到正文区」的半吊子样子。
+   *
+   * autoMaximized 记的就是「这次是我们替他放的」：用户自己按的最大化，
+   * 退出网页全屏时不该被缩回去。
+   */
+  setPageFullscreen(active: boolean): void {
+    if (active) {
+      /*
+       * 收起态下不理它：那时窗口就是一颗球，没有「铺满工作区」可言，
+       * 而 setMaximized 会照摆一块工作区大小的矩形——球会突然涨成一整屏。
+       * 这条路本来就到不了（HTML 全屏要用户手势，而收起时所有标签页视图都是
+       * 隐藏的，收不到点击），这里只是不让它有个荒谬的结果。
+       */
+      if (this.mode !== 'expanded') return
+      // 已经最大化了（用户自己放的）就不动它，也不接管所有权
+      if (this.maximized) return
+      this.autoMaximized = true
+      this.setMaximized(true)
+      return
+    }
+    if (!this.autoMaximized) return
+    this.autoMaximized = false
     this.setMaximized(false)
   }
 
@@ -864,6 +934,8 @@ export class WindowController {
     if (wasMaximized) {
       this.maximized = false
       this.restoreBounds = null
+      // 这一档是用户自己挑的尺寸，与网页全屏再无关系（见 autoMaximized）
+      this.autoMaximized = false
       this.syncChromeOrder()
     }
 
@@ -965,7 +1037,11 @@ export class WindowController {
      * 再跟着光标移动。不会是「窗口跳到光标上」——拖动是位移，与窗口此刻在哪无关。
      * 收起态下拖球同样走这里：还原只改记忆，球不会跳一下。
      */
-    if (this.maximized) this.setMaximized(false)
+    if (this.maximized) {
+      // 用户自己拖走的，与网页全屏再无关系（见 autoMaximized）
+      this.autoMaximized = false
+      this.setMaximized(false)
+    }
     const cursor = screen.getCursorScreenPoint()
     const b = win.getBounds()
     // 已经挂着一次拖动时（上一次的松开事件丢了）不忽略这一下，而是**重新锚定**：

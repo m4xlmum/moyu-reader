@@ -66,6 +66,14 @@ export interface TabManagerDeps {
    * 界面层那一侧（它拿着 chrome 视图），于是这里只负责通知一声。
    */
   onViewAdded: () => void
+  /**
+   * 有标签页进了（true）或全部退出了（false）网页全屏。
+   *
+   * 只在**跃变**上报：从「没有页面在全屏」变成「有」，或反过来。
+   * 后台标签页进出全屏不该掀动窗口，因此判据是整个集合的空 / 非空，
+   * 而不是「谁进去了」。
+   */
+  onPageFullscreen: (active: boolean) => void
 }
 
 let seq = 0
@@ -77,6 +85,14 @@ export class TabManager {
   private activeId: string | null = null
   /** 主体隐藏时为 true，此时所有标签页视图都不绘制且静音 */
   private bodyVisible = true
+  /**
+   * 此刻停在网页全屏的标签页（按 webContents.id 记）。
+   *
+   * 记的是一个集合而不是一个布尔：同一时刻可能有好几个页面都在全屏
+   * （用户切走了，先前那个还留在全屏态）。窗口那一侧只关心「有没有」，
+   * 而退出全屏时要逐个退，因此这里必须记全。
+   */
+  private fullscreenTabs = new Set<number>()
 
   constructor(private readonly deps: TabManagerDeps) {}
 
@@ -150,7 +166,16 @@ export class TabManager {
         session: this.deps.getSession(),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: true
+        sandbox: true,
+        /*
+         * 网页进全屏时不让 Chromium 自己去改窗口尺寸，改由我们接管
+         * （见 WindowController.setPageFullscreen）。
+         *
+         * 不关掉的话两边会同时动手：Chromium 按自己的算法摆一次窗口，
+         * 我们再按「铺满工作区」摆一次，肉眼上是一次跳。关掉之后页面照常收到
+         * requestFullscreen（视频照样铺满），只有窗口那一侧的动作归我们。
+         */
+        disableHtmlFullscreenWindowResize: true
       }
     })
     // 必须设成全透明，否则会在透明窗口里画出一块白底（spike Q1/Q2）
@@ -233,6 +258,8 @@ export class TabManager {
     const entry = this.tabs.get(tabId)
     if (!entry) return
 
+    // 视图下面就要被关掉了，全屏记账要用的 id 得先拿到手
+    const wcId = this.webContentsId(entry)
     const win = this.deps.getWindow()
     try {
       win?.contentView.removeChildView(entry.view)
@@ -249,6 +276,13 @@ export class TabManager {
 
     this.tabs.delete(tabId)
     this.order = this.order.filter((id) => id !== tabId)
+
+    /*
+     * 关掉一个正在全屏的标签页，与用户自己按退出全屏是一回事：
+     * 场上已经没有全屏的页面了，窗口不该继续铺满工作区。
+     * 交给同一个入口，判据（跃变）与所有权（autoMaximized）都只有那一条。
+     */
+    if (wcId !== null) this.setPageFullscreen(wcId, false)
 
     if (this.activeId === tabId) {
       this.activeId = null
@@ -462,6 +496,59 @@ export class TabManager {
     }
   }
 
+  // ------------------------------------------------------------ 网页全屏
+
+  /**
+   * 标签页的 webContents id。视图可能已在销毁中，取不到就当没有——
+   * 要它的是全屏记账，而取不到 id 的那个标签页本来也快没了。
+   */
+  private webContentsId(entry: TabEntry): number | null {
+    try {
+      return entry.view.webContents.id
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * 记下这一刻哪个页面在全屏，并**只在跃变时**通知窗口那一侧。
+   *
+   * 跃变 = 集合从空变非空、或从非空变空。后台标签页进出全屏不该掀动窗口
+   * （用户切走了，那个页面还留在全屏态），而「最后一个全屏的页面退出了」
+   * 与「第一个页面进了全屏」正是窗口该动的两个时刻。
+   */
+  private setPageFullscreen(wcId: number, on: boolean): void {
+    const had = this.fullscreenTabs.size > 0
+    if (on) this.fullscreenTabs.add(wcId)
+    else this.fullscreenTabs.delete(wcId)
+    const has = this.fullscreenTabs.size > 0
+    if (had === has) return
+    this.deps.onPageFullscreen(has)
+  }
+
+  /**
+   * 让所有停在网页全屏的标签页退出来。
+   *
+   * 窗口那一侧不再铺满工作区时（还原、收起成球）由它调用，见
+   * WindowController.deps.onLeavePageFullscreen。
+   *
+   * `document.exitFullscreen()` 不要求用户手势（要手势的是 requestFullscreen），
+   * 因此这里可以直接调。退出是异步的：它随后走到 leave-html-full-screen，
+   * 而那条路是幂等的——集合里已经没有它了，不会再报一次跃变。
+   *
+   * 遍历的是标签页表而不是那个集合：退出带来的记账发生在事件到达时（异步），
+   * 这一次同步遍历不会被它改到。
+   */
+  exitPageFullscreen(): void {
+    for (const entry of this.tabs.values()) {
+      const wcId = this.webContentsId(entry)
+      if (wcId === null || !this.fullscreenTabs.has(wcId)) continue
+      entry.view.webContents.executeJavaScript('document.exitFullscreen?.()').catch(() => {
+        // 页面已经不在了、或者没允许脚本：那它也就没有全屏可退，忽略
+      })
+    }
+  }
+
   // ------------------------------------------------------------ 事件
 
   /**
@@ -545,6 +632,16 @@ export class TabManager {
       this.applyPageStyles(entry)
       refresh()
     })
+
+    /*
+     * 网页自己的全屏。视频播放器右下角那枚键走的就是这条路，
+     * 用户要的是「点它，软件窗口也跟着最大化」（见 setPageFullscreen）。
+     *
+     * 这两个事件此前没有任何监听者——网页进全屏之后，窗口原样不动，
+     * 于是视频只铺满了正文那一块，而窗口还留着顶栏与右栏。
+     */
+    wc.on('enter-html-full-screen', () => this.setPageFullscreen(wc.id, true))
+    wc.on('leave-html-full-screen', () => this.setPageFullscreen(wc.id, false))
 
     // target=_blank 必须变成标签页，否则会冒出一个不受管理的野生窗口
     wc.setWindowOpenHandler(({ url }) => {
