@@ -15,6 +15,11 @@
  * 3. **透明中部没被弄坏**——本次最要紧的一条。窗口是逐像素透明的，chrome 视图的
  *    中部必须什么也不画，好让下面的网页或桌面露出来。终端世界的扫描线/暗角是
  *    铺满视口的覆盖层，它**绝不能跟着主题进 chrome**：那是机制，不是审美。
+ * 4. **新加的那一条「更新提示条」也站得住**。它是一行 30px 的实底，占的是版面
+ *    （网页要让出这一行），因此它比这一层里别的任何东西都更容易把中部染上色；
+ *    同时它的底、字、强调色必须逐条取自当前主题的令牌——写死一个白底的话，
+ *    纸白下看着完全正常，夜与磷绿下当场就是一块白条。这一组单独加载：真机上
+ *    提示条只在有新版时才占版面，一直挂着会让上面那几条基准漂移。
  *
  * 颜色一律经 canvas 归一后比对：getPropertyValue 拿回来的是计算值，写法
  * （`rgb(255 255 255 / 1)` 还是 `#ffffff`）随主题层怎么写出入很大，比字符串
@@ -32,6 +37,22 @@ const path = require('node:path')
 const ROOT = path.join(__dirname, '..')
 const OUT_DIR = path.join(__dirname, 'out')
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * 版面常量从 src/shared/constants.ts 里现读。
+ *
+ * 抄一个 30 到探针里最省事，但那正是这类断言最容易失效的地方：常量改了、
+ * 探针照旧按旧值量，于是「高度对不上」永远报不出来。读源文件只多一处麻烦
+ * （正则只认 `export const NAME = 30` 这一种写法），换来的是两边打架时当场红。
+ */
+function constant(name) {
+  const text = fs.readFileSync(path.join(ROOT, 'src', 'shared', 'constants.ts'), 'utf8')
+  const m = new RegExp(`^export const ${name} = ([\\d_]+)$`, 'm').exec(text)
+  if (!m) throw new Error(`读不到常量 ${name}（constants.ts 的写法变了？）`)
+  return Number(m[1].replace(/_/g, ''))
+}
+
+const NOTICE_H = constant('NOTICE_H')
 
 const PAGES = {
   chrome: 'index.html',
@@ -58,7 +79,14 @@ const opts = {
   bgAlpha: 1,
   ballIcon: 'book',
   ballFit: 'cover',
-  ballImage: null
+  ballImage: null,
+  /*
+   * 更新那条：默认没有新版本，于是提示条不占版面。
+   * 这一组单独加载一次（见 loadNotice），不混进上面那些基准里。
+   */
+  notice: null,
+  noticePhase: 'available',
+  noticePercent: 42
 }
 
 ipcMain.on('preview:options', (event) => {
@@ -116,8 +144,14 @@ const PAPER_SHAPE = {
  */
 const PAPER_RADIUS = { '.address-toggle': '13px', '.tab': '6px' }
 
-/** chrome 里必须保持逐像素透明的那几块。窗口透明靠的就是它们什么都不画 */
-const TRANSPARENT = ['.root', '.middle', '.main-col']
+/**
+ * chrome 里必须保持逐像素透明的那几块。窗口透明靠的就是它们什么都不画。
+ *
+ * `.spacer` 是最后一块：它是正文那一格本身（网页在原生视图里叠在它上面）。
+ * 它多出一块底色，就是桌面上多蒙一层——而提示条正好排在它上面一行，
+ * 是这一层里唯一有可能把颜色漏下来的东西。
+ */
+const TRANSPARENT = ['.root', '.middle', '.main-col', '.spacer']
 
 /**
  * 设置页的「字 / 它脚下的面」对，用来量可读性。
@@ -410,6 +444,91 @@ const COLLECT = `(async () => {
   }
 })()`
 
+/**
+ * 挂上提示条之后单独读一圈。
+ *
+ * 比上面那份 COLLECT 窄得多，因为它要问的东西就三样：这一行画在哪儿、
+ * 颜色从哪儿来、它下面那块留白还是不是空的。整份 COLLECT 里那些分栏、
+ * 可读性、圆角表都不必再量一遍——同一份文档、同一套主题，上面已经量过。
+ */
+const COLLECT_NOTICE = `(() => {
+  const root = getComputedStyle(document.documentElement)
+  const cv = document.createElement('canvas')
+  cv.width = 1
+  cv.height = 1
+  const ctx = cv.getContext('2d', { willReadFrequently: true })
+  const toRgba = (value) => {
+    if (!value || !CSS.supports('color', value)) return null
+    ctx.fillStyle = '#000000'
+    ctx.fillStyle = value
+    const text = String(ctx.fillStyle)
+    let m = /^#([0-9a-f]{6})$/i.exec(text)
+    if (m) {
+      const n = parseInt(m[1], 16)
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1]
+    }
+    m = /^rgba?\\(([^)]+)\\)$/i.exec(text)
+    if (m) {
+      const p = m[1].split(/[,\\s/]+/).filter(Boolean).map(Number)
+      return [p[0], p[1], p[2], p.length > 3 ? Math.round(p[3] * 1000) / 1000 : 1]
+    }
+    return null
+  }
+  const box = (el) => {
+    const r = el.getBoundingClientRect()
+    return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }
+  }
+  const look = (sel) => {
+    const el = document.querySelector(sel)
+    if (!el) return null
+    const s = getComputedStyle(el)
+    return {
+      text: (el.textContent ?? '').trim(),
+      color: toRgba(s.color),
+      background: toRgba(s.backgroundColor),
+      borderBottom: toRgba(s.borderBottomColor),
+      borderBottomWidth: s.borderBottomWidth,
+      radius: s.borderTopLeftRadius,
+      fontSize: parseFloat(s.fontSize),
+      box: box(el)
+    }
+  }
+  const spacer = document.querySelector('.spacer')
+  /*
+   * 版面变量写在 .root 上，不在 :root 上——ChromeApp 的 geometryVars 是一份
+   * :style。从 documentElement 读回来是空串，而空串最容易被读成「变量没了」。
+   */
+  const chromeRoot = document.querySelector('.root')
+  return {
+    theme: document.documentElement.dataset.theme ?? null,
+    world: document.documentElement.dataset.world ?? null,
+    /* 主进程下发的高度（geometryVars 里的 --moyu-notice-h），与常量是同一个数 */
+    noticeVar: chromeRoot
+      ? getComputedStyle(chromeRoot).getPropertyValue('--moyu-notice-h').trim()
+      : '',
+    tokens: {
+      surface: toRgba(root.getPropertyValue('--moyu-surface').trim()),
+      surfaceHover: toRgba(root.getPropertyValue('--moyu-surface-hover').trim()),
+      hairline: toRgba(root.getPropertyValue('--moyu-hairline').trim()),
+      ink: toRgba(root.getPropertyValue('--moyu-ink').trim()),
+      textDim: toRgba(root.getPropertyValue('--moyu-text-dim').trim()),
+      accent: toRgba(root.getPropertyValue('--moyu-accent').trim()),
+      accentSoft: toRgba(root.getPropertyValue('--moyu-accent-soft').trim()),
+      radiusSm: root.getPropertyValue('--moyu-radius-sm').trim()
+    },
+    row: look('.notice-row'),
+    text: look('.notice-text'),
+    primary: look('.notice-btn.primary'),
+    icon: look('.notice-btn.icon'),
+    progress: look('.notice-progress'),
+    topbar: document.querySelector('.topbar') ? box(document.querySelector('.topbar')) : null,
+    rail: document.querySelector('.rail') ? box(document.querySelector('.rail')) : null,
+    /* 底色报原始字符串：判「是不是逐像素透明」要比的是 rgba(0, 0, 0, 0) 这个原话 */
+    spacer: spacer ? { ...box(spacer), background: getComputedStyle(spacer).backgroundColor } : null,
+    viewport: [window.innerWidth, window.innerHeight]
+  }
+})()`
+
 // ---------------------------------------------------------------- 判定
 
 const results = []
@@ -418,6 +537,14 @@ const pass = (id, text) => results.push({ id, ok: true, text })
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const show = (c) => (c ? `#${c.slice(0, 3).map((v) => v.toString(16).padStart(2, '0')).join('')}@${c[3]}` : 'null')
+/**
+ * 计算值的 0 写成 0px，而自定义属性里写的 0 就是 0。
+ *
+ * 同一个「直角」有两种写法，比之前得先把它们并成一种——否则磷绿主题下
+ * 「令牌声明了 0、元素也真的是 0px」会被判成不一致（Q8 遇到过同一件事，
+ * 那里用的是正则）。
+ */
+const zeroish = (v) => (v === '0' ? '0px' : v)
 /** 上两张表写成 `'#rrggbb', alpha` 更好读，比的时候换成与页面一致的四通道 */
 const expectRgba = ([hex, alpha]) => {
   const n = parseInt(hex.slice(1), 16)
@@ -613,8 +740,141 @@ function checkReadable(byTheme) {
   else pass('Q9', `设置页五个分栏的字都压得住自己的底（最紧的一处 ${lines.join('；')}）`)
 }
 
-// ---------------------------------------------------------------- 跑
+/**
+ * 提示条画出来了没有，以及它有没有把中部染上色。
+ *
+ * 「画出来了」在这里有几层意思：DOM 在（`.notice-row` 取得到）、尺寸对（正好
+ * NOTICE_H 高、正好占正文那一栏宽）、位置对（顶栏之下）、**中部还在它下面**
+ * （`.spacer` 的高度与起点都分毫不差），而且那中部仍然是逐像素透明的。
+ * 最后一条才是这一组存在的理由：提示条是这一层里唯一一块**实底**，
+ * 它的底色只要顺着 flex 落到 `.main-col` 上，桌面上就多蒙了一块——那在截图里
+ * 看着只是「背景色有点不对」。
+ */
+function checkNoticeDrawn(withNotice) {
+  const bad = []
+  const lines = []
+  for (const t of THEMES) {
+    const page = withNotice[t.id]
+    const row = page.row
+    if (!row) {
+      bad.push(`${t.id} 下没有 .notice-row`)
+      continue
+    }
+    const bodyW = page.viewport[0] - (page.rail?.w ?? 0)
+    if (page.noticeVar !== `${NOTICE_H}px`) {
+      bad.push(`${t.id} 的 --moyu-notice-h 是 ${page.noticeVar || '(空)'}，该是 ${NOTICE_H}px`)
+    }
+    if (row.box.h !== NOTICE_H) bad.push(`${t.id} 的提示条高 ${row.box.h}px，该是 ${NOTICE_H}px`)
+    if (row.box.w !== bodyW) bad.push(`${t.id} 的提示条宽 ${row.box.w}px，正文那一栏该是 ${bodyW}px`)
+    if (page.topbar && row.box.y !== page.topbar.h) {
+      bad.push(`${t.id} 的提示条顶在 y=${row.box.y}，顶栏下沿是 ${page.topbar.h}`)
+    }
+    if (!page.spacer) bad.push(`${t.id} 下没有 .spacer（中部那块留白）`)
+    else {
+      if (page.spacer.background !== 'rgba(0, 0, 0, 0)') {
+        bad.push(`${t.id} 的中部被染上了底色 ${page.spacer.background}`)
+      }
+      if (page.spacer.y !== row.box.y + row.box.h) {
+        bad.push(`${t.id} 的中部从 y=${page.spacer.y} 起，提示条下沿是 ${row.box.y + row.box.h}`)
+      }
+      if (page.spacer.h <= 0) bad.push(`${t.id} 的中部没有高度（${page.spacer.h}）`)
+    }
+    if (page.progress) bad.push(`${t.id} 在 available 态下也画了进度线`)
+    if (!page.text || !page.text.text.includes('1.1.0')) {
+      bad.push(`${t.id} 的提示条没写出新版本号：${JSON.stringify(page.text?.text ?? null)}`)
+    }
+    lines.push(`${t.id} ${row.box.w}×${row.box.h}`)
+  }
+  if (bad.length) fail('Q10', `更新提示条没站住 —— ${bad.join('；')}`)
+  else pass('Q10', `三套主题下提示条都画在自己那一行上（${lines.join(' / ')}），紧贴顶栏下沿、中部仍逐像素透明`)
+}
 
+/**
+ * 这一行的颜色从哪儿来。
+ *
+ * 逐条与当前主题的令牌比，而不是比「三套互不相同」——写死一个 #ffffff 的底色，
+ * 在纸白下与令牌恰好相等（所以「与令牌一致」这一条在纸白下不算数），
+ * 但在夜与磷绿下会当场露出来。两条一起比才完整：与令牌一致，保证它是**从主题
+ * 拿的**；三套互不相同，保证那个令牌本身**确实换了**。
+ */
+function checkNoticeTokens(withNotice) {
+  const bad = []
+  const lines = []
+  const paints = []
+  for (const t of THEMES) {
+    const page = withNotice[t.id]
+    const row = page.row
+    if (!row) {
+      bad.push(`${t.id} 下没有提示条`)
+      continue
+    }
+    const pairs = [
+      ['底色', row.background, page.tokens.surface],
+      ['文字色', page.text?.color ?? null, page.tokens.textDim],
+      ['主按钮字色', page.primary?.color ?? null, page.tokens.accent],
+      ['主按钮底色', page.primary?.background ?? null, page.tokens.accentSoft],
+      ['关闭键字色', page.icon?.color ?? null, page.tokens.textDim]
+    ]
+    for (const [name, got, token] of pairs) {
+      if (!got || !token) {
+        bad.push(`${t.id} 的${name}没量成颜色（实为 ${show(got)}，令牌 ${show(token)}）`)
+        continue
+      }
+      if (!same(got, token)) bad.push(`${t.id} 的${name}是 ${show(got)}，该取令牌 ${show(token)}`)
+    }
+    if (row.borderBottomWidth !== '1px') bad.push(`${t.id} 的下沿不是 1px（${row.borderBottomWidth}）`)
+    else if (!same(row.borderBottom, page.tokens.hairline)) {
+      bad.push(`${t.id} 的下沿是 ${show(row.borderBottom)}，该取令牌 ${show(page.tokens.hairline)}`)
+    }
+    if (page.primary && zeroish(page.primary.radius) !== zeroish(page.tokens.radiusSm)) {
+      bad.push(`${t.id} 的主按钮圆角是 ${page.primary.radius}，该取令牌 ${page.tokens.radiusSm}`)
+    }
+    paints.push(show(row.background))
+    lines.push(
+      `${t.id} 底 ${show(row.background)} 字 ${show(page.text?.color ?? null)} 主按钮 ${show(page.primary?.background ?? null)}/${show(page.primary?.color ?? null)} 圆角 ${page.primary?.radius ?? '—'}`
+    )
+  }
+  if (paints.length === THEMES.length && new Set(paints).size !== THEMES.length) {
+    bad.push(`三套主题画出来的底色有重样的：${JSON.stringify(paints)}`)
+  }
+  if (bad.length) fail('Q11', `提示条的颜色没跟着主题走 —— ${bad.join('；')}`)
+  else pass('Q11', `提示条的底 / 字 / 强调色 / 圆角逐条取自当前主题的令牌，且三套画出来互不相同（${lines.join('；')}）`)
+}
+
+/**
+ * 下载态那条进度线。
+ *
+ * 它必须画在**已经算进版面**的那 30px 里：这个条的高度是主进程按 NOTICE_H 排给
+ * 网页的，进度线只要多占一个像素，网页就被压住一条——而它在截图上看着完全正常。
+ * 因此这里同时量宽度（是不是真有 42%）与「行高有没有变」。
+ */
+function checkNoticeProgress(withNotice) {
+  const bad = []
+  const page = withNotice.downloading
+  const bar = page.progress
+  const row = page.row
+  if (!row) bad.push('downloading 态下没有提示条')
+  else if (!bar) bad.push('downloading 态下没有 .notice-progress')
+  else {
+    const want = Math.round((42 / 100) * row.box.w)
+    if (Math.abs(bar.box.w - want) > 1) bad.push(`进度线宽 ${bar.box.w}px，42% 该是 ${want}px`)
+    if (bar.box.h !== 2) bad.push(`进度线高 ${bar.box.h}px，该是 2px`)
+    if (bar.box.y + bar.box.h > row.box.y + row.box.h) bad.push('进度线掉出了提示条')
+    if (row.box.h !== NOTICE_H) bad.push(`有进度线时提示条高 ${row.box.h}px，该仍是 ${NOTICE_H}px`)
+    if (!same(bar.background, page.tokens.accent)) {
+      bad.push(`进度线是 ${show(bar.background)}，该取令牌 ${show(page.tokens.accent)}`)
+    }
+    if (!page.text || !page.text.text.includes('42%')) {
+      bad.push(`文案里没写出进度：${JSON.stringify(page.text?.text ?? null)}`)
+    }
+    if (page.primary) bad.push('下载中不该给主按钮')
+    if (page.icon) bad.push('下载中不该给关闭键')
+  }
+  if (bad.length) fail('Q12', `下载态那条进度线不成立 —— ${bad.join('；')}`)
+  else pass('Q12', `下载态下进度线画在 ${show(bar?.background)} 上、宽 ${bar?.box.w}px（42%），行高仍是 ${NOTICE_H}px，且不给按钮`)
+}
+
+// ---------------------------------------------------------------- 跑
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
     width: 960,
@@ -633,9 +893,28 @@ app.whenReady().then(async () => {
   const load = async (page, theme, bgAlpha = 1) => {
     opts.theme = theme
     opts.bgAlpha = bgAlpha
+    opts.notice = null
     await win.loadFile(path.join(ROOT, 'out', 'renderer', PAGES[page]))
     await wait(1100)
     return win.webContents.executeJavaScript(COLLECT)
+  }
+
+  /**
+   * 挂上新版本再加载一次界面，量提示条那一组。
+   *
+   * 与 load 分开而不是给它加个开关：这一组的入参（有新版本、下载到一半）
+   * 与上面那些基准是两回事，混在一起量，上面那几条「平时的界面」就会
+   * 在一个多出一行的版面上得出读数——那正是提示条上线时最容易漏掉的回归。
+   */
+  const loadNotice = async (theme, phase = 'available') => {
+    opts.theme = theme
+    opts.bgAlpha = 1
+    opts.notice = '1.1.0'
+    opts.noticePhase = phase
+    opts.noticePercent = 42
+    await win.loadFile(path.join(ROOT, 'out', 'renderer', PAGES.chrome))
+    await wait(1100)
+    return win.webContents.executeJavaScript(COLLECT_NOTICE)
   }
 
   const byPage = {}
@@ -647,6 +926,11 @@ app.whenReady().then(async () => {
   // 背景透明度那一档：只跑一次，用界面问
   const alphaProbe = await load('chrome', 'paper', 0.4)
 
+  // 提示条那一组：三套主题各挂一次，再加一张下载到一半的
+  const withNotice = {}
+  for (const t of THEMES) withNotice[t.id] = await loadNotice(t.id)
+  withNotice.downloading = await loadNotice('paper', 'downloading')
+
   checkZeroRegression(byPage.chrome.paper)
   checkDistinct(byPage)
   checkTerminalShape(byPage.chrome['crt-green'])
@@ -655,6 +939,9 @@ app.whenReady().then(async () => {
   checkTransparent(byPage.chrome)
   checkContrast(byPage.chrome)
   checkReadable(byPage)
+  checkNoticeDrawn(withNotice)
+  checkNoticeTokens(withNotice)
+  checkNoticeProgress(withNotice)
 
   for (const r of results) console.log(`[${r.id}] ${r.ok ? 'OK  ' : 'FAIL'} ${r.text}`)
 
@@ -694,13 +981,24 @@ app.whenReady().then(async () => {
     )
   }
 
+  // 提示条实际画成了什么。变量有了不等于界面用了它，这一行值得单独看一眼
+  for (const t of THEMES) {
+    const page = withNotice[t.id]
+    console.log(
+      `NOTICE ${t.id.padEnd(10)} ${page.text?.text ?? '—'} | 底 ${page.row ? show(page.row.background) : '—'} 字 ${page.text ? show(page.text.color) : '—'} 中部 ${page.spacer?.background ?? '—'}`
+    )
+  }
+  console.log(
+    `NOTICE ${'downloading'.padEnd(10)} ${withNotice.downloading.text?.text ?? '—'} | 进度线 ${withNotice.downloading.progress ? `${withNotice.downloading.progress.box.w}×${withNotice.downloading.progress.box.h}` : '—'}`
+  )
+
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} 通过`)
 
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.writeFileSync(
     path.join(OUT_DIR, 'theme-chrome.json'),
-    JSON.stringify({ results, painted, byPage, alphaProbe }, null, 2)
+    JSON.stringify({ results, painted, byPage, alphaProbe, withNotice }, null, 2)
   )
   console.log(`REPORT spike/out/theme-chrome.json`)
 

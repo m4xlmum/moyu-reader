@@ -24,6 +24,9 @@
  *   npx electron spike/preview.js --settings --theme crt-green   # 设置页同理
  *   npx electron spike/preview.js --settings --width 560 --height 400
  *   npx electron spike/preview.js --bg 0.35        # 界面底板透明度：底板该淡，字不该淡
+ *   npx electron spike/preview.js --notice 1.1.0    # 更新提示条：查到新版、可以下载
+ *   npx electron spike/preview.js --notice 1.1.0 --notice-phase downloading --notice-percent 42
+ *   npx electron spike/preview.js --notice 1.1.0 --notice-phase ready --theme night
  *   npx electron spike/preview.js --drag-probe     # 逐个位置按一下，问「这里按下去起的是拖动还是缩放」
  *   npx electron spike/preview.js --popover --bg 0.35   # 弹出面板也是另一份文档，同样要问一遍
  *   npx electron spike/preview.js --popover --kind tabs # 面板有五张，换一张看
@@ -197,6 +200,38 @@ const BALL_FIT = (() => {
 })()
 
 /**
+ * --notice <版本>：摆出「查到这一版」那一态，于是提示条占一行。
+ *
+ * 形态由 --notice-phase 挑（available / downloading / ready / error），
+ * 下载中那一条进度线要 --notice-percent 才有长度，失败那一句要 --notice-message。
+ * 不给 --notice 就一条提示都没有——那正是「没有新版本」的正常样子，
+ * 因此它同时也是「平时窗口长什么样」的基准。
+ */
+const NOTICE = (() => {
+  const i = args.indexOf('--notice')
+  const next = i >= 0 ? args[i + 1] : null
+  return next && !next.startsWith('--') ? next : null
+})()
+
+/** --notice-phase <阶段>：提示条摆出哪一态，默认「可以下载」 */
+const NOTICE_PHASE = (() => {
+  const value = (() => {
+    const i = args.indexOf('--notice-phase')
+    return i >= 0 ? args[i + 1] : null
+  })()
+  const known = ['available', 'downloading', 'ready', 'error']
+  return known.includes(value) ? value : 'available'
+})()
+
+const NOTICE_PERCENT = Math.min(100, Math.max(0, num('--notice-percent', 42)))
+
+const NOTICE_MESSAGE = (() => {
+  const i = args.indexOf('--notice-message')
+  const next = i >= 0 ? args[i + 1] : null
+  return next && !next.startsWith('--') ? next : '网络不通'
+})()
+
+/**
  * --ball-zoom 4：把球面上的图形放大 4 倍再截图。
  *
  * 球上只有 18 像素画图标，八枚剪影长得成不成立，在 40×40 的截图里看不出来。
@@ -260,7 +295,11 @@ ipcMain.on('preview:options', (event) => {
     bgAlpha: BG,
     ballIcon: BALL_ICON,
     ballFit: BALL_FIT,
-    ballImage: BALL_IMAGE_DATA
+    ballImage: BALL_IMAGE_DATA,
+    notice: NOTICE,
+    noticePhase: NOTICE_PHASE,
+    noticePercent: NOTICE_PERCENT,
+    noticeMessage: NOTICE_MESSAGE
   }
 })
 
@@ -342,6 +381,29 @@ const MEASURE = `(() => {
     })(),
     zone,
     stripFits: document.querySelector('.strip')?.dataset.fits ?? null,
+    /*
+     * 更新提示条。它是一条**占版面的行**：高度必须等于 NOTICE_H（30），
+     * 上沿必须紧贴地址栏的下沿（地址栏折叠时就是顶栏的下沿）——差几像素
+     * 就是网页被压住一条，或者提示条自己露在网页外面。
+     *
+     * 进度线单独量：它画在条的下沿之内，因此高度是 2、不与条的高度相加。
+     * 还要报它的宽度，因为「进度是不是真的画出来了」只能这么问——
+     * 2px 高的一条在缩过的截图上未必看得清。
+     */
+    notice: box('.notice-row'),
+    noticeText: document.querySelector('.notice-text')?.textContent?.trim() ?? null,
+    noticeProgress: (() => {
+      const el = document.querySelector('.notice-progress')
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      const row = el.parentElement.getBoundingClientRect()
+      return {
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+        // 右端离条的下沿有多远：0 说明它贴在底边上，而不是压在文字中间
+        fromBottom: Math.round(row.bottom - r.bottom)
+      }
+    })(),
     /*
      * 缩放手柄的实测几何。它们**没有背景色**，截图上看不见，因此「画在哪、多大」
      * 只能这么问；而这几像素的位置正是「有没有抢走控件的点击」的全部依据。
@@ -607,6 +669,15 @@ const DRAG_PROBE = `(() => {
     ['顶栏：最小化（控件，不该拖）', centerOf('.topbar button[title*="最小化"]')],
     ['顶栏：悬浮球（它自己就是拖动面）', centerOf('.ball')],
     /*
+     * 更新提示条。整行都是拖动面（与顶栏、地址栏同一套规则：按在按钮上是操作，
+     * 按在别处都是拖窗口），因此文字那一点应当起拖动，两枚按钮则不应当。
+     * 不给 --notice 时这一行根本不存在，三条都报「这一点算不出来」——
+     * 那不是错，因此不计进 bad。
+     */
+    ['更新提示条：文字（拖动面）', centerOf('.notice-text')],
+    ['更新提示条：主按钮（控件，不该拖）', centerOf('.notice-btn.primary')],
+    ['更新提示条：忽略（控件，不该拖）', centerOf('.notice-btn.icon')],
+    /*
      * 右栏顶端留白。顶栏藏起来时这一栏顶到 y=0，而那最上 4px 归**上边缘**的
      * 缩放手柄（那条手柄是通宽的），纵坐标因此至少要从 6 起；
      * 顶栏展开时 rail.y 本来就是 44，rail.y + 2 已经够。
@@ -829,6 +900,17 @@ app.whenReady().then(async () => {
           `FLOAT ${JSON.stringify({ box: measured.floatBox, key: measured.floatKey, ball: measured.ball })}`
         )
       }
+      // 提示条：高度、位置、那一句文案、进度线。26 行之外的东西看不见，只能这么问
+      if (NOTICE) {
+        console.log(
+          `NOTICE ${JSON.stringify({
+            row: measured.notice,
+            text: measured.noticeText,
+            progress: measured.noticeProgress,
+            topbar: measured.topbar
+          })}`
+        )
+      }
     }
   }
 
@@ -854,6 +936,12 @@ app.whenReady().then(async () => {
    * 全体改名——因此这三页只在 --theme 明确指到非默认主题时才缀上。
    */
   const themeTag = page === 'home' || theme !== 'paper' ? `-${theme}` : ''
+  /*
+   * 提示条的形态也写进名字：四种形态各是一张图，跑第二轮时彼此不能覆盖。
+   * 只有 chrome 那一页会画它，别的页面上这个开关没有任何作用。
+   */
+  const noticeTag =
+    page === 'chrome' && NOTICE ? `-notice${NOTICE_PHASE === 'available' ? '' : `-${NOTICE_PHASE}`}` : ''
 
   /*
    * --drag-probe：先按一遍，再照第一张。
@@ -920,7 +1008,7 @@ app.whenReady().then(async () => {
     const name =
       page !== 'chrome'
         ? `${page}${themeTag}${page === 'popover' ? `-${KIND}` : ''}${size}${tabs}${bg}${ball}${zoom}`
-        : `preview-${mode}${max}${themeTag}${size}${tabs}${bg}${ball}${zoom}`
+        : `preview-${mode}${max}${themeTag}${noticeTag}${size}${tabs}${bg}${ball}${zoom}`
     await shoot(name)
 
     /*

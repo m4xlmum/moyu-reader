@@ -112,6 +112,10 @@ const config = {
     searchTemplate: 'https://www.bing.com/search?q=%s',
     newWindowAsTab: true
   },
+  update: {
+    autoCheck: opts.noticeAutoCheck !== false,
+    ignoredVersion: opts.noticeIgnored ?? null
+  },
   lastSession: { openUrls: [], activeIndex: 0 }
 }
 
@@ -181,6 +185,8 @@ const state = {
   addressOpen: false,
   topBarOpen,
   railVisible: !maximized && (config.ui.railOpen || !topBarOpen),
+  // 由下面 syncNotice 按「有新版且没被忽略」算出来，这里只是给个初值
+  noticeVisible: false,
   maximized
 }
 
@@ -197,6 +203,58 @@ const stateListeners = new Set()
 function emitState() {
   const snapshot = { ...state }
   for (const listener of stateListeners) listener(snapshot)
+}
+
+/**
+ * 更新提示条是否占版面。
+ *
+ * 判据**必须与 updateService.setState 里那一条一致**：「有一个已知的新版本、
+ * 且没被忽略」。假桥若自己另定一套（比如「有版本号就显示」），就会验出一个
+ * 真实程序走不到的形状——被忽略的那一版在真机上不占版面，在预览里却占着。
+ */
+function syncNotice() {
+  const visible = updateState.version !== null && !updateState.ignored
+  if (state.noticeVisible === visible) return
+  state.noticeVisible = visible
+  emitState()
+}
+
+/**
+ * 更新那条桥。
+ *
+ * 形态由命令行给（--notice 1.1.0 / --notice-phase ready / --notice-percent 42），
+ * 因为要看的正是那几种形态各自长什么样。**点击是真的会改状态的**：
+ * 「按了下载会走到已下载」「按了 ✕ 这一条会收掉」是这一版最要紧的两条往返，
+ * 假桥要是把按钮当摆设，预览里点一下什么都不动，也就验不出按对了没有。
+ *
+ * 下载不去模拟 111MB 的进度：形态用 --notice-phase downloading --notice-percent 42
+ * 直接摆出来（要验的是那一条进度线画在哪儿）。真进度只有主进程那边才走得通，
+ * 由 spike/update-check.js 验。
+ */
+const updateListeners = new Set()
+const updateState = {
+  phase: opts.notice ? (opts.noticePhase ?? 'available') : 'idle',
+  enabled: opts.noticeEnabled !== false,
+  currentVersion: opts.noticeCurrent ?? '1.0.0',
+  version: opts.notice ?? null,
+  percent: opts.noticePercent ?? 0,
+  message: opts.noticeMessage ?? '',
+  ignored: false
+}
+let installCalls = 0
+
+/** 初始那一份也要按同一条判据算：--notice-ignored 供的就是「已忽略这一版」那一态 */
+updateState.ignored = updateState.version !== null && config.update.ignoredVersion === updateState.version
+syncNotice()
+
+function emitUpdate() {
+  const snapshot = { ...updateState }
+  for (const listener of updateListeners) listener(snapshot)
+}
+
+function onUpdate(listener) {
+  updateListeners.add(listener)
+  return () => updateListeners.delete(listener)
 }
 
 /** 最大化 / 还原只改这两个字段，其余照主进程的规则重算一遍 */
@@ -387,6 +445,36 @@ contextBridge.exposeInMainWorld('moyu', {
     }
   },
   ui: { openPopover: ok, closePopover: ok, openSettings: ok },
+  update: {
+    get: () => Promise.resolve({ ...updateState }),
+    /*
+     * 查一次不动形态：要看的形态都是命令行摆出来的，而「查完之后画成什么样」
+     * 在真机上由 updateService 决定。这里只保证按钮点得动、回得来。
+     */
+    check: () => Promise.resolve({ ...updateState }),
+    download: () => {
+      // 按了下载就走到底（真进度要 111MB，见上面 updateState 的说明）
+      updateState.phase = 'ready'
+      updateState.percent = 100
+      emitUpdate()
+      return Promise.resolve({ ...updateState })
+    },
+    install: () => {
+      installCalls += 1
+      return Promise.resolve()
+    },
+    /** --drag-probe 那套的同一招：把点击的账记下来，供探针来读 */
+    installLog: () => ({ calls: installCalls }),
+    ignore: (input) => {
+      config.update.ignoredVersion = input?.version ?? null
+      updateState.ignored =
+        updateState.version !== null && config.update.ignoredVersion === updateState.version
+      emitUpdate()
+      syncNotice()
+      return Promise.resolve({ ...updateState })
+    },
+    onState: onUpdate
+  },
   hotkey: {
     list: () =>
       Promise.resolve({
