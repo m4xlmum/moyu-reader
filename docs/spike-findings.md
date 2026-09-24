@@ -14,7 +14,8 @@ Q18 起是「悬浮球图标 · 16:9 边缘缩放 · 最大化与还原 · 视�
 但每一条都决定了下一次写探针时该怎么写**；**Q34–Q36 来自「自动检查更新」那一版，
 量的不是界面而是网络这条路，以及这台机器自己的脾气**；**Q37 来自「起始页与系统设置
 不再当标签页」那一版，是一条纯粹的观测方法：想知道一页被要求打开的是哪个地址，
-监听必须挂在这一页出生那一刻**。
+监听必须挂在这一页出生那一刻**；**Q38 来自「设置那颗键搬到顶栏左上角」那一版，
+量的是探针自己的一次翻车——模板字符串里的一个反引号**。
 
 ## 结论
 
@@ -60,6 +61,8 @@ Q18 起是「悬浮球图标 · 16:9 边缘缩放 · 最大化与还原 · 视�
 | Q35 | 一个**没有窗口**的 Electron 进程里，`net.request` 走得通吗 | **走得通**。探针从头到尾不建 `BrowserWindow`（也就不必担心抢焦点），`app.whenReady()` 之后直接发请求，本机那只假 GitHub 与真的 `api.github.com` 都照常应答 | 「只有主进程才验得了」的东西可以写成无头探针，不必把用户的应用拉起来——`spike/update-check.js` 因此能在几秒内跑完十三问，不需要 IPC、不需要渲染进程，配置写在临时目录。另：喂给它的 `latest.yml` 用的是 `release/latest.yml` 那一份**真构建产物**，不是手写的样例 |
 | Q36 | 这台机器上「连不连得上 GitHub」是由什么决定的 | **两套网络栈走了两条路**。`session.resolveProxy()` 报 `DIRECT`（Windows 系统代理关着：`ProxyEnable=0`、`ProxyServer` 为空），于是 Chromium 与 node 都直连；而 `curl` 连的是 `127.0.0.1`（实测 `remote_ip=127.0.0.1`，本机 7897 端口上那个代理），所以 curl 通、进程内不通。同一支探针连着跑：`api.github.com` 一直 200，`github.com` 六次都在 170ms 上下回来，也见过连着几分钟 20 秒不回 | 「查不到更新」在这台机器上会真的发生，而且**安静地失败**——设置页里写着「检查失败：网络不通」，窗口里一条提示都不冒。要让它稳，得把本地代理写进 Windows 的系统代理设置（或让它接管整机流量）。`spike/update-check.js --net` 那一问因此记 **SKIP 而不是 FAIL**：网络上时通时不通，那一问红了未必是代码的问题 |
 | Q37 | `tabs.create()` 返回之后再给那个 `webContents` 挂 `did-start-navigation`，头一发还收得到吗 | **收不到，而且失败的样子有两种。**`create()` 里是**同步** `loadURL()`，等它返回再挂监听，第一发事件早已派发完。真跑起来：`douyin.com`（会 301 到 `www.`）量到的是**重定向之后**那一发 `https://www.douyin.com/`，看起来还像个合理答案；`google.com`（只有那一发）四秒后 `getURL()` 仍是空串 | 「这一页被要求打开的是哪个地址」只能靠 `app.on('web-contents-created')` + 在**出生那一刻**挂监听来问（第一份 `webContents` 一建出来就挂上，比任何 `create()` 都早），按 `webContents.id` 存下第一发主框架非 `about:blank` 的地址。这条也顺带说明：量到的若是「重定向之后」的地址，读数**不会报错**，只会悄悄换成一个看着更正常的域名——这种错最难发现。见 `spike/own-screens.js` 的 `firstNav` 与 Q9 |
+
+| Q38 | 在一个**模板字符串**里（`preview.js` 发给渲染进程执行的 `MEASURE`）写注释时顺手用了反引号，会发生什么 | **整个模板提前收尾**，剩下的半段变成主进程里跑的代码，于是 Electron 报 `App threw an error during load` + `TypeError: Cannot read properties of undefined (reading 'on')`，行号指向源码里那一段（那时候它已经是一句注释了），而**渲染进程一个字的报告都没有**。更费时间的是它挂住的样子：`npx electron …` 七分钟没有任何输出，最后是 `tasklist /V` 看见一个标题为 `Electron` 的窗口才认出「它弹了个错误对话框在等人点」 | 探针里那几段发给页面的脚本都是模板字符串（`MEASURE` / `PAGE_MEASURE` / `POPOVER_MEASURE`），里面写注释提到选择器时别用反引号——`.icon.on` 这样写就行。这一条也是 Q30 的另一面：**「挂住」有两种样子**，一种是一个字都不打，一种是弹一个没人看得见的模态框；探针之外那套 `unhandledRejection` + 看门狗对后者没办法。见 `preview.js` 里 `MEASURE` 顶上那段警告 |
 
 ## 对原设计的两处修正
 
