@@ -1,10 +1,15 @@
 # Spike 结论：Windows 透明窗口合成行为
 
 在 Windows 11（1920×1080，scaleFactor=1）上用 Electron 44.4.3 实测得出。
-脚本见仓库根目录 `spike/index.js`，运行 `npx electron spike/index.js` 可在本机复现
-（它会自行截屏并比对像素，不依赖肉眼观察）。
+脚本在 `spike/` 下，一个主题一份，运行 `npx electron spike/<名字>.js` 可在本机复现
+——`index.js` 会自行截屏并比对像素，不依赖肉眼观察；`resize.js` / `window-max.js` /
+`vieworder.js` / `fullscreen.js` / `fullscreen-cycles.js` 只断言次序与几何，
+隐藏窗口里取不到快照（见 Q20）。
 
-这些结论直接决定了 `src/main/services/windowSurface.ts` 的实现方式。
+Q1–Q17 决定了 `src/main/services/windowSurface.ts` 的实现方式；
+Q18 起是「悬浮球图标 · 16:9 边缘缩放 · 最大化与还原 · 视频全屏联动」这一版
+量出来的，决定了 `windowController.ts`、`tabManager.ts` 与 `chrome/ChromeApp.vue`
+的做法。
 
 ## 结论
 
@@ -29,6 +34,15 @@
 | Q16 | 一条栏声明 `-webkit-app-region: drag`、子元素再声明 `no-drag`，只要**剩下**空白像素就还能拖吗 | **不能**。一个子元素若铺满整条栏（顶栏中间是 `flex: 1 1 auto` 的标签条，右栏里是撑满的功能栈），可拖区域就只剩几像素的内边距——用户的结论是「只能拖悬浮球」，而这件事从 CSS 上读不出来、从截图上也看不出来 | 整套 `-webkit-app-region` 取消，改成显式规则：**按在控件（按钮 / 输入 / 滑块 / `data-drag-ignore`）上是操作，按在别处都是拖窗口**。可拖区域不再随版面变化悄悄消失。验证：`spike/preview.js --drag-probe`——逐个位置派发合成 `pointerdown`/`pointerup` 并读拖动计数（合成事件不产生 `click`，因此按在按钮上没有副作用） |
 | Q17 | 在 `:root` 上定义 `--surface: rgb(255 255 255 / var(--alpha))`，再把 `--alpha` 写在某个下层元素上，那个元素拿到的是不是半透明底色 | **不是**。自定义属性里的 `var()` 是在**声明它的那个元素**上完成替换的：`:root` 上算出来的已经是一个定值颜色（按当时的 `--alpha`），之后只是把这个结果继承下去。实测：下层 `--moyu-alpha` 读到 0.35，顶栏实测底色仍是 `rgb(255, 255, 255)`——滑块在动，画面纹丝不动 | `--moyu-alpha` 改写到 `document.documentElement`（与令牌同层），ChromeApp 与 PopoverApp 各写自己那份文档。`spike/preview.js --bg 0.35` 的 `surfaces` 盯着这一对关系：`bar` 应当带上这个 alpha，`ink`（字与图标）必须是不带 alpha 的实色——拉到 0 也要看得见、点得到 |
 
+| Q18 | 对一个**已经在场的**子视图再 `addChildView()` 一次，会多插一份，还是把它挪到最上层 | **挪到最上层**：`win.contentView.children` 的个数不变，次序变了。抬上 / 让回交替十次，个数与次序都不漂 | 「把界面层抬到网页之上」不必新建视图，就是再 `addChildView` 一次。最大化时右上角那一小块、光标进边带时的左/下手柄都用它。见 `spike/vieworder.js` 与 `tabManager.raiseActive()` |
+| Q19 | 两个铺满窗口的 `WebContentsView` 叠在一起，上面那层若在 CSS 里写 `pointer-events: none`，点击能落到下面那层吗 | **不能**。子视图是原生视图不是 DOM，指针事件只投给最上面那一层，`pointer-events` 在这里完全没有参与 | 「铺一张透明的整窗浮层、只在控件处设 auto」这条画法在这里根本不成立——浮层一铺，整块网页就点不动了。改为**把界面层缩到右上角一小块**（80×48 的 `.float`），别处的指针本来就不经界面。左/下那条 8px 缩放手柄带同理，只能靠「光标进带时抬起界面层」，代价是抬起之前那一条上的点击归网页 |
+| Q20 | 在 `show: false` 的窗口里 `view.webContents.capturePage()` | **抛 `UnknownVizError`**——没有合成器，也就没有帧 | 与 Q11 是同一件事的两个面（那边抓得到但晚一帧，前提是窗口被合成过）。因此这一版的探针只断言次序与几何，不报像素；`spike/fullscreen.js` 里的窗口从头到尾不显示 |
+| Q21 | 一个**从未显示过**的窗口里，网页连续进出 HTML 全屏能走几趟 | **只走得了一趟。**第二趟起 `requestFullscreen()` 会把 `document.fullscreenElement` 置上，但 `enter-html-full-screen` 再也不来，`exitFullscreen()` 也退不回去。把变量一样一样摘出来之后：**不是**透明 / `resizable:false` / `frame:false` 这些窗口配置，**不是** `disableHtmlFullscreenWindowResize`，**不是**在回调里重排子视图次序，**把回调里的动作 `setImmediate` 推迟一个 tick 也救不回来**；一扇最小窗口（`plain`）三趟干净，所以也**不是**「一个进程只容得下一趟」 | 能在回调里把它弄坏的是**两件事**：在那个回调里 `view.setBounds()` 改页面视图尺寸，以及窗口没被真正合成（`shown` 那一支能撑到第三趟）。产品必然要做那一下 `setBounds`——窗口尺寸变了正文矩形就得跟着变，否则视频停在旧矩形上——因此这是**环境的脾气、不是产品的毛病**，没有在 `src/` 里加补丁。真机上要看的是「再按一次视频的全屏键能不能退出来」。见 `spike/fullscreen-cycles.js`，七支变体一次一支跑 |
+| Q22 | `disableHtmlFullscreenWindowResize: true` 到底改变了什么 | **量得出，而且差别正是我们要接管这一摊的理由**：不带它时 Chromium 自己把窗口铺到**整块显示器**（本机 `0,0,1920,1080`，任务栏一起盖住）；带上它，窗口一动不动。工作区是 `0,0,1920,1032` | 那 48px 就是「Chromium 与 `WindowController` 两边同时动手」会跳的那一下。这个开关不是可选项。判据见 `spike/fullscreen.js control`：起一扇**不在任何全屏流程里**的对照窗口，同样禁用/不禁用各试一遍 |
+| Q23 | 在从未显示过的窗口里 `executeJavaScript('document.exitFullscreen()')` | **那个 promise 永不落地**——退出全屏本身照样发生（`leave-html-full-screen` 到了、窗口也还原了），但等着它的那次 `executeJavaScript` 会一直挂着 | 探针页面里两处入口都写成 fire-and-forget，失败塞进 `window.moyuErr`，轮询去读，而不是 `await` 那个 promise；`waitUntil` 替代固定延时。产品侧本来就不等（`TabManager.exitPageFullscreen()` 只 `.catch(() => {})`） |
+| Q24 | 在从未显示过的窗口里走完一趟全屏，之后这个进程里再 `loadURL('file://…')` | **`ERR_FAILED (-2)`**。对照窗口若建在那趟全屏**之后**，它连页面都载不进来 | 探针里的对照窗口必须在任何全屏流程**之前**就建好并载入（`spike/fullscreen.js control` 就是这么改的）。同属 Q21 那一类环境症状，不用改产品 |
+| Q25 | 一次 `setBounds()` 能不能把窗口正好摆成当前显示器的 `workArea` | **能**，读回与 `workArea` 逐字段相等（`0,0,1920,1032`）；隐藏窗口上同样成立 | 最大化不必分几步摆，一次到位即可——`windowController.setMaximized()` 就是这么做的，摆完照既有习惯**读回实测矩形**存进 `expandedBounds`。见 `spike/resize.js` 与 `spike/window-max.js` |
+
 ## 对原设计的两处修正
 
 **1. 无极透明度改用 `setOpacity`，而不是注入 CSS。**
@@ -46,6 +60,10 @@
 Q4 显示被裁剪区域与桌面基线完全一致（差值 0），即区域外既不绘制也不接收鼠标事件。
 这比 `setIgnoreMouseEvents` 方案更优：没有轮询竞态，显形条带天然可悬停、可拖拽。
 
+> 后来这套机制整体移除了：窗口改成「收起时真的缩小成一枚球」，
+> 尺寸本身就是命中区域，不必再靠裁剪去欺骗命中测试，`setShape` 也就不再有
+> 存在的理由。Q4 仍然成立，只是现在没有调用点了。
+
 ## 仍需在真实环境验证的项
 
 - **混合 DPI**：本机为 scaleFactor=1 的单显示器。125% / 150% 下
@@ -56,6 +74,16 @@ Q4 显示被裁剪区域与桌面基线完全一致（差值 0），即区域外
   仍需用真机测试确认——**把记事本放在窗口后面，隐藏主体后点击原主体位置，
   光标必须落进记事本**。
 - **DevTools 打开时窗口不透明**（Electron 既有行为）：透明度相关验证必须关闭 DevTools 进行。
+- **最大化之后的那个出口能不能点得到**：最大化时两栏都让位，界面层只剩右上角
+  一小块（还原键 + 球），它盖在网页之上靠的是 Q18 那次重排。进程内没有任何东西
+  能移动系统光标，命中测试无法自动化，只能真机确认——**点得到，这一态才有出口**。
+- **窗口下边缘与左边缘能不能拖起来**：那两条边的像素归网页，靠「光标进边带抬起
+  界面层」才拿得到（Q19）。若真机上不灵，兜底是只留上/右两条边与三个角
+  （右上角那一个角已经足以到达任意 16:9 尺寸），以及最大化时保留右栏。
+- **再按一次视频的全屏键**：Q21 里那个「第二趟起退不出来」在真机上是什么症状，
+  只能真机看——探针那扇窗口从头到尾没显示过，量到的是环境的脾气。
+- **裁剪弹窗的滚轮缩放**：`spike/ball-crop.js` 走的是合成 `PointerEvent` 与代码里
+  那条缩放路径，滚轮事件本身（`deltaY` 的量级与符号）没有在真鼠标上过一遍。
 - **拖动的流畅度只在隐藏窗口上量过**：`spike/dragTicks.js` 量的是定时器间隔与
   `setPosition` 的开销，二者都是**下界**——真实拖动时窗口是可见的，还要参与合成。
   因此「一个滴答一次」这个结论是确定的（间隔量化与窗口可见与否无关），
