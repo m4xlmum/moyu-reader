@@ -40,7 +40,19 @@ const title = computed(
 
 let unsubscribeTabs: (() => void) | null = null
 
+/**
+ * Esc 收起面板。
+ *
+ * 面板一打开就把焦点拿到手了（见 popoverWindow 里 show() 那一段），
+ * 键盘此刻在面板这儿——那么「按 Esc 退出」这条人人都有的手势就得接住，
+ * 不然它什么都不做。走的还是那条「用户自己收」的路，焦点跟着回主窗口。
+ */
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') void window.moyu.ui.closePopover()
+}
+
 onMounted(async () => {
+  window.addEventListener('keydown', onKeydown)
   const tabsState = await window.moyu.tabs.list()
   activeTabId.value = tabsState.activeTabId
   tabList.value = tabsState.tabs
@@ -56,7 +68,10 @@ onMounted(async () => {
   await refreshAll()
 })
 
-onUnmounted(() => unsubscribeTabs?.())
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  unsubscribeTabs?.()
+})
 
 async function refreshAll(): Promise<void> {
   if (kind === 'sites') {

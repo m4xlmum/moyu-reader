@@ -38,14 +38,42 @@ function sizeOf(kind: OpenPopoverRequest['kind']): { width: number; height: numb
  */
 const PREFER_BELOW: ReadonlySet<OpenPopoverRequest['kind']> = new Set(['tabs'])
 
+/**
+ * 「同一次点击的第二半」的时限，见 justClosed。
+ *
+ * 两半之间只隔着一次 IPC 往返（主窗口被激活 → 面板 blur → 那颗键的 click
+ * 走到主进程），几十毫秒；而人真要连点同一颗键两下，间隔不会短于 300ms。
+ */
+const REOPEN_MS = 300
+
 export class PopoverWindowService {
   private win: BrowserWindow | null = null
   private currentKind: OpenPopoverRequest['kind'] | null = null
 
+  /**
+   * 刚刚因为失焦而收起的那个面板，以及收起的时刻。
+   *
+   * 它专治「同一次点击的第二半」：面板开着的时候焦点在面板身上（见 open() 里
+   * show() 那一段），用户点面板**外面**那一下会先把焦点从面板上拿走——
+   * 面板失焦收起，而那一下若正落在锚点那颗键上，那颗键照旧会发出一条 open 请求。
+   * 不认出来的话，面板会「关掉又立刻开回来」，那颗键读起来像是点了没反应，
+   * 「同一颗键再点一次 = 收起」这条手感就没了。kind 也对得上才算同一次：
+   * 点了另一颗键是「换一个面板看」，得放行。
+   */
+  private justClosed: { kind: OpenPopoverRequest['kind']; at: number } | null = null
+
   constructor(
     private readonly registry: WindowRegistry,
     private readonly preloadPath: string,
-    private readonly getParentBounds: () => Rect | null
+    private readonly getParentBounds: () => Rect | null,
+    /**
+     * 把焦点还给主窗口。
+     *
+     * 面板是独立的一扇窗，它在场时焦点在它身上（见 open() 里 show() 那一段）。
+     * 用户自己在面板里选完东西、面板收起之后，焦点得还回去——否则接着敲键盘
+     * 是敲在一扇已经没了的窗口上，整片落空。
+     */
+    private readonly focusParent: () => void
   ) {}
 
   getKind(): OpenPopoverRequest['kind'] | null {
@@ -55,6 +83,16 @@ export class PopoverWindowService {
   open(req: OpenPopoverRequest): void {
     const parentBounds = this.getParentBounds()
     if (!parentBounds) return
+
+    // 同一次点击的第二半，见 justClosed 那一段
+    if (
+      this.justClosed &&
+      this.justClosed.kind === req.kind &&
+      Date.now() - this.justClosed.at <= REOPEN_MS
+    ) {
+      this.justClosed = null
+      return
+    }
 
     // 同一个面板再次点击视为收起
     if (this.currentKind === req.kind && this.win && !this.win.isDestroyed() && this.win.isVisible()) {
@@ -102,20 +140,52 @@ export class PopoverWindowService {
     // 面板会孤零零飘在桌面上。
     this.registry.add(win, { blocksAutoHide: true })
 
-    win.on('blur', () => this.close())
+    win.on('blur', () => {
+      // 认明是**这一扇**：窗口关掉时也会发一次 blur（它本来就有焦点），
+      // 若那时已经点开了另一个面板，this.win 是新的那扇——不认人就会把它关掉。
+      if (this.win !== win) return
+      // 焦点被拿走 = 用户点到了面板外面（网页、右栏、别的应用），面板就该收起。
+      // 记下是哪一种面板、什么时候，理由见 justClosed 那一段。
+      const kind = req.kind
+      this.close()
+      this.justClosed = { kind, at: Date.now() }
+    })
     win.on('closed', () => {
       this.registry.remove(winId)
-      if (this.win === win) this.win = null
-      this.currentKind = null
+      // 两条都要认明是**这一扇**：'closed' 是异步到的，上一边那块面板关掉时
+      // 新面板已经接手了，不加这一句会把新面板的 kind 抹成 null——
+      // 「同一颗键再点一次 = 收起」那一条判据正是读它，抹掉之后那颗键就只剩开。
+      if (this.win === win) {
+        this.win = null
+        this.currentKind = null
+      }
     })
 
-    win.once('ready-to-show', () => win.showInactive())
+    /*
+     * show()，不是 showInactive()：面板要**拿到焦点**，上面那条 blur 才有着落。
+     *
+     * 先前用的是 showInactive——焦点一直留在主窗口里，于是「用户点了别处」
+     * 这件事面板根本收不到：blur 永不触发，面板就一直飘在那儿（用户报的就是这个）。
+     * 菜单、下拉框本来就该拿走焦点：拿到之后，点任何别处都是一次失焦，
+     * 面板自己收起；顺带键盘也有了去处（面板里的搜索框、Esc 收起）。
+     */
+    win.once('ready-to-show', () => win.show())
 
     const url = `${rendererUrl('popover')}?kind=${encodeURIComponent(req.kind)}`
     win.loadURL(url).catch((err) => log.error('加载弹出面板失败', err))
   }
 
+  /**
+   * 收起面板，**不碰焦点**。
+   *
+   * 走这条路的都是「焦点不该动」的场合：面板失焦自己收起（焦点已经在用户点的
+   * 那一处了）、换一个面板（新面板马上接手）、窗口收起成球或进了托盘
+   * （整扇窗口都不在了）。用户自己在面板里选完东西的那条路走 dismiss()。
+   */
   close(): void {
+    // 上一条「刚因为失焦关掉」的记录只对紧接着的那一次点击有意义，
+    // 关掉即作废，免得隔了很久再点同一颗键被它吃掉
+    this.justClosed = null
     const win = this.win
     this.win = null
     this.currentKind = null
@@ -123,6 +193,19 @@ export class PopoverWindowService {
       this.registry.remove(win.id)
       win.close()
     }
+  }
+
+  /**
+   * 用户自己在面板里选完东西（切标签、点书签、点历史）之后收起面板。
+   *
+   * 与 close() 只差收尾这一下：面板在场时焦点在面板身上（见 open() 里 show()
+   * 那一段），面板一走，焦点得还回主窗口——用户接下来的键盘是敲给网页的。
+   * 失焦自己收起的那条路**绝不能**这么做：那时焦点多半正落在别的应用里，
+   * 抢回来就成了「点一下别处，摸鱼窗口自己跳到最前」。
+   */
+  dismiss(): void {
+    this.close()
+    this.focusParent()
   }
 
   /** 依据锚点与屏幕可用区域决定面板摆在哪一侧 */

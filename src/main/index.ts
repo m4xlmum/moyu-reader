@@ -89,6 +89,15 @@ function bootstrap(): void {
 
   // tabs 与 controller 互相引用，用可变引用打破声明顺序上的死结
   let tabsRef: TabManager | null = null
+  /**
+   * 弹出面板服务，供窗口状态变化时回头叫它。
+   *
+   * 面板是与主窗口并列的另一扇窗，主窗口收起 / 进托盘 / 最小化都不会带上它——
+   * 不管的话，按下老板键之后桌面上会孤零零留着一块列着站点名或历史的面板，
+   * 正是这个软件最不该露出来的东西。声明在 controller 之前是因为
+   * onVisibilityChange 里要用（那里 controller 自己还没构造完）。
+   */
+  let popoverRef: PopoverWindowService | null = null
 
   const controller = new WindowController({
     config,
@@ -99,6 +108,8 @@ function bootstrap(): void {
       // 隐藏（收起成球 / 进托盘 / 最小化）时网页那一侧要暂停正在播的媒体并静音，
       // 回到展开态再恢复——见 TabManager.setBodyVisible
       tabsRef?.setBodyVisible(visible, config.get().stealth.muteMediaOnCollapse)
+      // 面板不跟着窗口走，窗口一没就得自己收掉（见 popoverRef 的注释）
+      if (!visible) popoverRef?.close()
     },
     // 正文区是原生视图，版面一变就得显式重摆——它不跟着 CSS 走
     onLayoutChange: () => {
@@ -142,8 +153,11 @@ function bootstrap(): void {
   const popover = new PopoverWindowService(
     registry,
     preloadPath,
-    (): Rect | null => controller.getWindow()?.getBounds() ?? null
+    (): Rect | null => controller.getWindow()?.getBounds() ?? null,
+    // 面板收起时把焦点还回主窗口（不展开、不显形——它本来就在场）
+    (): void => controller.getWindow()?.focus()
   )
+  popoverRef = popover
 
   /**
    * 打开系统设置。
@@ -238,7 +252,8 @@ function bootstrap(): void {
     openSettings: () => showSettings(),
     leaveScreen: () => backToPage(),
     openPopover: (req: OpenPopoverRequest) => popover.open(req),
-    closePopover: () => popover.close(),
+    // 用户在面板里选完东西（切标签、点书签、点历史）→ 走 dismiss：连焦点一起收尾
+    closePopover: () => popover.dismiss(),
     quit
   }
 
