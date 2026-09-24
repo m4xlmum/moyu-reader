@@ -26,7 +26,14 @@ import {
   PERSIST_DEBOUNCE_MS
 } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
-import type { AppConfig, HomeTheme, StealthConfig, UiConfig, WindowConfig } from '@shared/types'
+import type {
+  AppConfig,
+  HomeTheme,
+  StealthConfig,
+  UiConfig,
+  UpdateConfig,
+  WindowConfig
+} from '@shared/types'
 import { DebouncedWriter, readJson } from './jsonFile'
 import { log } from './logger'
 
@@ -71,6 +78,12 @@ export function defaultConfig(): AppConfig {
       hideScrollbars: true,
       searchTemplate: DEFAULT_SEARCH_TEMPLATE,
       newWindowAsTab: true
+    },
+    update: {
+      // 默认开：装完就再也收不到消息的软件，等于把用户留在旧版本里。
+      // 关掉之后程序不再自己联网，设置页里那个手动按钮仍然可用
+      autoCheck: true,
+      ignoredVersion: null
     },
     lastSession: { openUrls: [], activeIndex: 0 }
   }
@@ -118,6 +131,14 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
     hideDelayMs: input.stealth?.hideDelayMs ?? d.stealth.hideDelayMs,
     muteMediaOnCollapse: input.stealth?.muteMediaOnCollapse ?? d.stealth.muteMediaOnCollapse,
     contentProtection: input.stealth?.contentProtection ?? d.stealth.contentProtection
+  }
+
+  const u: UpdateConfig = {
+    autoCheck: input.update?.autoCheck ?? d.update.autoCheck,
+    // 不是字符串就回 null（= 没有忽略任何版本）。宁可多提示一次，
+    // 也不要因为一个写坏的值把提示永久关掉
+    ignoredVersion:
+      typeof input.update?.ignoredVersion === 'string' ? input.update.ignoredVersion : null
   }
 
   // 迁移：1 版的竖屏尺寸与新的 16:9 横屏版面不兼容。
@@ -182,6 +203,7 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   if (!BALL_CUSTOM_FITS.some((f) => f.id === ui.ballCustomFit)) {
     ui.ballCustomFit = d.ui.ballCustomFit
   }
+  if (typeof u.autoCheck !== 'boolean') u.autoCheck = d.update.autoCheck
 
   return {
     version: CONFIG_VERSION,
@@ -190,6 +212,7 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
     stealth: s,
     hotkeys: h,
     browser: b,
+    update: u,
     lastSession: ls
   }
 }
@@ -224,6 +247,7 @@ export class ConfigStore {
       stealth: { ...this.config.stealth, ...(patch.stealth ?? {}) },
       hotkeys: { ...this.config.hotkeys, ...(patch.hotkeys ?? {}) },
       browser: { ...this.config.browser, ...(patch.browser ?? {}) },
+      update: { ...this.config.update, ...(patch.update ?? {}) },
       lastSession: { ...this.config.lastSession, ...(patch.lastSession ?? {}) }
     }
     this.config = normalize(next)

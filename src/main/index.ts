@@ -8,10 +8,12 @@ import { join } from 'node:path'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { BROADCAST } from '@shared/ipc'
 import type { OpenPopoverRequest } from '@shared/ipc'
+import { UPDATE_CHECK_DELAY_MS, UPDATE_FEED_BASE } from '@shared/constants'
 import type { Rect } from '@shared/types'
 import type { AppContext } from './context'
 import { registerBrowserIpc } from './ipc/registerBrowserIpc'
 import { registerDataIpc } from './ipc/registerDataIpc'
+import { registerUpdateIpc } from './ipc/registerUpdateIpc'
 import { registerWindowIpc } from './ipc/registerWindowIpc'
 import { BookmarkStore } from './services/bookmarkStore'
 import { BallIconStore } from './services/ballIconStore'
@@ -25,6 +27,7 @@ import { hardenWebContents, setupSession } from './services/sessionSetup'
 import { SiteStore } from './services/siteStore'
 import { TabManager } from './services/tabManager'
 import { TrayService } from './services/trayService'
+import { UpdateService } from './services/updateService'
 import { WindowController } from './services/windowController'
 import { WindowRegistry } from './services/windowRegistry'
 
@@ -167,6 +170,31 @@ function bootstrap(): void {
     onQuit: () => quit()
   })
 
+  /**
+   * 检查更新。
+   *
+   * 版本号与「是不是打包版」由外面传进去：服务本身不读 app.*，探针才能直接
+   * 构造它（spike/update-check.js 走的就是这条路）。
+   *
+   * 开发模式（app.isPackaged 为假）下不联网：那时版本号是 0.0.0、界面来自
+   * vite 的开发服务器，查到的更新对当前这个进程没有任何意义。
+   * 安装包落在系统临时目录下的一个子目录里——它是可以丢的，别占用户的
+   * userData；而且那个目录会被系统定期清理，正好符合「下完就该被用掉」。
+   */
+  const updateEnabled = app.isPackaged
+  /** 启动后那一次静默检查的定时器，见 whenReady 末尾 */
+  let updateTimer: NodeJS.Timeout | null = null
+  const update = new UpdateService({
+    config,
+    feedBase: UPDATE_FEED_BASE,
+    currentVersion: app.getVersion(),
+    enabled: updateEnabled,
+    downloadDir: join(app.getPath('temp'), 'moyu-reader-update'),
+    onState: (state) => broadcast(BROADCAST.updateState, state),
+    setNoticeVisible: (visible) => controller.setNoticeVisible(visible),
+    quit: () => quit()
+  })
+
   const ctx: AppContext = {
     userDataDir,
     config,
@@ -179,6 +207,7 @@ function bootstrap(): void {
     tabs,
     bossKeys,
     tray,
+    update,
     broadcast,
     openSettings: () => showSettings(),
     openPopover: (req: OpenPopoverRequest) => popover.open(req),
@@ -213,6 +242,7 @@ function bootstrap(): void {
     registerDataIpc(ctx)
     registerBrowserIpc(ctx)
     registerWindowIpc(ctx)
+    registerUpdateIpc(ctx)
 
     controller.create()
     tray.create(trayIconPath)
@@ -231,6 +261,22 @@ function bootstrap(): void {
     }
 
     controller.show()
+
+    /*
+     * 启动后静默查一次更新。
+     *
+     * 拖二十秒再查有两条理由：别跟启动那一堆活抢网络与主线程；以及——一个刚打开
+     * 的窗口立刻变出一条提示，比二十秒后悄悄多出一行更容易被旁边的人注意到。
+     * 查到什么都不弹东西：提示条只是窗口内的一行，见 UpdateNotice.vue。
+     *
+     * 开关（update.autoCheck）管的是这一次自动检查，设置页里那个手动按钮不受它管。
+     */
+    if (updateEnabled && config.get().update.autoCheck) {
+      updateTimer = setTimeout(() => {
+        updateTimer = null
+        void update.check()
+      }, UPDATE_CHECK_DELAY_MS)
+    }
 
     // explorer.exe 重启会带走托盘图标，而 Electron 没有任务栏重建事件。
     // 在每次显示窗口时重建一次，成本很低；托盘没了用户可能再也找不回窗口。
@@ -272,6 +318,11 @@ function bootstrap(): void {
     // 反过来的话，定时器会在窗口销毁后继续 tick，撞上已销毁的对象，
     // 异常会冒到主进程的未捕获异常处理器上，弹框把退出流程卡住。
     controller.destroy()
+    // 启动那次静默检查若还没到点，就别让它醒过来了
+    if (updateTimer) {
+      clearTimeout(updateTimer)
+      updateTimer = null
+    }
     // 不注销的话，退出后这些组合键仍被本进程占用，别的程序用不了
     bossKeys.unregisterAll()
     tabs.destroyAll()

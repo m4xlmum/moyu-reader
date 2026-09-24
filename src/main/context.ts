@@ -12,6 +12,7 @@ import type { HistoryStore } from './services/historyStore'
 import type { SiteStore } from './services/siteStore'
 import type { TabManager } from './services/tabManager'
 import type { TrayService } from './services/trayService'
+import type { UpdateService } from './services/updateService'
 import type { WindowController } from './services/windowController'
 import type { WindowRegistry } from './services/windowRegistry'
 
@@ -28,6 +29,8 @@ export interface AppContext {
   tabs: TabManager
   bossKeys: BossKeyService
   tray: TrayService
+  /** 检查更新。查什么、下到哪儿、装不装，都归它；界面只是它的投影 */
+  update: UpdateService
   /** 向所有界面窗口广播 */
   broadcast: (channel: string, payload: unknown) => void
   openSettings: () => void

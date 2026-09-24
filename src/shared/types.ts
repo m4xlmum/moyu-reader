@@ -100,6 +100,26 @@ export interface BrowserConfig {
   newWindowAsTab: boolean
 }
 
+/**
+ * 自动检查更新。
+ *
+ * 新增这一段**没有动 CONFIG_VERSION**：那条迁移阶梯是给「老值需要换算」的迁移
+ * 用的（1 版竖屏尺寸、4 版 autoCollapse、8 版主题收编），而这里两个字段都是
+ * 新增、都有安全默认值，normalize() 逐字段取值就够了。
+ */
+export interface UpdateConfig {
+  /** 启动后静默查一次。关掉之后程序不再自己联网，只剩设置页里那个手动按钮 */
+  autoCheck: boolean
+  /**
+   * 用户点了提示条上那个 ✕ 的版本号（`1.1.0` 这种形状），没有则为 null。
+   *
+   * 落盘而不是只记在内存里：否则用户关掉提示、下次启动它又冒出来，
+   * 一个「已经说不要了」的东西反复出现，比一直挂着更烦人。
+   * 只忽略这一个版本——下一个版本照常提示。
+   */
+  ignoredVersion: string | null
+}
+
 export interface AppConfig {
   version: number
   window: WindowConfig
@@ -107,6 +127,7 @@ export interface AppConfig {
   stealth: StealthConfig
   hotkeys: HotkeyConfig
   browser: BrowserConfig
+  update: UpdateConfig
   lastSession: { openUrls: string[]; activeIndex: number }
 }
 
@@ -223,6 +244,53 @@ export interface WindowRuntime {
    * 它跟着消失，图标不存在切换一说。还原键是另一枚，画在右上角那一小块里。
    */
   maximized: boolean
+  /**
+   * 更新提示条是否占版面。
+   *
+   * 与 addressOpen 同一种东西：提示条要吃掉 30px，正文是原生视图，只能由主进程
+   * 重排。因此「有没有这一条」是**版面状态**，写在这里；而这一条上写什么字、
+   * 按下去做什么，由 BROADCAST.updateState 那条单独给（见 UpdateState）。
+   * 两者分开是因为管的人不同：这个字段归窗口控制器，那一条归更新服务。
+   */
+  noticeVisible: boolean
+}
+
+/**
+ * 更新这件事走到哪一步了。
+ *
+ * 状态只有一份、在主进程里，界面（提示条与设置页）都只是它的投影。因此下载进度
+ * 在哪个文档里看都是同一个数，也不会出现「提示条说下载完了、设置页说还在下」。
+ */
+export type UpdatePhase =
+  /** 还没查过 */
+  | 'idle'
+  /** 查不了：开发模式，或用户把自动检查关了 */
+  | 'disabled'
+  | 'checking'
+  /** 已是最新 */
+  | 'none'
+  /** 有更新的版本 */
+  | 'available'
+  | 'downloading'
+  /** 下完了、sha512 校验通过，等用户点「重启并安装」 */
+  | 'ready'
+  /** 查或下失败了。界面**不弹任何东西**，只在设置页里写一句 */
+  | 'error'
+
+export interface UpdateState {
+  phase: UpdatePhase
+  /** 这个构建能不能查更新（开发模式下为 false）。界面据此把按钮禁掉并说明理由 */
+  enabled: boolean
+  /** 正在运行的这个版本 */
+  currentVersion: string
+  /** 查到的新版本。available / downloading / ready 时有值 */
+  version: string | null
+  /** 下载进度 0–100（整数）。downloading 时有意义 */
+  percent: number
+  /** 给人看的一句话，失败时说清是什么失败 */
+  message: string
+  /** 这个新版本是否被用户忽略过（提示条据此不冒出来） */
+  ignored: boolean
 }
 
 export interface Rect {

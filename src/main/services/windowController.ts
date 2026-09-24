@@ -22,6 +22,7 @@ import {
   BALL_SIZE,
   DRAG_TICK_MS,
   MOVE_SETTLE_MS,
+  NOTICE_H,
   RAIL_W,
   SIZE_PRESETS,
   TOP_BAR_H,
@@ -114,6 +115,14 @@ export class WindowController {
    */
   private addressOpen = false
   /**
+   * 更新提示条是否占版面。
+   *
+   * 与 addressOpen 同一种东西：它要吃掉 30px，而正文是原生视图，只能由主进程
+   * 重排。拨动它的是更新服务（找到新版本、被忽略、被撤销忽略），因此这里是
+   * 一个被动字段，没有对应的界面意图。
+   */
+  private noticeVisible = false
+  /**
    * 悬浮球此刻在窗口内的矩形，由渲染进程量好后上报。
    *
    * 球是 DOM 元素（排在顶栏里，或顶栏隐藏时浮在右上角），它的位置由 CSS
@@ -170,7 +179,7 @@ export class WindowController {
   /** 光标此刻是否贴在窗口边框上（见 EdgeWatcher 与 setEdgeHot） */
   private edgeHot = false
 
-  private layout: Layout = computeLayout(960, 540, TOP_BAR_H, 0, RAIL_W)
+  private layout: Layout = computeLayout(960, 540, TOP_BAR_H, 0, 0, RAIL_W)
 
   /**
    * 拖动中的锚点：按下那一刻的光标位置与窗口位置，外加「上一次请求到的位置」。
@@ -388,8 +397,8 @@ export class WindowController {
     const cfg = this.deps.config.get()
     const previous = this.layout
     /*
-     * 最大化时两栏与地址栏一起让位：整个工作区都归网页，界面在窗口里
-     * 只剩下右上角那一小块（chromeBounds）。三者都按同一个条件收起来——
+     * 最大化时两栏、地址栏与更新提示条一起让位：整个工作区都归网页，界面在
+     * 窗口里只剩下右上角那一小块（chromeBounds）。它们都按同一个条件收起来——
      * 少收一个，正文就少一块、而那块位置又没有任何东西画在上面。
      */
     const chromeHidden = this.maximized
@@ -398,6 +407,7 @@ export class WindowController {
       height,
       cfg.ui.topBarOpen && !chromeHidden ? TOP_BAR_H : 0,
       this.addressOpen && !chromeHidden ? ADDRESS_H : 0,
+      this.noticeVisible && !chromeHidden ? NOTICE_H : 0,
       railVisible(cfg, chromeHidden) ? RAIL_W : 0
     )
     this.chrome?.setBounds(this.chromeBounds(width, height))
@@ -419,6 +429,7 @@ export class WindowController {
       mode: this.mode,
       opacity: cfg.window.opacity,
       addressOpen: this.addressOpen,
+      noticeVisible: this.noticeVisible,
       topBarOpen: cfg.ui.topBarOpen,
       railVisible: railVisible(cfg, this.maximized),
       maximized: this.maximized
@@ -434,6 +445,20 @@ export class WindowController {
   setAddressOpen(open: boolean): void {
     if (this.addressOpen === open) return
     this.addressOpen = open
+    this.recomputeLayout()
+    this.deps.onStateChange()
+  }
+
+  /**
+   * 更新提示条是否占版面。
+   *
+   * 与地址栏逐字同构，只是拨它的不是用户而是更新服务（见 updateService 的
+   * setState：有一个已知的新版本、且没被忽略时才为真）。因此这里没有对应的
+   * SEND 通道——界面只按广播的结果绘制。
+   */
+  setNoticeVisible(visible: boolean): void {
+    if (this.noticeVisible === visible) return
+    this.noticeVisible = visible
     this.recomputeLayout()
     this.deps.onStateChange()
   }

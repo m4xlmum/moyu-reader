@@ -15,6 +15,7 @@ export interface Layout {
   height: number
   topBar: Rect
   address: Rect
+  notice: Rect
   body: Rect
   rail: Rect
 }
@@ -24,22 +25,29 @@ export interface Layout {
  *
  * 版面是一个「顶栏 + 右侧栏」的 L 形：顶栏横跨整个宽度（窗口按钮在最右端，
  * 与 Windows 的习惯一致），右侧栏从顶栏下沿一直垂到窗口底部。
- * 地址栏夹在顶栏与正文之间，折叠时传 addressH = 0，正文直接顶上去。
+ * 地址栏夹在顶栏与正文之间，折叠时传 addressH = 0，正文直接顶上去；
+ * 更新提示条同理，不显示时传 noticeH = 0。
+ *
+ * 提示条排在地址栏**之下**、正文**之上**：它是「网页里那条内容有新版本」，
+ * 位置贴着正文；而地址栏是用户自己的东西，不该被一条提示推着上下走。
  */
 export function computeLayout(
   width: number,
   height: number,
   topH: number,
   addressH: number,
+  noticeH: number,
   railW: number
 ): Layout {
   const mainWidth = Math.max(0, width - railW)
-  const bodyTop = topH + addressH
+  const noticeTop = topH + addressH
+  const bodyTop = noticeTop + noticeH
   return {
     width,
     height,
     topBar: { x: 0, y: 0, width, height: topH },
     address: { x: 0, y: topH, width: mainWidth, height: addressH },
+    notice: { x: 0, y: noticeTop, width: mainWidth, height: noticeH },
     body: { x: 0, y: bodyTop, width: mainWidth, height: Math.max(0, height - bodyTop) },
     rail: { x: mainWidth, y: topH, width: railW, height: Math.max(0, height - topH) }
   }

@@ -20,6 +20,19 @@ export const TOP_BAR_H = 44
 export const ADDRESS_H = 34
 
 /**
+ * 更新提示条的高度（DIP）。
+ *
+ * 与新版本有关的提示只落在这一条上——**不用系统通知**：通知会进通知中心、
+ * 上锁屏、被录屏录进去，那等于替用户宣布「我在跑别的程序」。
+ *
+ * 30 是「一行 12px 的字、外加两枚 22px 的小按钮、上下各留 4px」的最小整数。
+ * 它是一条**占版面的行**（与地址栏同类，正文要往下让 30px）而不是浮在网页上的
+ * 覆盖层：界面层与网页是两个原生视图，铺在网页上的东西会把那一块的点击整个
+ * 吃掉（见 docs/spike-findings.md 的 Q19）。
+ */
+export const NOTICE_H = 30
+
+/**
  * 右侧功能栏宽度（DIP）。
  *
  * 站点、历史、书签、缩放、透明度、设置这些原本摊在底栏的功能都收在这条竖栏里。
@@ -356,3 +369,45 @@ export const TABS_BROADCAST_DEBOUNCE_MS = 60
 
 /** 持久化写入去抖（毫秒） */
 export const PERSIST_DEBOUNCE_MS = 300
+
+// ---------------------------------------------------------------- 自动检查更新
+
+/**
+ * 更新源。本应用唯一的对外地址。
+ *
+ * 走的是 `releases/latest/download/` 这条**下载路径**，不是 api.github.com：
+ * 前者不需要 token、不占未认证请求那 60 次/小时的额度，也只是 CDN 上的一个
+ * 静态文件。查新版本这件事值不上一条 API 通道。
+ *
+ * owner/repo 写死在这里而不是去读打包时生成的 app-update.yml：那个文件是
+ * electron-builder 从 git remote 推出来的，一旦打包机器上的 remote 变了，
+ * 它就悄悄变——而这份地址是产品事实，不该随构建环境漂。
+ */
+export const UPDATE_FEED_BASE = 'https://github.com/m4xlmum/moyu-reader'
+
+/**
+ * 启动后多久才去查（毫秒）。
+ *
+ * 两个理由，都与「别打扰」有关：一是别和启动那一堆活（恢复标签页、重建托盘、
+ * 摆窗口）抢；二是一个刚打开的窗口立刻自己冒出一条提示，比二十秒后悄悄多出
+ * 一条更容易被旁边的人一眼看见。
+ */
+export const UPDATE_CHECK_DELAY_MS = 20_000
+
+/**
+ * 单次检查（取 latest.yml）的整体超时（毫秒）。
+ *
+ * Electron 的 ClientRequest 没有 setTimeout，自己挂一个定时器调 abort()。
+ * 拿不到就当作「这次没查到」——查更新失败不该在界面上留下任何东西。
+ */
+export const UPDATE_CHECK_TIMEOUT_MS = 15_000
+
+/**
+ * 下载卡住的判据（毫秒）：多久没有收到任何数据就放弃。
+ *
+ * 刻意**不设总时长上限**：安装包有 100MB 以上，慢网下线几分钟是正常的，
+ * 设了总时长等于「网慢的人永远更新不了」。判据只能是「还在动吗」。
+ * 每收到一块数据就把这个表重置一次。
+ */
+export const UPDATE_STALL_MS = 60_000
+

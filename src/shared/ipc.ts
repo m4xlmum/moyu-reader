@@ -13,6 +13,7 @@ import type {
   ResizeEdge,
   SiteRecord,
   TabState,
+  UpdateState,
   WindowRuntime
 } from './types'
 
@@ -81,6 +82,12 @@ export const INVOKE = {
   hotkeyList: 'hotkey:list',
   hotkeySet: 'hotkey:set',
 
+  updateGet: 'update:get',
+  updateCheck: 'update:check',
+  updateDownload: 'update:download',
+  updateInstall: 'update:install',
+  updateIgnore: 'update:ignore',
+
   appQuit: 'app:quit'
 } as const
 
@@ -95,7 +102,14 @@ export const BROADCAST = {
    */
   ballIconChanged: 'ballIcon:changed',
   tabsState: 'tabs:state',
-  windowState: 'window:state'
+  windowState: 'window:state',
+  /**
+   * 更新这件事的状态（查到了什么、下到哪儿了）。
+   *
+   * 与提示条是否占版面（WindowRuntime.noticeVisible）分开：那条是版面状态、
+   * 归窗口控制器；这条是内容、归更新服务。两份状态各有各的主人。
+   */
+  updateState: 'update:state'
 } as const
 
 /**
@@ -297,6 +311,26 @@ export interface MoyuApi {
       which: 'bossMinimize' | 'bossHideToTray'
       accelerator: string
     }): Promise<{ ok: boolean; accelerator: string; reason?: string }>
+  }
+  /**
+   * 检查更新。
+   *
+   * 五个动作都返回**做完之后**的状态：界面不必自己猜主进程走到了哪一步
+   * （下载进度这种一路在变的东西，猜出来的那一份必然是错的）。
+   *
+   * 不提供「下载进度」这类单独的回调——一个 BROADCAST.updateState 就够，
+   * 提示条与设置页听的是同一条。
+   */
+  update: {
+    get(): Promise<UpdateState>
+    /** 查一次。正在查或正在下时直接返回当前状态，不叠第二次 */
+    check(): Promise<UpdateState>
+    download(): Promise<UpdateState>
+    /** 起安装程序并退出。没下载完 / 没校验通过时拒绝，且什么都不做 */
+    install(): Promise<void>
+    /** 忽略这个版本：整条提示收掉，且下次启动不再出现。传 null 是撤销 */
+    ignore(input: { version: string | null }): Promise<UpdateState>
+    onState(cb: (state: UpdateState) => void): () => void
   }
   app: {
     quit(): Promise<void>
