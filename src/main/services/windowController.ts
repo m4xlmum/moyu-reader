@@ -24,9 +24,9 @@ import {
   type SizePreset
 } from '@shared/constants'
 import type { ChromePatch } from '@shared/ipc'
-import type { AppConfig, Rect, WindowMode, WindowRuntime } from '@shared/types'
+import type { AppConfig, Rect, ResizeEdge, WindowMode, WindowRuntime } from '@shared/types'
 import type { ConfigStore } from './configStore'
-import { computeLayout, sameRect, type Layout } from './geometry'
+import { computeLayout, resizeRect, sameRect, type Layout, type ResizeLimits } from './geometry'
 import { log } from './logger'
 import { WindowLeaveWatcher } from './windowLeaveWatcher'
 import { WindowSurface } from './windowSurface'
@@ -121,6 +121,23 @@ export class WindowController {
     lastY: number
   } | null = null
   private dragTimer: NodeJS.Timeout | null = null
+  /**
+   * 缩放中的锚点：拖的是哪条边、按下那一刻的光标与窗口矩形、上下限。
+   *
+   * 与 dragAnchor 同一套道理（绝对算、不做增量累加、last 记的是我们自己请求过的
+   * 矩形而不是读回来的），因此这里只留一份注释：那几条理由见 dragAnchor。
+   * limits 在按下时算一次就够——拖动过程中窗口可能跨到另一块显示器上，
+   * 但半路换上下限会让窗口突然跳一下，不如等下一次按下再算。
+   */
+  private resizeAnchor: {
+    edge: ResizeEdge
+    cursorX: number
+    cursorY: number
+    start: Rect
+    last: Rect
+    limits: ResizeLimits
+  } | null = null
+  private resizeTimer: NodeJS.Timeout | null = null
   /** 窗口移动停止的判定计时器，见 scheduleMoveSettle() */
   private moveSettleTimer: NodeJS.Timeout | null = null
 
@@ -194,7 +211,9 @@ export class WindowController {
       // 拖动窗口时每次 setPosition 都会触发本事件。这时绝不能 reassert()：
       // 它会重放整套窗口属性（置顶、焦点、任务栏、阴影、透明度），
       // 每帧来一遍就是持续闪烁。拖动只需移动位置，属性一个都不用碰。
-      if (this.dragAnchor) return
+      // 缩放时的道理相同——拖左边或上边同样每帧都在改位置，
+      // 而落盘与重放由 endResize() 那一次收尾统一做。
+      if (this.dragAnchor || this.resizeAnchor) return
 
       // 位置要立刻记住，但落盘与重放都得等窗口停下来，见 scheduleMoveSettle()。
       if (this.mode === 'expanded') this.expandedBounds = win.getBounds()
@@ -204,7 +223,10 @@ export class WindowController {
       // 松开鼠标那一下若没送到（界面卡了一下、指针被别的窗口截走），
       // 拖动会一直挂着：窗口从此黏在光标上，整个程序没法再用。
       // 失焦是这一类「卡住」最可靠的信号——那一刻用户已经在别处按下了。
+      // 缩放挂住不会黏住光标，但窗口会一直跟着光标长，
+      // 而且是同一类「松手信号丢了」，用同一个信号收掉。
       if (this.dragAnchor) this.endDrag()
+      if (this.resizeAnchor) this.endResize()
     })
     win.on('restore', () => {
       if (this.mode === 'minimized') this.transitionTo('expanded')
@@ -221,7 +243,12 @@ export class WindowController {
         clearInterval(this.dragTimer)
         this.dragTimer = null
       }
+      if (this.resizeTimer) {
+        clearInterval(this.resizeTimer)
+        this.resizeTimer = null
+      }
       this.dragAnchor = null
+      this.resizeAnchor = null
       this.win = null
     })
 
@@ -649,11 +676,16 @@ export class WindowController {
       clearInterval(this.dragTimer)
       this.dragTimer = null
     }
+    if (this.resizeTimer) {
+      clearInterval(this.resizeTimer)
+      this.resizeTimer = null
+    }
     if (this.moveSettleTimer) {
       clearTimeout(this.moveSettleTimer)
       this.moveSettleTimer = null
     }
     this.dragAnchor = null
+    this.resizeAnchor = null
     if (this.mode === 'quitting') return
     this.mode = 'quitting'
     try {
@@ -738,6 +770,89 @@ export class WindowController {
     }
   }
 
+  // ------------------------------------------------------------ 缩放
+
+  /**
+   * 拖动边缘改窗口大小。
+   *
+   * 与拖动窗口共用同一套机制：界面在边缘手柄上按下时报「拖的是哪条边」，
+   * 之后每帧由主进程读全局光标、算出新矩形、推给窗口。不这么做的话，
+   * 指针一旦离开窗口，渲染进程就收不到事件，缩放会当场断在半路。
+   *
+   * 界面那一侧之所以是**自绘手柄**而不是 `resizable: true`：透明窗口开原生缩放
+   * 会在某些 Windows 版本上失效（见 windowSurface 与 spike Q5），而透明正是
+   * 这个程序的全部——那条路根本走不通。
+   */
+  beginResize(edge: ResizeEdge): void {
+    const win = this.win
+    // 收起态下窗口就是一颗球，没有「边缘」可言；最小化 / 托盘里更谈不上。
+    if (!win || this.mode !== 'expanded') return
+
+    const cursor = screen.getCursorScreenPoint()
+    const b = win.getBounds()
+    // 与拖动一样，挂着一次旧的（松手信号丢了）不忽略这一下，而是重新锚定，
+    // 于是用户再按一下就能接回来。绝对算法下重新锚定不会让窗口跳一下。
+    this.resizeAnchor = {
+      edge,
+      cursorX: cursor.x,
+      cursorY: cursor.y,
+      start: b,
+      last: b,
+      limits: this.resizeLimits(b)
+    }
+    if (!this.resizeTimer) this.resizeTimer = setInterval(() => this.tickResize(), DRAG_TICK_MS)
+  }
+
+  endResize(): void {
+    if (this.resizeTimer) {
+      clearInterval(this.resizeTimer)
+      this.resizeTimer = null
+    }
+    if (!this.resizeAnchor) return
+    this.resizeAnchor = null
+
+    // 新矩形要立刻记住并落盘：用户拖出来的尺寸就是他下次启动想看到的尺寸。
+    this.syncBoundsMemory()
+    // 落盘与重放都不必每帧做，等窗口停稳后合并成一次（拖左 / 上边时位置也在变，
+    // 期间那些 move 事件被上面的守卫挡掉了，收尾这一次正好补上）。
+    this.scheduleMoveSettle()
+  }
+
+  private tickResize(): void {
+    const win = this.win
+    const anchor = this.resizeAnchor
+    if (!win || !anchor) return
+
+    const cursor = screen.getCursorScreenPoint()
+    const next = resizeRect(
+      anchor.start,
+      anchor.edge,
+      cursor.x - anchor.cursorX,
+      cursor.y - anchor.cursorY,
+      anchor.limits
+    )
+    if (sameRect(next, anchor.last)) return
+
+    // 缩放期间光标在窗口的边上（手柄跟着窗口走），清掉「离开计时」，
+    // 免得自动收起在一次缩放刚结束时被触发
+    this.watcher?.rearm()
+
+    anchor.last = next
+    this.applyBounds(next)
+  }
+
+  /**
+   * 缩放的上下限：下限是已验证过的最小版面，上限是**当前显示器**的工作区。
+   *
+   * 取显示器而不是主显示器：窗口挪到副屏上再拖边缘，能长到多大取决于那块屏。
+   * 位置不夹紧（与拖动窗口一致）——拖出屏幕外是用户自己拖的，他能拖回来；
+   * 而在这里替他挪窗口，手感就成了「拖到屏幕边缘时窗口突然自己跳走」。
+   */
+  private resizeLimits(b: Rect): ResizeLimits {
+    const area = screen.getDisplayMatching(b).workArea
+    return { min: SIZE_PRESETS.mini, max: { width: area.width, height: area.height } }
+  }
+
   /**
    * 把当前窗口位置记进「展开态矩形」并落盘。
    *
@@ -788,10 +903,24 @@ export class WindowController {
   private applySurface(): void {
     const win = this.win
     if (!win) return
-    const cfg = this.deps.config.get()
     const windowRect =
       this.mode === 'collapsed' ? this.collapsedBounds() : (this.expandedBounds ?? win.getBounds())
-    this.surface?.apply({ mode: this.mode, windowRect, opacity: cfg.window.opacity })
+    this.applyBounds(windowRect)
+  }
+
+  /**
+   * 把窗口摆成某个矩形。
+   *
+   * 尺寸一律经这一条路出去（收展切换、拖动缩放、透明度变化都走它），
+   * 于是「谁能改窗口大小」这个问题只有一个答案，而它下面只有 windowSurface
+   * 一处真的碰窗口属性。缩放每帧调用它一次，与预设换尺寸走的是同一条路。
+   */
+  private applyBounds(rect: Rect): void {
+    this.surface?.apply({
+      mode: this.mode,
+      windowRect: rect,
+      opacity: this.deps.config.get().window.opacity
+    })
   }
 }
 

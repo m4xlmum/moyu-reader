@@ -178,11 +178,19 @@ const list = () => Promise.resolve([])
  * 都被 no-drag 的子元素盖满，于是只剩悬浮球拖得动，而从代码上看不出来。
  * 探针按一下、读这里的计数，就能问出「这个位置按下去到底起没起拖动」。
  *
- * dragLog 只存在于这份假桥里（真实的 preload 没有它，界面也不需要它），
- * 它是给 spike/preview.js 的 --drag-probe 用的。
+ * 缩放（拖边缘改大小）是同一类问题、同一个记法，因此和拖动并排记在一起：
+ * 边缘手柄压在顶栏与右栏的留白上，一旦它的盒子比预想的大，就会把按钮的点击
+ * 悄悄变成缩放——那种错从截图上完全看不出来。
+ *
+ * dragLog / resizeLog 只存在于这份假桥里（真实的 preload 没有它们，界面也不需要），
+ * 它们是给 spike/preview.js 的 --drag-probe 用的。
  */
 let dragStarts = 0
 let dragEnds = 0
+let resizeStarts = 0
+let resizeEnds = 0
+/** 每次缩放开始时报上来的边名，按顺序记下来：拖的是不是那一条边，只能这么问 */
+const resizeEdges = []
 
 /** 标签页的对外快照。isActive 跟着当前那一格算，不另存一份，免得两处说法对不上 */
 function tabsState() {
@@ -296,6 +304,14 @@ contextBridge.exposeInMainWorld('moyu', {
       dragEnds += 1
     },
     dragLog: () => ({ starts: dragStarts, ends: dragEnds }),
+    resizeStart: (edge) => {
+      resizeStarts += 1
+      resizeEdges.push(edge)
+    },
+    resizeEnd: () => {
+      resizeEnds += 1
+    },
+    resizeLog: () => ({ starts: resizeStarts, ends: resizeEnds, edges: resizeEdges }),
     setAddressOpen: () => {},
     setChrome: () => {},
     setBallRect: (rect) => ipcRenderer.send('preview:ballRect', rect),

@@ -65,6 +65,19 @@ export const BALL_GLYPH_SIZE = Math.round(BALL_SIZE * 0.46)
  */
 export const BALL_MARGIN = (RAIL_W - BALL_SIZE) / 2
 
+/**
+ * 自绘缩放手柄的粗细（DIP）：四条边 4px，四个角 8×8。
+ *
+ * 为什么是自绘而不是 `resizable: true`：透明窗口开原生缩放会在某些 Windows
+ * 版本上失效，而透明是这个程序的全部（见 windowSurface.ts）。
+ *
+ * 4 这个数不是随手取的——它恰好是顶栏与右侧栏自己的内边距，于是这两条边上的
+ * 手柄永远压不到任何一个控件，只是把「栏目与窗口之间那几像素的留白」变成了
+ * 可拖的区域。界面与探针读的是同一份数字（探针要去这些位置按一下）。
+ */
+export const RESIZE_EDGE = 4
+export const RESIZE_CORNER = 8
+
 /** 主进程鼠标位置轮询间隔（毫秒） */
 export const POLL_MS = 50
 /**

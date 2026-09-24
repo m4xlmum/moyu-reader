@@ -101,6 +101,13 @@ export const api: MoyuApi = {
     dragEnd: () => {
       ipcRenderer.send(SEND.dragEnd)
     },
+    // 缩放与拖动同一条路：界面只报「拖的是哪条边」，矩形与光标都由主进程读
+    resizeStart: (edge) => {
+      ipcRenderer.send(SEND.resizeStart, edge)
+    },
+    resizeEnd: () => {
+      ipcRenderer.send(SEND.resizeEnd)
+    },
     // 地址栏折叠同样走单向消息：它是版面切换，状态由主进程持有并回传
     setAddressOpen: (input) => {
       ipcRenderer.send(SEND.setAddressOpen, input)

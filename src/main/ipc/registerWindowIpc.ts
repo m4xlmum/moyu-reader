@@ -6,7 +6,7 @@
 import { ipcMain } from 'electron'
 import { INVOKE, SEND, type ChromePatch, type OpenPopoverRequest } from '@shared/ipc'
 import type { SizePreset } from '@shared/constants'
-import type { Rect } from '@shared/types'
+import type { Rect, ResizeEdge } from '@shared/types'
 import type { AppContext } from '../context'
 import { popupBallMenu } from '../services/ballMenu'
 
@@ -28,6 +28,12 @@ export function registerWindowIpc(ctx: AppContext): void {
   // 拖动走单向消息：高频且不需要回执
   ipcMain.on(SEND.dragStart, () => ctx.controller.beginDrag())
   ipcMain.on(SEND.dragEnd, () => ctx.controller.endDrag())
+
+  // 缩放同路：界面只报「拖的是哪条边」，起始矩形与光标都由主进程读
+  ipcMain.on(SEND.resizeStart, (_e, edge: ResizeEdge) => {
+    ctx.controller.beginResize(edge)
+  })
+  ipcMain.on(SEND.resizeEnd, () => ctx.controller.endResize())
 
   // 地址栏折叠同样走单向消息：它只是一次版面切换，状态由主进程持有并回传
   ipcMain.on(SEND.setAddressOpen, (_e, input: { open: boolean }) => {

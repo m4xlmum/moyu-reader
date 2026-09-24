@@ -10,6 +10,7 @@ import type {
   HotkeyInfo,
   PresetSite,
   Rect,
+  ResizeEdge,
   SiteRecord,
   TabState,
   WindowRuntime
@@ -97,6 +98,16 @@ export const BROADCAST = {
 export const SEND = {
   dragStart: 'window:dragStart',
   dragEnd: 'window:dragEnd',
+  /**
+   * 拖动窗口的边缘改大小。
+   *
+   * 与拖动同一套道理：界面只报「拖的是哪条边」，**起始矩形与光标位置都由主进程读**
+   * （渲染进程读不到全局光标，指针一离开窗口它就收不到事件了）。
+   * 于是两边不必各存一份几何，也不会出现「界面算出来的矩形与窗口实际的不一致」。
+   * 载荷见 ResizeEdge；缩放严格保持 16:9，算它的只有 geometry.resizeRect 一处。
+   */
+  resizeStart: 'window:resizeStart',
+  resizeEnd: 'window:resizeEnd',
   /** 展开或折叠地址栏。主进程据此重排版面，再回传最终状态 */
   setAddressOpen: 'window:setAddressOpen',
   /**
@@ -215,6 +226,14 @@ export interface MoyuApi {
     dragStart(): void
     /** 结束拖动 */
     dragEnd(): void
+    /**
+     * 开始拖动边缘改大小。与 dragStart 一样由主进程接过去按帧做，
+     * 界面只报「拖的是哪条边」——起始矩形与光标都在主进程那一侧读。
+     * 结果恒为 16:9，且被拖边对面那条边钉住不动。
+     */
+    resizeStart(edge: ResizeEdge): void
+    /** 结束缩放。主进程据此停表并记下新矩形 */
+    resizeEnd(): void
     /**
      * 展开或折叠地址栏。
      *

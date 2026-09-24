@@ -12,11 +12,20 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed } from 'vue'
-import { ADDRESS_H, BALL_MARGIN, BALL_SIZE, RAIL_W, TOP_BAR_H } from '@shared/constants'
+import {
+  ADDRESS_H,
+  BALL_MARGIN,
+  BALL_SIZE,
+  RAIL_W,
+  RESIZE_CORNER,
+  RESIZE_EDGE,
+  TOP_BAR_H
+} from '@shared/constants'
 import TopBar from './TopBar.vue'
 import AddressBar from './AddressBar.vue'
 import Rail from './Rail.vue'
 import Ball from './Ball.vue'
+import ResizeFrame from './ResizeFrame.vue'
 import { useConfig } from '../composables/useConfig'
 import { useBackgroundAlpha } from '../composables/useBackgroundAlpha'
 import { useTabs } from '../composables/useTabs'
@@ -60,7 +69,9 @@ const geometryVars = {
   '--moyu-address-h': `${ADDRESS_H}px`,
   '--moyu-rail-w': `${RAIL_W}px`,
   '--moyu-ball-size': `${BALL_SIZE}px`,
-  '--moyu-ball-margin': `${BALL_MARGIN}px`
+  '--moyu-ball-margin': `${BALL_MARGIN}px`,
+  '--moyu-resize-edge': `${RESIZE_EDGE}px`,
+  '--moyu-resize-corner': `${RESIZE_CORNER}px`
 }
 </script>
 
@@ -107,6 +118,13 @@ const geometryVars = {
       @toggle="toggleBall"
       @menu="openBallMenu"
     />
+
+    <!--
+      四周的缩放手柄。排在最后：它压在顶栏与右栏的留白上（那几像素本来就点不到），
+      而角上的 8×8 会切掉「设置」按钮右下角 4×4——那是 Windows 自己的做法，
+      角落让给缩放。收起态下窗口就是一颗球，没有边缘可言，因此不画。
+    -->
+    <ResizeFrame v-if="!collapsed" />
   </div>
 </template>
 

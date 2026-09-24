@@ -203,6 +203,15 @@ export interface Rect {
   height: number
 }
 
+/**
+ * 被拖动的边或角：`n` 上边、`s` 下边、`e` 右边、`w` 左边、`ne` 右上角……
+ *
+ * 放在 shared 里而不是算它的 geometry.ts 里：界面在按下手柄时要把「拖的是哪条边」
+ * 发给主进程（算缩放需要屏幕坐标，只有主进程读得到），因此它是跨进程的词汇。
+ * 真正算矩形的那一步仍然只有 geometry.ts 一处（见 resizeRect）。
+ */
+export type ResizeEdge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
+
 export interface HotkeyInfo {
   accelerator: string
   registered: boolean

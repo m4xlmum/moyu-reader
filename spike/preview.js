@@ -19,7 +19,7 @@
  *   npx electron spike/preview.js --home --theme crt-green --width 448 --height 297
  *   npx electron spike/preview.js --settings --width 560 --height 400
  *   npx electron spike/preview.js --bg 0.35        # 界面底板透明度：底板该淡，字不该淡
- *   npx electron spike/preview.js --drag-probe     # 逐个位置按一下，问「这里按下去起没起拖动」
+ *   npx electron spike/preview.js --drag-probe     # 逐个位置按一下，问「这里按下去起的是拖动还是缩放」
  *   npx electron spike/preview.js --popover --bg 0.35   # 弹出面板也是另一份文档，同样要问一遍
  *   npx electron spike/preview.js --popover --kind tabs # 面板有五张，换一张看
  *   npx electron spike/preview.js --desktop        # 界面背后垫一层模拟桌面：截图用
@@ -307,6 +307,22 @@ const MEASURE = `(() => {
     })(),
     zone,
     stripFits: document.querySelector('.strip')?.dataset.fits ?? null,
+    /*
+     * 缩放手柄的实测几何。它们**没有背景色**，截图上看不见，因此「画在哪、多大」
+     * 只能这么问；而这几像素的位置正是「有没有抢走控件的点击」的全部依据。
+     * 尺寸应当与 @shared/constants 的 RESIZE_EDGE / RESIZE_CORNER 一致（各 4 / 8）。
+     */
+    resizeHandles: [...document.querySelectorAll('[data-resize-handle]')].map((el) => {
+      const r = el.getBoundingClientRect()
+      return {
+        edge: el.getAttribute('data-resize-handle'),
+        x: Math.round(r.x),
+        y: Math.round(r.y),
+        w: Math.round(r.width),
+        h: Math.round(r.height),
+        cursor: getComputedStyle(el).cursor
+      }
+    }),
     // 逐格实测：左端、宽度，以及里面的文字有没有被省略号截掉
     tabBoxes: tabs.map((el) => {
       const r = el.getBoundingClientRect()
@@ -525,9 +541,23 @@ const DRAG_PROBE = `(() => {
   const items = [...document.querySelectorAll('.rail .stack .item')]
   const firstItem = items[0]?.getBoundingClientRect() ?? null
   const railMidX = rail ? Math.round(rail.x + rail.width / 2) : 0
+  const W = window.innerWidth
+  const H = window.innerHeight
 
+  /*
+   * 第三项是「这一点应当起的是哪一种手势」：
+   *   'resize:<边名>' —— 缩放手柄，且报上来的边名必须是这一个（拖东边报成西边，
+   *                       窗口就朝反方向长，而那种错光看截图看不出来）
+   *   省略           —— 其余一律**不该**起缩放：手柄若画大了，第一个被抢走点击的
+   *                       就是这些控件，而界面上看不出来
+   */
   const POINTS = [
-    ['顶栏左端留白', bar ? { x: Math.round(bar.x + 3), y: Math.round(bar.y + bar.height / 2) } : null],
+    /*
+     * 顶栏自己的左端留白。取 bar.x + 6 而不是 +3：最外那 4px 归**缩放手柄**
+     * （窗口左边缘的手柄是通高的，顶栏这一段也在它里面），从 4 往里才是
+     * 顶栏那 8px 内边距剩下的部分，那里按下去应当还是拖窗口。
+     */
+    ['顶栏左端留白', bar ? { x: Math.round(bar.x + 6), y: Math.round(bar.y + bar.height / 2) } : null],
     ['顶栏：导航组与地址栏之间的缝', nav ? { x: Math.round(nav.right + 2), y: Math.round(bar.y + bar.height / 2) } : null],
     ['顶栏：标签条右侧的空白（.rest）', centerOf('.zone > .rest')],
     ['顶栏：第一格标签（控件，不该拖）', centerOf('.zone .tab')],
@@ -536,27 +566,58 @@ const DRAG_PROBE = `(() => {
     ['顶栏：置顶（控件，不该拖）', centerOf('.topbar button[title*="置顶"]')],
     ['顶栏：最小化（控件，不该拖）', centerOf('.topbar button[title*="最小化"]')],
     ['顶栏：悬浮球（它自己就是拖动面）', centerOf('.ball')],
-    ['右栏顶端留白', rail ? { x: Math.round(rail.x + 2), y: Math.round(rail.y + 2) } : null],
+    /*
+     * 右栏顶端留白。顶栏藏起来时这一栏顶到 y=0，而那最上 4px 归**上边缘**的
+     * 缩放手柄（那条手柄是通宽的），纵坐标因此至少要从 6 起；
+     * 顶栏展开时 rail.y 本来就是 44，rail.y + 2 已经够。
+     */
+    ['右栏顶端留白', rail ? { x: Math.round(rail.x + 2), y: Math.max(6, Math.round(rail.y + 2)) } : null],
     ['右栏：两个功能格之间的缝', firstItem ? { x: railMidX, y: Math.round(firstItem.bottom + 1) } : null],
     ['右栏：分隔线', centerOf('.rail .sep')],
     ['右栏：滑块的小字（不该拖）', centerOf('.rail .opacity .label')],
     ['右栏：滑块的轨道（控件，不该拖）', centerOf('.rail .opacity input')],
-    ['右栏：设置（控件，不该拖）', centerOf('.rail .foot')]
+    ['右栏：设置（控件，不该拖）', centerOf('.rail .foot')],
+
+    // 四条边与四个角的中点各按一下：起缩放，且边名要对得上
+    ['上边缘', { x: Math.round(W / 2), y: 1 }, 'resize:n'],
+    ['右边缘', { x: W - 2, y: Math.round(H / 2) }, 'resize:e'],
+    ['左上角', { x: 1, y: 1 }, 'resize:nw'],
+    ['右上角', { x: W - 1, y: 1 }, 'resize:ne'],
+    ['右下角', { x: W - 1, y: H - 1 }, 'resize:se'],
+    /*
+     * 下边缘与左边缘在**真机上**归网页：正文矩形从 x=0 起、下沿到窗口底，
+     * 而网页是叠在界面之上的原生视图，界面在这两处收不到指针事件。
+     * 这一格要等「把界面提到网页之上」那套机制落地之后才真正可用
+     * （见 WindowController.setChromeOnTop）。此处只能验手柄本身在不在，
+     * 名字里写清楚，免得把这一格当成「真机上也能拖」。
+     */
+    ['下边缘（真机归网页）', { x: Math.round(W / 2), y: H - 1 }, 'resize:s'],
+    ['左边缘（真机归网页）', { x: 1, y: Math.round(H / 2) }, 'resize:w'],
+    ['左下角（真机归网页）', { x: 1, y: H - 1 }, 'resize:sw']
   ]
 
   const results = []
-  for (const [name, p] of POINTS) {
+  /*
+   * 收起态（窗口就是一颗球）**不画**手柄，那时没有「边缘」可言。
+   * 探针的点是按展开态列出来的，因此这里按实际有没有手柄来定判据：
+   * 没有手柄时，那些点全部变成「不该起缩放」——收起态若还能拖出缩放，
+   * 球就会在光标下被拉成一块方的。
+   */
+  const handles = document.querySelectorAll('[data-resize-handle]').length
+  for (const [name, p, want] of POINTS) {
+    const expect = handles > 0 ? (want ?? null) : null
     if (!p) {
-      results.push({ name, at: null, hit: null, started: null, why: '这一点算不出来' })
+      results.push({ name, at: null, hit: null, started: null, resized: null, why: '这一点算不出来' })
       continue
     }
     const hit = document.elementFromPoint(p.x, p.y)
     if (!hit) {
-      results.push({ name, at: p, hit: null, started: null, why: '这一点上没有元素' })
+      results.push({ name, at: p, hit: null, started: null, resized: null, why: '这一点上没有元素' })
       continue
     }
     const classes = typeof hit.className === 'string' ? hit.className.trim().split(/\\s+/).filter(Boolean) : []
-    const before = window.moyu.win.dragLog().starts
+    const dragBefore = window.moyu.win.dragLog().starts
+    const resizeBefore = window.moyu.win.resizeLog()
     const base = {
       bubbles: true, cancelable: true, composed: true,
       button: 0, pointerId: 1, pointerType: 'mouse', isPrimary: true,
@@ -564,11 +625,21 @@ const DRAG_PROBE = `(() => {
     }
     hit.dispatchEvent(new PointerEvent('pointerdown', { ...base, buttons: 1 }))
     hit.dispatchEvent(new PointerEvent('pointerup', { ...base, buttons: 0 }))
+    const log = window.moyu.win.resizeLog()
+    const started = window.moyu.win.dragLog().starts > dragBefore
+    const resized = log.starts > resizeBefore.starts
+    // 报上来的边名：这一点若起了缩放，就是最后一次记下的那一个
+    const edge = resized ? log.edges[log.edges.length - 1] : null
+    const ok = expect ? resized && edge === expect.slice('resize:'.length) : !resized
     results.push({
       name,
       at: p,
       hit: hit.tagName.toLowerCase() + classes.map((c) => '.' + c).join(''),
-      started: window.moyu.win.dragLog().starts > before
+      started,
+      resized,
+      edge,
+      want: expect,
+      ok
     })
   }
 
@@ -576,10 +647,22 @@ const DRAG_PROBE = `(() => {
    * 收尾对账：每个点都按下去又松开了，起停次数应当相等。
    * starts > ends 意味着有一次拖动没被收掉——那正是「窗口黏在光标上」的前身，
    * 界面给这类漏网准备了四道兜底（松手、窗口失焦、页面失焦、下一次按下重新锚定），
-   * 而这里能把它查出来。
+   * 而这里能把它查出来。缩放的两条路（开始 / 结束）同此。
    */
   const log = window.moyu.win.dragLog()
-  return { points: results, starts: log.starts, ends: log.ends, balanced: log.starts === log.ends }
+  const rlog = window.moyu.win.resizeLog()
+  return {
+    points: results,
+    handles,
+    starts: log.starts,
+    ends: log.ends,
+    balanced: log.starts === log.ends,
+    resizeStarts: rlog.starts,
+    resizeEnds: rlog.ends,
+    resizeBalanced: rlog.starts === rlog.ends,
+    // 手势判对的那些点：一条条按名字列出来，「哪些对哪些不对」一眼看得出
+    bad: results.filter((p) => p.ok === false).map((p) => p.name)
+  }
 })()`
 
 
@@ -707,9 +790,23 @@ app.whenReady().then(async () => {
     dragProbe = await run(DRAG_PROBE)
     for (const p of dragProbe.points) {
       const mark = p.started ? '拖' : p.started === false ? '不拖' : '？'
-      console.log(`DRAG ${mark} ${p.name} → ${p.hit ?? p.why ?? '?'}`)
+      // 手势判对与否：'✓' / '✗' / 这一点没算出判据（'·'）
+      const verdict = p.ok === true ? '✓' : p.ok === false ? '✗' : '·'
+      const size = p.want ? ` ${p.want}${p.edge ? `→${p.edge}` : ''}` : ''
+      console.log(`DRAG ${verdict} ${mark} ${p.name} → ${p.hit ?? p.why ?? '?'}${size}`)
     }
-    console.log(`DRAG_LOG ${JSON.stringify({ starts: dragProbe.starts, ends: dragProbe.ends, balanced: dragProbe.balanced })}`)
+    console.log(`DRAG_BAD ${JSON.stringify(dragProbe.bad)}`)
+    console.log(`DRAG_HANDLES ${dragProbe.handles}`)
+    console.log(
+      `DRAG_LOG ${JSON.stringify({
+        starts: dragProbe.starts,
+        ends: dragProbe.ends,
+        balanced: dragProbe.balanced,
+        resizeStarts: dragProbe.resizeStarts,
+        resizeEnds: dragProbe.resizeEnds,
+        resizeBalanced: dragProbe.resizeBalanced
+      })}`
+    )
   }
 
   if (page === 'home' && has('--themes')) {
