@@ -153,12 +153,12 @@ function goHome(): void {
 /**
  * 紧挨着起始页那颗键的「设置」：系统设置的入口，也是它自己的出口。
  *
- * 与起始页同一套判据——再点一次就原路返回。它原先待在右栏栏底（用户要求
- * 搬到左上角并换成图标）：两屏的键摆在一起，「这两屏不是标签页、各有各的
+ * 与起始页同一套判据——再点一次就原路返回。它原先待在右栏栏底、写着「设置」两个字
+ * （用户要求搬到左上角并换成图标）：两屏的键摆在一起，「这两屏不是标签页、各有各的
  * 进出口」才一眼看得明白，而栏底那一格在小窗口里本来就会被滚出视野。
  *
- * 图标是这一套里那个「三条带旋钮的滑杆」（Icon 的 settings），不是齿轮：
- * 齿轮的齿在 24 视框里画不准，那一枚为什么不长齿轮，Icon.vue 里有账。
+ * 图标是这一套里那枚齿轮（Icon 的 settings）。这一枚原先画的是滑杆，用户点名要齿轮，
+ * 齿怎么画准的账记在 Icon.vue 里。
  */
 function toggleSettings(): void {
   void (props.screen === 'settings' ? window.moyu.ui.leaveScreen() : window.moyu.ui.openSettings())
@@ -188,8 +188,7 @@ function toggleSettings(): void {
         <Icon name="home" />
       </button>
       <!--
-        设置。这一套图标里它长得像三条带旋钮的滑杆，不是齿轮——为什么不是齿轮，
-        见 Icon.vue 里那一枚上的注释。
+        设置。图标是这一套里那枚齿轮（齿怎么画准的账见 Icon.vue 里那一枚）。
       -->
       <button
         class="icon"
