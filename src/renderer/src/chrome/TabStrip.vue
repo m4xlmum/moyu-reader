@@ -30,14 +30,6 @@ import Icon from './Icon.vue'
 const props = defineProps<{
   tabs: TabState[]
   activeTabId: string | null
-  /**
-   * 正文区正停在自家哪一屏上时的名字（起始页 / 系统设置），看着网页时为 null。
-   *
-   * 只在让位成下拉清单时用得上：那时这一条缩成一枚按钮，按钮上写的是
-   * 「正在看什么」。停在自家那两屏上时没有哪个标签是当前页，写它的名字
-   * 才不会是一句「新标签页」那样的假话。
-   */
-  screenTitle: string | null
 }>()
 
 /** 标签之间的间距，与 .zone 的 gap 一致；算容量时要用到 */
@@ -65,8 +57,16 @@ const fits = ref(true)
 
 const activeTab = computed(() => props.tabs.find((t) => t.id === props.activeTabId) ?? null)
 
-/** 让位成下拉清单时按钮上的字：当前那张网页的标题，或者是自家那一屏的名字 */
-const activeTitle = computed(() => activeTab.value?.title || props.screenTitle || '标签页')
+/**
+ * 让位成下拉清单时按钮上的字：当前那张网页的标题。
+ *
+ * 停在起始页 / 系统设置上时**不写那一屏的名字**（用户要求）：这一条是标签条，
+ * 上面写的每一个词都该是「一张网页」。那两屏不是标签页，名字出现在这里，
+ * 读起来就是一个叫「系统设置」的标签——正是先前那版改掉的东西，
+ * 只因这一枚按钮把它又漏了回来。没有当前网页时它就是一格中性的「标签页」，
+ * 数一数右边那枚小牌就知道开着几张。
+ */
+const activeTitle = computed(() => activeTab.value?.title || '标签页')
 
 function measure(): void {
   const z = zone.value
