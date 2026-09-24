@@ -477,7 +477,7 @@ function save(): void {
 .error {
   margin-top: 10px;
   font-size: 12px;
-  color: #b42318;
+  color: var(--moyu-danger, #b42318);
 }
 
 .actions {
@@ -505,8 +505,13 @@ function save(): void {
   cursor: pointer;
 }
 
+/*
+ * 悬停的那一层过去是 5% 的黑（叠在纸白面板上是 #f2f2f2）。改成令牌之后
+ * 纸白下是 #f3f4f6——差 2/255，换来的是它在暗夜下真的看得见：
+ * 5% 的黑叠在 #16181d 上，与没悬停时是同一个颜色。
+ */
 .btn:hover:not(:disabled) {
-  background: rgba(17, 24, 39, 0.05);
+  background: var(--moyu-surface-hover, rgba(17, 24, 39, 0.05));
 }
 
 .btn:disabled {
@@ -517,7 +522,7 @@ function save(): void {
 .btn.primary {
   border-color: transparent;
   background: var(--moyu-accent, #2563eb);
-  color: #ffffff;
+  color: var(--moyu-on-fill, #ffffff);
 }
 
 .btn.primary:hover:not(:disabled) {

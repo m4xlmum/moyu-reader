@@ -269,7 +269,8 @@ function goHome(): void {
 }
 
 .icon.danger:hover {
-  color: #ffffff;
+  /* 危险色在深色主题里是亮的（#ff8a8a），上面的字得跟着翻面 */
+  color: var(--moyu-on-fill);
   background: var(--moyu-danger);
 }
 
@@ -289,7 +290,7 @@ function goHome(): void {
   min-width: 120px;
   max-width: 260px;
   padding: 0 12px;
-  border-radius: 13px;
+  border-radius: var(--moyu-radius-pill);
   background: var(--moyu-surface-hover);
   color: var(--moyu-text-dim);
   transition: background 120ms ease-out, color 120ms ease-out;

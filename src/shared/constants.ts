@@ -227,10 +227,17 @@ export const SETTINGS_TITLE = '系统设置'
 export type HomeWorld = 'modern' | 'terminal'
 
 /**
- * 起始页主题。
+ * 主题。
  *
  * 三个主题 = 两套世界：现代配色两套，荧光屏一套。
- * 主题只在起始页生效——它是「自己的一页」，换个样子不会影响阅读网页时的观感。
+ *
+ * 主题管的是**整个界面**：顶栏、地址栏、标签条、右栏、悬浮球、弹出面板、系统设置页，
+ * 以及起始页自己。四份文档各加载同一份 styles/themes.css，再各自把主题名写到
+ * html[data-theme] 上（见 renderer/src/composables/useTheme.ts）——文档之间没有
+ * 继承路径，只能各自写一遍。
+ *
+ * **网页永远不受影响**：访客页面是另一个 WebContentsView，拿不到这份样式表，
+ * 也拿不到这个属性。读懂这一条就明白它的边界在哪。
  */
 export type HomeTheme = 'paper' | 'night' | 'crt-green'
 

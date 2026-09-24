@@ -80,7 +80,7 @@ input {
 
 ::-webkit-scrollbar-thumb {
   background: var(--moyu-border);
-  border-radius: 4px;
+  border-radius: var(--moyu-radius-sm);
 }
 
 ::-webkit-scrollbar-thumb:hover {

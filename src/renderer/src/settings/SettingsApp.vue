@@ -22,6 +22,7 @@ import BallGlyph from '../chrome/BallGlyph.vue'
 import Icon from '../chrome/Icon.vue'
 import BallIconCropper from './BallIconCropper.vue'
 import { useBallIcon } from '../composables/useBallIcon'
+import { useTheme } from '../composables/useTheme'
 
 type SectionKey = 'general' | 'stealth' | 'hotkey' | 'data' | 'about'
 
@@ -39,6 +40,9 @@ const hotkeys = ref<{ bossMinimize: HotkeyInfo; bossHideToTray: HotkeyInfo } | n
 const hotkeyMessage = ref<string>('')
 const capturing = ref<'bossMinimize' | 'bossHideToTray' | null>(null)
 
+/** 设置页自己也跟着主题变——改主题的人正是站在这页上，不跟就说不过去 */
+useTheme(config)
+
 const sizePresets = computed(() => Object.keys(SIZE_PRESETS) as SizePreset[])
 const SIZE_LABEL: Record<SizePreset, string> = {
   mini: '迷你',
@@ -50,7 +54,7 @@ const SIZE_LABEL: Record<SizePreset, string> = {
 /** 版本号来自构建时写入的 package.json，见 electron.vite.config.ts */
 const APP_VERSION = __APP_VERSION__
 
-/** 当前起始页主题的一句话说明，取自主题表，不在模板里再写一遍 */
+/** 当前主题的一句话说明，取自主题表，不在模板里再写一遍 */
 const themeHint = computed(
   () => HOME_THEMES.find((t) => t.id === config.value?.ui.homeTheme)?.hint ?? ''
 )
@@ -115,7 +119,8 @@ let offConfig: (() => void) | null = null
 onMounted(async () => {
   config.value = await window.moyu.config.get()
   hotkeys.value = await window.moyu.hotkey.list()
-  // 起始页也能换主题，那一边改完只有这条广播会通知到这里。
+  // 起始页也能换主题，那一边改完只有这条广播会通知到这里；
+  // 这一页自己改主题时也是同一条路——配置一变，四份文档一起重画。
   // 本页自己发的 patch 也会回广播一次，值相同，不冲突。
   offConfig = window.moyu.config.onChanged((next) => {
     config.value = next
@@ -323,7 +328,7 @@ function setSizePreset(preset: SizePreset): void {
           </div>
 
           <div class="field">
-            <label>起始页主题</label>
+            <label>主题</label>
             <div class="control column">
               <div class="themes">
                 <button
@@ -339,9 +344,10 @@ function setSizePreset(preset: SizePreset): void {
             </div>
           </div>
           <p class="hint">
-            主题不只换配色，还决定起始页披哪一层皮：纸白与暗夜是现代行式列表，磷绿是命令行。
+            主题不只换配色，还决定披哪一层皮：纸白与暗夜是现代行式列表，磷绿是命令行。
             三套主题的划分与操作完全一致，换的只是观感。
-            它只作用在起始页上——那是「自己的一页」，换个样子不影响阅读网页时的观感。
+            它作用在<b>整个界面</b>上——顶栏、地址栏、右栏、悬浮球、弹出面板与这一页都跟着换，
+            <b>网页永远不受影响</b>：那是你正在读的东西，不该被界面的皮肤染上颜色。
             起始页最底下那条状态行里也能直接换。
           </p>
 
@@ -605,14 +611,15 @@ function setSizePreset(preset: SizePreset): void {
   display: flex;
   height: 100%;
   /* 底板画在这里，而不是只画在 html/body 上：见样式表开头的说明 */
-  background: var(--bg);
+  background: var(--moyu-ground);
 }
 
 .sidebar {
   flex: 0 0 160px;
   padding: 14px 10px;
-  background: #eef0f3;
-  border-right: 1px solid var(--border);
+  /* 凹面，不是卡面：它在浅色下比页底深、在深色下比页底暗，见 themes.css */
+  background: var(--moyu-sunken);
+  border-right: 1px solid var(--moyu-hairline);
 }
 
 .brand {
@@ -626,19 +633,19 @@ function setSizePreset(preset: SizePreset): void {
   padding: 7px 10px;
   margin-bottom: 2px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--moyu-radius);
   background: none;
-  color: var(--text-dim);
+  color: var(--moyu-text-dim);
   text-align: left;
 }
 
 .nav-item:hover {
-  background: #e2e5ea;
+  background: var(--moyu-sunken-hover);
 }
 
 .nav-item.active {
-  background: var(--card);
-  color: var(--accent);
+  background: var(--moyu-surface);
+  color: var(--moyu-accent);
   font-weight: 600;
 }
 
@@ -656,9 +663,9 @@ h2 {
 .card {
   padding: 14px 16px;
   margin-bottom: 14px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  background: var(--moyu-surface);
+  border: 1px solid var(--moyu-hairline);
+  border-radius: var(--moyu-radius-tag);
 }
 
 .field {
@@ -671,7 +678,7 @@ h2 {
 .field > label {
   flex: 0 0 150px;
   padding-top: 2px;
-  color: var(--text-dim);
+  color: var(--moyu-text-dim);
 }
 
 .control {
@@ -696,23 +703,23 @@ h2 {
 
 .control button {
   padding: 4px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: #fff;
+  border: 1px solid var(--moyu-hairline);
+  border-radius: var(--moyu-radius);
+  background: var(--moyu-surface);
 }
 
 .control button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--moyu-accent);
+  color: var(--moyu-accent);
 }
 
 .control button.danger {
-  color: var(--danger);
+  color: var(--moyu-danger);
 }
 
 .control button.danger:hover {
-  border-color: var(--danger);
-  background: #fdf3f2;
+  border-color: var(--moyu-danger);
+  background: var(--moyu-danger-soft);
 }
 
 .themes {
@@ -721,10 +728,17 @@ h2 {
   gap: 6px;
 }
 
+/*
+ * 选中那一格的面：一张专门给「上面要压字」用的淡强调底。
+ *
+ * 它比顶栏高亮按钮用的 --moyu-accent-soft 浅一档，理由见 themes.css：
+ * 那张面上是图标，这一张面上是正文，同样的强调色字在 10% 的底上差 0.01 到不了 4.5。
+ * 值本身与它一直以来的字面量 #eef4fd 相同——纸白下的观感一个像素都没变。
+ */
 .control button.on {
-  border-color: var(--accent);
-  background: #eef4fd;
-  color: var(--accent);
+  border-color: var(--moyu-accent);
+  background: var(--moyu-selected);
+  color: var(--moyu-accent);
   font-weight: 600;
 }
 
@@ -748,7 +762,7 @@ h2 {
     padding: 8px 10px;
     overflow-x: auto;
     border-right: none;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--moyu-hairline);
   }
 
   .brand {
@@ -784,27 +798,27 @@ h2 {
   width: 100%;
   margin-top: 8px;
   padding: 6px 10px;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
+  border: 1px solid var(--moyu-accent);
+  border-radius: var(--moyu-radius);
   outline: none;
 }
 
 .value {
   min-width: 40px;
-  color: var(--text-dim);
+  color: var(--moyu-text-dim);
 }
 
 .dim {
-  color: var(--text-dim);
+  color: var(--moyu-text-dim);
 }
 
 .warn {
-  color: var(--danger);
+  color: var(--moyu-danger);
 }
 
 .hint {
   margin: 6px 0 0;
-  color: var(--text-dim);
+  color: var(--moyu-text-dim);
   line-height: 1.6;
 }
 
@@ -832,16 +846,17 @@ h2 {
   display: grid;
   place-items: center;
   overflow: hidden;
+  /* 球是圆的这件事不跟着形态变方，见 themes.css 末尾那一段 */
   border-radius: 50%;
-  border: 1px solid var(--border);
-  background: #ffffff;
-  color: var(--text-dim);
+  border: 1px solid var(--moyu-hairline);
+  background: var(--moyu-surface);
+  color: var(--moyu-text-dim);
 }
 
 .ball-icons .ball-chip.on {
   border-color: transparent;
-  background: var(--accent);
-  color: #ffffff;
+  background: var(--moyu-accent);
+  color: var(--moyu-on-fill);
 }
 
 .ball-face {
@@ -867,8 +882,8 @@ h2 {
 
 code {
   padding: 1px 5px;
-  background: #eef0f3;
-  border-radius: 4px;
+  background: var(--moyu-sunken);
+  border-radius: var(--moyu-radius-sm);
   font-family: Consolas, monospace;
 }
 </style>

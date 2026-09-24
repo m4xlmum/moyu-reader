@@ -8,6 +8,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { Bookmark, HistoryEntry, PresetSite, SiteRecord, TabState } from '@shared/types'
 import { useConfig } from '../composables/useConfig'
 import { useBackgroundAlpha } from '../composables/useBackgroundAlpha'
+import { useTheme } from '../composables/useTheme'
 
 type Kind = 'sites' | 'history' | 'bookmarks' | 'uaZoom' | 'tabs'
 
@@ -20,6 +21,8 @@ const kind = (new URLSearchParams(location.search).get('kind') ?? 'sites') as Ki
  */
 const { config } = useConfig()
 useBackgroundAlpha(config)
+/** 面板也是另一份文档，主题同样得自己读一遍 */
+useTheme(config)
 
 const mySites = ref<SiteRecord[]>([])
 const presets = ref<PresetSite[]>([])

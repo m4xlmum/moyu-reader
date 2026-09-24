@@ -133,7 +133,8 @@ watch(
   flex: 0 0 auto;
   border-radius: 50%;
   background: var(--moyu-accent);
-  color: #ffffff;
+  /* 球面就是一块实色填充，上面的图形跟着填充的深浅翻面，见 themes.css */
+  color: var(--moyu-on-fill);
   opacity: 0.55;
   box-shadow: 0 2px 8px rgba(17, 24, 39, 0.28);
   transition: opacity 140ms ease-out, box-shadow 140ms ease-out;
@@ -213,7 +214,7 @@ watch(
   opacity: 1;
   box-shadow:
     0 1px 4px rgba(17, 24, 39, 0.3),
-    inset 0 0 0 2px rgba(255, 255, 255, 0.45);
+    inset 0 0 0 2px color-mix(in srgb, var(--moyu-on-fill) 45%, transparent);
 }
 
 .ball:focus-visible {

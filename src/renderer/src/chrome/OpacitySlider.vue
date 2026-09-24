@@ -140,7 +140,7 @@ function onInput(event: Event): void {
  */
 .slider::-webkit-slider-runnable-track {
   height: 14px;
-  border-radius: 7px;
+  border-radius: var(--moyu-radius-track);
   background-image: linear-gradient(var(--moyu-border), var(--moyu-border));
   background-size: 100% 3px;
   background-position: center;

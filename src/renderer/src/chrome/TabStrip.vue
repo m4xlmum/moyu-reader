@@ -334,7 +334,7 @@ function hideBrokenIcon(event: Event): void {
   align-items: center;
   gap: 6px;
   padding: 0 10px;
-  border-radius: 13px;
+  border-radius: var(--moyu-radius-pill);
   background: var(--moyu-surface-hover);
   color: var(--moyu-text-dim);
   white-space: nowrap;
@@ -355,7 +355,7 @@ function hideBrokenIcon(event: Event): void {
   flex: 0 0 auto;
   min-width: 16px;
   padding: 0 4px;
-  border-radius: 8px;
+  border-radius: var(--moyu-radius-tag);
   background: var(--moyu-surface-active);
   color: var(--moyu-text-dim);
   font-size: 11px;

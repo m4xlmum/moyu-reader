@@ -161,8 +161,8 @@ function bootstrap(): void {
     onClickIcon: () => controller.toggleFromTray(),
     // 双击的第二次点击不切换，只补一次「提到最前」
     onRepeatedClick: () => controller.raiseFromTray(),
-    // 菜单里的「现形」意图明确，只把它提到最前，不切换
-    onReveal: () => controller.showForeground(),
+    // 菜单里的「现形」意图明确：提到最前，并且把整扇窗恢复不透明
+    onReveal: () => controller.revealFully(),
     onOpenSettings: () => showSettings(),
     onQuit: () => quit()
   })

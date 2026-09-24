@@ -53,7 +53,13 @@ export interface UiConfig {
   topBarOpen: boolean
   /** 显示右侧功能栏。顶栏隐藏时这一栏会被强制保留，见 WindowRuntime.railVisible */
   railOpen: boolean
-  /** 起始页主题。只在起始页生效，不影响阅读网页时的观感 */
+  /**
+   * 主题。管整个界面（顶栏、右栏、悬浮球、面板、系统设置页与起始页），
+   * 不影响阅读网页时的观感。见 @shared/constants 的 HomeTheme。
+   *
+   * 键名仍叫 homeTheme：它从起始页那一页长起来，如今管得宽了。改名要动迁移阶梯
+   * （CONFIG_VERSION 10→11）与校验逻辑，而这个名字用户看不到，不如把注释写准。
+   */
   homeTheme: HomeTheme
   /**
    * 界面底板透明度 0–1。

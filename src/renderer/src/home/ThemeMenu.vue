@@ -66,7 +66,7 @@ onUnmounted(() => {
       class="trigger"
       :aria-expanded="open"
       aria-haspopup="listbox"
-      :title="`起始页主题：${current?.label ?? ''}`"
+      :title="`主题：${current?.label ?? ''}`"
       @click="open = !open"
     >
       <template v-if="variant === 'terminal'">
@@ -79,7 +79,7 @@ onUnmounted(() => {
       <Icon name="chevron-down" :size="11" />
     </button>
 
-    <div v-if="open" class="panel" role="listbox" aria-label="起始页主题">
+    <div v-if="open" class="panel" role="listbox" aria-label="主题">
       <button
         v-for="t in HOME_THEMES"
         :key="t.id"

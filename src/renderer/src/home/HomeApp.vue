@@ -25,6 +25,7 @@ import StartModern from './StartModern.vue'
 import StartTerminal from './StartTerminal.vue'
 import { useBox } from './useBox'
 import { rowsOf } from './useRows'
+import { applyThemeToDocument } from '../composables/useTheme'
 import type { HomeTile } from './types'
 
 const mySites = ref<SiteRecord[]>([])
@@ -32,7 +33,7 @@ const history = ref<HistoryEntry[]>([])
 const bookmarks = ref<Bookmark[]>([])
 const config = ref<AppConfig | null>(null)
 const query = ref('')
-/** 起始页主题，见 config.ui.homeTheme */
+/** 主题，见 config.ui.homeTheme。它管的是整个界面，不只是这一页 */
 const theme = ref<HomeTheme>(DEFAULT_HOME_THEME)
 /** 开着几张标签页。两套世界的页眉都要报这个数 */
 const tabCount = ref(0)
@@ -189,15 +190,14 @@ function resume(): void {
 // ---------------------------------------------------------------- 主题
 
 /**
- * 主题与形态都写在 html 的属性上，样式表按属性挑变量组（见 styles/home.css）。
+ * 主题与形态都写在 html 的属性上，样式表按属性挑变量组（见 styles/themes.css）。
  *
- * 不绑 class：属性选择器在样式表里更直白，也不会与作用域样式打架——
- * 作用域样式会给选择器末尾补一个 data-v 属性，属性选择器不参与那套改写。
+ * 具体怎么写交给 useTheme 里那一份实现——界面、面板、设置页三处写的也是它，
+ * 这里只额外留一个 theme ref 给主题菜单用。
  */
 function applyTheme(next: HomeTheme): void {
   theme.value = next
-  document.documentElement.dataset.theme = next
-  document.documentElement.dataset.world = worldOfTheme(next)
+  applyThemeToDocument(next)
 }
 
 /**

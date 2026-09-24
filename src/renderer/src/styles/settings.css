@@ -6,20 +6,13 @@
  * 「背景透明」是 user origin 的 !important，压得过作者样式表，html/body 那一层挡不住
  * （见 tabManager.applyPageStyles 与 spike/ownpage-bg.js）。起始页的 `.start` 也是这么做的。
  *
- * 注意这一页与起始页共用一套排版惯例，但**不共享主题**：主题是起始页的东西。
+ * 注意这一页与起始页共用一套排版惯例，也**共用同一个主题**：配色与字体来自
+ * styles/themes.css，这一页只声明它自己的排版。过去它有一份自己的小调色板
+ * （--bg/--card/--border/…），主题管到整个界面之后那份就成了第二份真相——
+ * 换到暗夜，别的界面都黑了，只有这一页还亮着。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-:root {
-  --bg: #f6f7f9;
-  --card: #ffffff;
-  --border: #e3e5e8;
-  --text: #1f2328;
-  --text-dim: #5c6370;
-  --accent: #2f6fd0;
-  --danger: #c0392b;
-  --moyu-font: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', system-ui, sans-serif;
-}
 
 * {
   box-sizing: border-box;
@@ -30,14 +23,27 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--moyu-ground);
+  color: var(--moyu-text);
   font-family: var(--moyu-font);
   font-size: 13px;
 }
 
 #app {
   height: 100%;
+}
+
+/*
+ * 控件要继承正文的颜色。
+ *
+ * 这一条不是可选项：按钮与输入框在 UA 样式表里带自己的颜色（buttontext /
+ * fieldtext），它们不继承。不写这一条，设置页上的按钮字就是 Chromium 给的那个
+ * 黑——纸白下看着没事（黑与 #111827 谁也分不出来），暗夜下就成了黑底黑字，
+ * 探针量出来 1.18:1。base.css 里 chrome 与面板早就有这一条，这一页缺了它。
+ */
+button,
+input {
+  color: inherit;
 }
 
 button {

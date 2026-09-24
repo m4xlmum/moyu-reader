@@ -1,22 +1,22 @@
 /*
  * 窗口 chrome（顶栏、地址栏、右侧功能栏）的设计令牌。
  *
- * 与首页同属一套：中性的浅色界面，克制的分隔线，一个强调色。
- * 参照浏览器自身的工具栏——工具栏退到内容之后，不做视觉主张。
+ * 这里**不再有颜色**：颜色全部来自 styles/themes.css，按 html[data-theme] 挑。
+ * 留下的是这层拼接——把主题给的三通道与「界面底板透明度」合成一个面。
+ * 之所以非要有这一层：`--moyu-alpha` 是运行时写在文档根上的，
+ * 而自定义属性在**声明它的那个元素上**就把 var() 替换定了，所以
+ * `rgb(<三通道> / var(--moyu-alpha))` 只能写在同一层、同一条规则里。
  *
  * 注意：不做毛玻璃。backdrop-filter 无法模糊透明窗口背后的桌面
  * （它只能模糊窗口自身的内容），在这里效果是错的。
  *
- * 各区域的**尺寸**不在这里：顶栏高、地址栏高、右侧栏宽是主进程排版用的常量
+ * 各区域的**尺寸**也不在这里：顶栏高、地址栏高、右侧栏宽是主进程排版用的常量
  * （@shared/constants），由 ChromeApp 下发成 CSS 变量。写死在这里就成了第二份
  * 真相，两边迟早差上几个像素，正文就会被栏压住一条。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 :root {
-  --moyu-radius: 6px;
-  --moyu-radius-sm: 4px;
-
   /*
    * 界面底板透明度 0–1。默认 1（不透明），由「背景透明度」那条滑块改，
    * ChromeApp 与 PopoverApp 各在自己的**文档根**上写一次（见 useBackgroundAlpha：
@@ -30,28 +30,14 @@
   --moyu-alpha: 1;
 
   /*
-   * 面。写成 rgb 三通道 + 一个 alpha，才能让同一个颜色整体变淡；
-   * 写成 #ffffff 或 rgba(..., 1) 都没法再被一个变量整体调淡。
+   * 面。三通道由主题给（themes.css 的 --moyu-*-rgb），alpha 由这里给，
+   * 于是同一个颜色既能被换主题、又能被一条滑块整体调淡。
    */
-  --moyu-surface: rgb(255 255 255 / var(--moyu-alpha));
-  --moyu-surface-hover: rgb(243 244 246 / var(--moyu-alpha));
-  --moyu-surface-active: rgb(232 234 238 / var(--moyu-alpha));
-
-  /* 文字。次级文字同样满足 4.5:1 */
-  --moyu-ink: #111827;
-  --moyu-text: #111827;
-  --moyu-text-dim: #5b6472;
-  --moyu-text-faint: #6f7683;
+  --moyu-surface: rgb(var(--moyu-surface-rgb) / var(--moyu-alpha));
+  --moyu-surface-hover: rgb(var(--moyu-surface-hover-rgb) / var(--moyu-alpha));
+  --moyu-surface-active: rgb(var(--moyu-surface-active-rgb) / var(--moyu-alpha));
 
   /* 线。分隔线也是画在底板上的，底板淡了它不淡就会剩下几条浮空的线 */
-  --moyu-border: rgb(209 213 219 / var(--moyu-alpha));
-  --moyu-hairline: rgb(229 231 235 / var(--moyu-alpha));
-
-  /* 强调色只用于焦点、当前与主操作。它是「状态」，不跟着底板变淡 */
-  --moyu-accent: #2563eb;
-  --moyu-accent-hover: #1d4ed8;
-  --moyu-accent-soft: rgba(37, 99, 235, 0.1);
-  --moyu-danger: #b91c1c;
-
-  --moyu-font: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', system-ui, sans-serif;
+  --moyu-border: rgb(var(--moyu-border-rgb) / var(--moyu-alpha));
+  --moyu-hairline: rgb(var(--moyu-hairline-rgb) / var(--moyu-alpha));
 }

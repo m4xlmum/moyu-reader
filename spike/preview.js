@@ -20,6 +20,8 @@
  *   npx electron spike/preview.js --home          # 起始页
  *   npx electron spike/preview.js --home --themes # 起始页三套主题各截一张（走真实换主题那条路）
  *   npx electron spike/preview.js --home --theme crt-green --width 448 --height 297
+ *   npx electron spike/preview.js --theme night    # 界面也跟主题走，换一套配色看顶栏与右栏
+ *   npx electron spike/preview.js --settings --theme crt-green   # 设置页同理
  *   npx electron spike/preview.js --settings --width 560 --height 400
  *   npx electron spike/preview.js --bg 0.35        # 界面底板透明度：底板该淡，字不该淡
  *   npx electron spike/preview.js --drag-probe     # 逐个位置按一下，问「这里按下去起的是拖动还是缩放」
@@ -844,6 +846,14 @@ app.whenReady().then(async () => {
   const zoom = BALL_ZOOM > 1 ? `-zoom${BALL_ZOOM}` : ''
   // 最大化那一档与展开态是两张不同的图（一张是右上角一小块、一张是整扇窗），不能互相覆盖
   const max = MAXIMIZED ? '-max' : ''
+  /*
+   * 主题也写进名字。
+   *
+   * 起始页一直这么干（三套主题各截一张是它的常规用法）；界面、面板与设置页
+   * 这次也跟着主题走了，但它们的图名 README 在用，不能因为多了一个默认值就
+   * 全体改名——因此这三页只在 --theme 明确指到非默认主题时才缀上。
+   */
+  const themeTag = page === 'home' || theme !== 'paper' ? `-${theme}` : ''
 
   /*
    * --drag-probe：先按一遍，再照第一张。
@@ -909,8 +919,8 @@ app.whenReady().then(async () => {
   } else {
     const name =
       page !== 'chrome'
-        ? `${page}${page === 'home' ? `-${theme}` : page === 'popover' ? `-${KIND}` : ''}${size}${tabs}${bg}${ball}${zoom}`
-        : `preview-${mode}${max}${size}${tabs}${bg}${ball}${zoom}`
+        ? `${page}${themeTag}${page === 'popover' ? `-${KIND}` : ''}${size}${tabs}${bg}${ball}${zoom}`
+        : `preview-${mode}${max}${themeTag}${size}${tabs}${bg}${ball}${zoom}`
     await shoot(name)
 
     /*

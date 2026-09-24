@@ -39,6 +39,7 @@ import ResizeFrame from './ResizeFrame.vue'
 import Icon from './Icon.vue'
 import { useConfig } from '../composables/useConfig'
 import { useBackgroundAlpha } from '../composables/useBackgroundAlpha'
+import { useTheme } from '../composables/useTheme'
 import { useTabs } from '../composables/useTabs'
 import { useWindowState } from '../composables/useWindowState'
 
@@ -48,6 +49,9 @@ const { state, collapse, expand, restore } = useWindowState()
 
 /** 底板透明度写在文档根上，理由见 useBackgroundAlpha */
 useBackgroundAlpha(config)
+
+/** 顶栏、地址栏、右栏、悬浮球都跟着主题走。网页在另一个 WebContentsView 里，管不到 */
+useTheme(config)
 
 const collapsed = computed(() => state.value?.mode === 'collapsed')
 const addressOpen = computed(() => state.value?.addressOpen ?? false)
