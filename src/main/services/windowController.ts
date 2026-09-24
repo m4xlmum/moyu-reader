@@ -57,7 +57,7 @@ export interface ControllerDeps {
   registry: import('./windowRegistry').WindowRegistry
   preloadPath: string
   rendererUrl: string
-  /** 收起或展开时通知外部（用于同步标签页视图的显隐与静音） */
+  /** 回到展开态、或离开展开态时通知外部（用于同步标签页视图的显隐、媒体的暂停与静音） */
   onVisibilityChange: (visible: boolean) => void
   /**
    * 正文区矩形变化时通知外部，由外部重新摆放标签页视图。
@@ -482,7 +482,8 @@ export class WindowController {
     log.info(`窗口状态：${previous} → ${next}`)
 
     // 标签页视图只在展开态绘制。收起时它们必须让位给悬浮球，
-    // 否则球的位置会露出网页内容的一角。
+    // 否则球的位置会露出网页内容的一角。收起 / 托盘 / 最小化这三种「没露出来」
+    // 的状态一视同仁：网页那一侧要一并暂停正在播的媒体（见 TabManager.setBodyVisible）。
     this.deps.onVisibilityChange(next === 'expanded')
 
     this.applySurface()

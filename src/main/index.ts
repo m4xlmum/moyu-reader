@@ -93,6 +93,8 @@ function bootstrap(): void {
     preloadPath,
     rendererUrl: rendererUrl('index'),
     onVisibilityChange: (visible) => {
+      // 隐藏（收起成球 / 进托盘 / 最小化）时网页那一侧要暂停正在播的媒体并静音，
+      // 回到展开态再恢复——见 TabManager.setBodyVisible
       tabsRef?.setBodyVisible(visible, config.get().stealth.muteMediaOnCollapse)
     },
     // 正文区是原生视图，版面一变就得显式重摆——它不跟着 CSS 走

@@ -3,7 +3,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { WebContentsView, type BaseWindow, type Session } from 'electron'
+import {
+  WebContentsView,
+  type BaseWindow,
+  type Session,
+  type WebContents,
+  type WebFrameMain
+} from 'electron'
 import { HOME_TITLE, HOME_URL, SETTINGS_TITLE, SETTINGS_URL } from '@shared/constants'
 import type { Rect, TabState } from '@shared/types'
 import { resolveInput } from '@shared/url'
@@ -26,6 +32,46 @@ const OWN_PAGE: Record<'home' | 'settings', { page: 'home' | 'settings'; url: st
   }
 
 const isOwnPage = (kind: TabKind): kind is 'home' | 'settings' => kind !== 'guest'
+
+/**
+ * 暂停网页里正在播放的音视频。**暂停，不是静音。**
+ *
+ * 收起成球或藏进托盘时窗口虽然不在屏幕上，网页那一侧仍是一个活着的渲染进程：
+ * 视频会照常往下播，用户回来时进度已经跑掉了。`setAudioMuted` 只解决听得到
+ * 的那一半（它仍然要留着——Web Audio 与我们暂停不到的播放器都靠它闭麦）。
+ *
+ * 记号打成一个展开属性（`__moyuPaused`）而不是 `data-` 属性：后者会出现在 DOM 里，
+ * 页面自己能看见。也正因为记号在元素上，页面换了播放器元素、或者整页导航走了，
+ * 这份账就自然作废，不会出现「恢复了一个已经不存在的播放器」。
+ */
+const PAUSE_PLAYING_MEDIA = `(() => {
+  let n = 0
+  for (const el of document.querySelectorAll('video, audio')) {
+    if (el.paused || el.ended) continue
+    el.__moyuPaused = true
+    el.pause()
+    n += 1
+  }
+  return n
+})()`
+
+/**
+ * 恢复**我们自己**按下去的暂停。
+ *
+ * 只认那个记号：用户自己按了暂停的视频，展开时不该被我们放起来——那比不暂停更烦。
+ * 万一 `play()` 被拦下来（自动播放策略、DRM），就让它停着：停在原处总比误放强。
+ */
+const RESUME_PAUSED_MEDIA = `(() => {
+  let n = 0
+  for (const el of document.querySelectorAll('video, audio')) {
+    if (el.__moyuPaused !== true) continue
+    delete el.__moyuPaused
+    n += 1
+    const p = el.play()
+    if (p && typeof p.catch === 'function') p.catch(() => {})
+  }
+  return n
+})()`
 
 interface TabEntry {
   id: string
@@ -322,8 +368,10 @@ export class TabManager {
   // ------------------------------------------------------------ 主体显隐
 
   /**
-   * 主体隐藏时把所有标签页视图设为不绘制并静音。
-   * 仅仅是「不绘制」还不够——网页若在播放音频，用户会立刻发现。
+   * 主体隐藏时把所有标签页视图设为不绘制、暂停正在播放的媒体并静音。
+   *
+   * 仅仅是「不绘制」远远不够：网页那一侧照常活着，视频会继续往下播，
+   * 用户回来时进度已经跑掉了（音视频一起，见那两个脚本）。
    */
   setBodyVisible(visible: boolean, muteMedia: boolean): void {
     this.bodyVisible = visible
@@ -333,12 +381,38 @@ export class TabManager {
       } catch (err) {
         log.warn('同步主体显隐失败', err)
       }
-      if (muteMedia) {
-        try {
-          t.view.webContents.setAudioMuted(!visible)
-        } catch {
-          // 页面可能已销毁
-        }
+      if (!muteMedia) continue
+      try {
+        t.view.webContents.setAudioMuted(!visible)
+      } catch {
+        // 页面可能已销毁
+      }
+      this.setMediaPaused(t.view.webContents, !visible)
+    }
+  }
+
+  /**
+   * 让一页里所有框架一起暂停 / 恢复媒体。
+   *
+   * 逐帧跑，而不是只跑主框架：视频常常住在 iframe 里（各家网站的嵌入播放器都是），
+   * 而跨源 iframe 的文档从顶层脚本够不着——主进程从 `framesInSubtree` 走没有这个限制。
+   * 一次页面动作发一帧，互不等待；单帧失败（正在销毁、已拆掉）不该拖住其余的。
+   */
+  private setMediaPaused(wc: WebContents, paused: boolean): void {
+    if (wc.isDestroyed()) return
+    const script = paused ? PAUSE_PLAYING_MEDIA : RESUME_PAUSED_MEDIA
+    let frames: WebFrameMain[]
+    try {
+      frames = wc.mainFrame.framesInSubtree
+    } catch {
+      return
+    }
+    for (const frame of frames) {
+      try {
+        const done = frame.executeJavaScript(script)
+        if (done && typeof done.catch === 'function') done.catch(() => {})
+      } catch {
+        // 框架可能正在销毁
       }
     }
   }

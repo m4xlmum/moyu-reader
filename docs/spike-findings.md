@@ -42,6 +42,9 @@ Q18 起是「悬浮球图标 · 16:9 边缘缩放 · 最大化与还原 · 视�
 | Q23 | 在从未显示过的窗口里 `executeJavaScript('document.exitFullscreen()')` | **那个 promise 永不落地**——退出全屏本身照样发生（`leave-html-full-screen` 到了、窗口也还原了），但等着它的那次 `executeJavaScript` 会一直挂着 | 探针页面里两处入口都写成 fire-and-forget，失败塞进 `window.moyuErr`，轮询去读，而不是 `await` 那个 promise；`waitUntil` 替代固定延时。产品侧本来就不等（`TabManager.exitPageFullscreen()` 只 `.catch(() => {})`） |
 | Q24 | 在从未显示过的窗口里走完一趟全屏，之后这个进程里再 `loadURL('file://…')` | **`ERR_FAILED (-2)`**。对照窗口若建在那趟全屏**之后**，它连页面都载不进来 | 探针里的对照窗口必须在任何全屏流程**之前**就建好并载入（`spike/fullscreen.js control` 就是这么改的）。同属 Q21 那一类环境症状，不用改产品 |
 | Q25 | 一次 `setBounds()` 能不能把窗口正好摆成当前显示器的 `workArea` | **能**，读回与 `workArea` 逐字段相等（`0,0,1920,1032`）；隐藏窗口上同样成立 | 最大化不必分几步摆，一次到位即可——`windowController.setMaximized()` 就是这么做的，摆完照既有习惯**读回实测矩形**存进 `expandedBounds`。见 `spike/resize.js` 与 `spike/window-max.js` |
+| Q26 | 窗口收起成球（或最小化、藏进托盘）之后，网页里正在播的 `<video>` / `<audio>` 会不会自己停 | **不会**。`setVisible(false)` 只是不合成，`setAudioMuted(true)` 只是听不见——`paused` 仍是 `false`，进度照走。这是用户报的那个毛病：收起来听着没动静，回来发现片子已经跑掉一截 | 隐藏态要**真的暂停**，得在页面里做 DOM 操作（`el.pause()`）。只有我们按下去的才恢复：动过的当场打一枚展开属性 `__moyuPaused`（不是 `data-` 属性，不给页面自己的选择器添麻烦），恢复时只挑带这枚记号的。页面上用户自己按过暂停的，前后都不动它。见 `spike/media-pause.js` |
+| Q27 | 顶层的 `document.querySelectorAll` 能够到跨源 iframe 里的播放器吗 | **够不到**（不透明源的 `contentWindow.document` 直接抛），但主进程**够得到**：`webContents.mainFrame.framesInSubtree` 给出 `WebFrameMain[]`，逐个 `frame.executeJavaScript()` 就跑进了人家自己的上下文里 | 「连嵌入播放器一起暂停」只能走这条路。`data:` iframe 与真实网站里的 `<iframe src="https://…">` 在这一点上同类，因此探针用一个 `data:` iframe 就能把这条验证做实 |
+| Q28 | 隐藏的页面里，`setInterval` 还能按时上报状态吗 | **不能**：被节流到约 1 秒一次（再久还会更稀），于是「等不到回复」会**伪装成「没暂停」**——一个刚好会把被测对象判成通过的假象 | 探针页面之间改用**一问一答**（父页面 `postMessage({ask:'state'})` 问，iframe 答），消息投递不受节流影响；等待一律走 `waitUntil` 轮询而不是固定延时。产品侧不受影响（暂停是主进程推过去的，不依赖页面里的定时器） |
 
 ## 对原设计的两处修正
 
@@ -82,6 +85,10 @@ Q4 显示被裁剪区域与桌面基线完全一致（差值 0），即区域外
   （右上角那一个角已经足以到达任意 16:9 尺寸），以及最大化时保留右栏。
 - **再按一次视频的全屏键**：Q21 里那个「第二趟起退不出来」在真机上是什么症状，
   只能真机看——探针那扇窗口从头到尾没显示过，量到的是环境的脾气。
+- **真网站上的暂停与恢复**：`spike/media-pause.js` 用的是现做的 WAV 与一个 `data:`
+  iframe，验的是「这条路通不通」；B 站这类站点的播放器自己也在监听页面可见性，
+  两边同时下手时会是什么样，只能真机看。要看的是这一条：收起再展开后，
+  片子是从原处接着放，而不是从头开始或干脆不放了。
 - **裁剪弹窗的滚轮缩放**：`spike/ball-crop.js` 走的是合成 `PointerEvent` 与代码里
   那条缩放路径，滚轮事件本身（`deltaY` 的量级与符号）没有在真鼠标上过一遍。
 - **拖动的流畅度只在隐藏窗口上量过**：`spike/dragTicks.js` 量的是定时器间隔与

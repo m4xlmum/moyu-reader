@@ -29,7 +29,14 @@ export interface StealthConfig {
   autoCollapse: boolean
   /** 收起前的延迟，毫秒。收起慢、展开靠点击，避免误触 */
   hideDelayMs: number
-  /** 隐藏时暂停网页音视频 */
+  /**
+   * 隐藏时暂停网页音视频：收起成球、藏进托盘、最小化这三种「没露出来」的状态，
+   * 都算隐藏。
+   *
+   * 暂停的是**正在播的**那一些，并且只恢复由我们按下去的那些——用户自己按了
+   * 暂停的视频，回到展开态时不该被我们放起来。字段名沿用下来（原先只做静音），
+   * 现在一并把媒体真正暂停，静音仍然保留（见 tabManager 里的两个脚本）。
+   */
   muteMediaOnCollapse: boolean
   /** 从屏幕捕获中排除窗口（SetWindowDisplayAffinity） */
   contentProtection: boolean
