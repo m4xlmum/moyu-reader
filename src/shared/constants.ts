@@ -235,7 +235,7 @@ export const HOME_TITLE = '起始页'
  *
  * 与首页同属「自家页面」：带 preload、能读写配置，但它不再是一扇独立窗口——
  * 那扇窗口会出现在任务栏与 Alt+Tab 里，等于把「我在摸鱼」写在脸上。
- * 与首页一样不进标签条：入口是右侧栏栏底那一格「设置」。
+ * 与首页一样不进标签条：入口是顶栏最左那颗「起始页」右边紧挨着的那颗键。
  */
 export const SETTINGS_URL = 'moyu://settings'
 export const SETTINGS_TITLE = '系统设置'

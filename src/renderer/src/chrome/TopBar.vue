@@ -1,9 +1,12 @@
 <script setup lang="ts">
 /**
- * 顶部功能栏：导航、地址栏开关、标签页、手机 / 置顶、窗口操作。
+ * 顶部功能栏：两屏入口、导航、地址栏开关、标签页、手机 / 置顶、窗口操作。
  *
  * 地址栏本身不在这里——它默认折叠，展开时是顶栏下方独立的一行。
  * 这里只留一个开关，兼作「当前在哪」的一眼可见处。
+ *
+ * 起始页与系统设置这两屏**不是标签页**，各自在栏左占一枚键（见下），
+ * 因此它们不出现在标签条里，也不跟着标签页一起被关掉。
  *
  * 标签条与它的让位（窗口窄时退回下拉清单）都在 TabStrip 里，
  * 那一条要按实测宽度决定自己让不让位，是顶栏里唯一需要知道自己有多宽的东西。
@@ -146,6 +149,20 @@ function winClose(): void {
 function goHome(): void {
   void (props.screen === 'home' ? window.moyu.ui.leaveScreen() : window.moyu.ui.openHome())
 }
+
+/**
+ * 紧挨着起始页那颗键的「设置」：系统设置的入口，也是它自己的出口。
+ *
+ * 与起始页同一套判据——再点一次就原路返回。它原先待在右栏栏底（用户要求
+ * 搬到左上角并换成图标）：两屏的键摆在一起，「这两屏不是标签页、各有各的
+ * 进出口」才一眼看得明白，而栏底那一格在小窗口里本来就会被滚出视野。
+ *
+ * 图标是这一套里那个「三条带旋钮的滑杆」（Icon 的 settings），不是齿轮：
+ * 齿轮的齿在 24 视框里画不准，那一枚为什么不长齿轮，Icon.vue 里有账。
+ */
+function toggleSettings(): void {
+  void (props.screen === 'settings' ? window.moyu.ui.leaveScreen() : window.moyu.ui.openSettings())
+}
 </script>
 
 <template>
@@ -155,16 +172,38 @@ function goHome(): void {
     @pointerup="drag.onPointerUp"
     @pointercancel="drag.onPointerCancel"
   >
-    <!-- 导航 -->
+    <!--
+      两屏的入口，摆在最左。它们不是标签页，各有各的键，而进出口是同一颗——
+      再点一次就原路返回（判据在 goHome / toggleSettings 里）。
+      与右边那组导航之间留出组间距，读起来是「两屏 · 一页」两摊事。
+    -->
     <div class="group">
       <button
         class="icon"
+        aria-label="起始页"
         :class="{ on: screen === 'home' }"
         :title="screen === 'home' ? '回到刚才那张网页' : '回到起始页'"
         @click="goHome"
       >
         <Icon name="home" />
       </button>
+      <!--
+        设置。这一套图标里它长得像三条带旋钮的滑杆，不是齿轮——为什么不是齿轮，
+        见 Icon.vue 里那一枚上的注释。
+      -->
+      <button
+        class="icon"
+        aria-label="系统设置"
+        :class="{ on: screen === 'settings' }"
+        :title="screen === 'settings' ? '回到刚才那张网页' : '系统设置'"
+        @click="toggleSettings"
+      >
+        <Icon name="settings" />
+      </button>
+    </div>
+
+    <!-- 导航 -->
+    <div class="group">
       <button class="icon" title="后退" :disabled="!activeTab?.canGoBack" @click="navBack">
         <Icon name="back" />
       </button>

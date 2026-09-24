@@ -174,7 +174,6 @@ const geometryVars = {
           v-if="railVisible"
           :config="config"
           :active-tab="activeTab"
-          :screen="screen"
           :ball-gap-top="!topBarOpen"
           @patch="patch"
         />

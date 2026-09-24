@@ -2,12 +2,16 @@
 /**
  * 右侧功能栏。
  *
- * 站点、历史、书签、缩放、两条透明度滑块、设置这些原本摊在底栏的功能都收在这里。
+ * 站点、历史、书签、缩放、两条透明度滑块这些原本摊在底栏的功能都收在这里。
  * 横屏下纵向空间最贵，而底栏那条横带子要吃掉整个宽度；换成一条竖栏，
  * 代价只是正文窄了 48px。
  *
  * 手机与置顶原本也是这里的两个按钮（写着汉字，一格一个），现在搬去了顶栏的图标组：
  * 它们改的是「这一页怎么显示」，与阅读本身无关，占着功能位不如让给滑块。
+ *
+ * 栏底那格「设置」也搬走了——用户要它挪到界面左上角并换成图标，现在它与起始页
+ * 那颗键并排待在顶栏最左（见 TopBar.vue）。于是这一栏不再有「固定在栏底、
+ * 滚不掉」的那一格：整条栈都能滚，最下面一条滑块不会被谁挤掉。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -19,7 +23,7 @@ import {
   OPACITY_MIN
 } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
-import type { AppConfig, OwnScreen, TabState } from '@shared/types'
+import type { AppConfig, TabState } from '@shared/types'
 import Icon from './Icon.vue'
 import OpacitySlider from './OpacitySlider.vue'
 import { useWindowDrag } from '../composables/useWindowDrag'
@@ -27,15 +31,13 @@ import { useWindowDrag } from '../composables/useWindowDrag'
 const props = defineProps<{
   config: AppConfig | null
   activeTab: TabState | null
-  /** 正文区此刻停在自家哪一屏上；看着网页时为 null */
-  screen: OwnScreen | null
   /** 顶栏已隐藏，球浮在本栏顶端，需要给它让出一段空白 */
   ballGapTop: boolean
 }>()
 
 const emit = defineEmits<{ patch: [patch: ConfigPatch] }>()
 
-/** 整条栏可拖动。按在按钮与滑块上是操作，其余地方（格子之间、分隔线、栏底空白）都是拖窗口 */
+/** 整条栏可拖动。按在按钮与滑块上是操作，其余地方（格子之间、分隔线、栏内空白）都是拖窗口 */
 const drag = useWindowDrag()
 
 type PopoverKind = 'sites' | 'history' | 'bookmarks' | 'uaZoom'
@@ -95,17 +97,6 @@ const pauseHint = computed(() =>
 
 function togglePauseOnCollapse(): void {
   emit('patch', { stealth: { muteMediaOnCollapse: !pauseOnCollapse.value } })
-}
-
-// 模板里的 window 指向组件实例而非全局对象，因此全局调用都要包一层方法
-/**
- * 栏底那格「设置」：系统设置的入口，也是它自己的出口。
- *
- * 与顶栏左上角那颗键同一个意思——再点一次就原路返回进来之前那张网页。
- * 托盘菜单与悬浮球菜单里那一项不走这条路：菜单是明确意图，不是开关。
- */
-function toggleSettings(): void {
-  void (props.screen === 'settings' ? window.moyu.ui.leaveScreen() : window.moyu.ui.openSettings())
 }
 </script>
 
@@ -186,17 +177,6 @@ function toggleSettings(): void {
         @update:model-value="setBackgroundOpacity"
       />
     </div>
-
-    <!-- 设置固定在栏底：它是最常走的一个出口，不该被滚出视野。
-         按钮上是简称——栏宽 48px 放不下「系统设置」，全名给 tooltip -->
-    <button
-      class="item foot"
-      :class="{ on: screen === 'settings' }"
-      :title="screen === 'settings' ? '回到刚才那张网页' : '系统设置'"
-      @click="toggleSettings"
-    >
-      设置
-    </button>
   </aside>
 </template>
 

@@ -35,7 +35,7 @@ export interface AppContext {
   broadcast: (channel: string, payload: unknown) => void
   /**
    * 进入自家那一屏。两者都是窗口内的视图，**不是标签页**：
-   * 起始页是顶栏左上角那颗键的落点，设置是右栏栏底那一格。
+   * 起始页与设置各是顶栏最左那两颗键（起始页在前，设置紧挨着它）。
    * 窗口若正缩成球或藏在托盘里，这两条都会先叫回来。
    */
   openHome: () => void
