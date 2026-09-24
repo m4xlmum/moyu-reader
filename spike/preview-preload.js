@@ -255,8 +255,20 @@ function emitTabs() {
 const configListeners = new Set()
 
 function patchConfig(input) {
-  Object.assign(config, input)
-  if (input.ui) config.ui = { ...config.ui, ...input.ui }
+  /*
+   * 逐个子对象合并，与真的 ConfigStore.patch 一致。
+   *
+   * 这里曾经只对 `ui` 这么做，其余走 Object.assign —— 于是改一个 stealth 字段
+   * 会把整个 stealth 换成只带这一个字段的新对象，`autoCollapse` 之类当场消失。
+   * 假桥与真实现的差别只有一个后果：验出来的结论不算数。
+   */
+  for (const [key, value] of Object.entries(input)) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      config[key] = { ...config[key], ...value }
+    } else {
+      config[key] = value
+    }
+  }
   for (const listener of configListeners) listener(config)
   return Promise.resolve(config)
 }

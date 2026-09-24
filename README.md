@@ -346,6 +346,19 @@ npx electron spike/media-pause.js
 把这个开关关掉之后收起时**什么都不该动**。
 
 ```bash
+npx electron spike/settings-fields.js
+```
+
+探「系统设置里到底有哪些项，各自在哪一节、看不看得见」：加载编译好的设置页，逐个
+点过五节导航，把每一节的 `.field` 连**标题、控件类型、当前值、画没画出来、要不要
+滚动才看得到**一起列出来，写进 `spike/out/settings-fields.json`，并截一张「隐蔽」
+那一节的图。起因是一句反馈——「收起时暂停播放」这个开关找不到；而它是**在**的，
+于是问题不在有没有，在**找不找得到**，那就该当成版面事实来量，而不是读一遍模板说
+「有」。判据用的是 `checkVisibility({ visibilityProperty: true })`（把祖先算进去，
+见架构要点第 8 条）——模板里有、页面上看不见是这里真出过的事。最后它还会**真的把
+那个开关点一下**，读回假桥里的配置，确认改的是这一个字段、没把旁边的带坏。
+
+```bash
 npx electron spike/preview.js --no-topbar
 ```
 
