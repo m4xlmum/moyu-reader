@@ -3,7 +3,8 @@
  * chrome 层根组件。
  *
  * 三种形态共用这一层，差别只在界面部分是否绘制：
- *   - 展开：顶栏 + 地址栏（默认折叠）+ 正文（留空，由标签页视图覆盖）+ 右侧栏 + 悬浮球
+ *   - 展开：顶栏 + 地址栏（默认折叠）+ 更新提示条（有新版本时才占位）+ 正文
+ *           （留空，由标签页视图覆盖）+ 右侧栏 + 悬浮球
  *   - 收起：只有悬浮球，铺满整扇窗
  *   - 最大化：没有栏也没有正文，只在右上角一小块里浮着「还原键 + 球」
  *
@@ -26,6 +27,7 @@ import {
   BALL_SIZE,
   FLOAT_GAP,
   FLOAT_KEY_SIZE,
+  NOTICE_H,
   RAIL_W,
   RESIZE_CORNER,
   RESIZE_EDGE,
@@ -33,6 +35,7 @@ import {
 } from '@shared/constants'
 import TopBar from './TopBar.vue'
 import AddressBar from './AddressBar.vue'
+import UpdateNotice from './UpdateNotice.vue'
 import Rail from './Rail.vue'
 import Ball from './Ball.vue'
 import ResizeFrame from './ResizeFrame.vue'
@@ -56,6 +59,8 @@ useTheme(config)
 const collapsed = computed(() => state.value?.mode === 'collapsed')
 const addressOpen = computed(() => state.value?.addressOpen ?? false)
 const topBarOpen = computed(() => state.value?.topBarOpen ?? true)
+/** 更新提示条是否占版面。由主进程按「有新版本且没被忽略」裁定，见 updateService */
+const noticeVisible = computed(() => state.value?.noticeVisible ?? false)
 /** 右侧栏是否占位。顶栏藏起来时它会被强制保留——那是球的落脚处 */
 const railVisible = computed(() => state.value?.railVisible ?? true)
 /**
@@ -90,6 +95,7 @@ function openBallMenu(): void {
 const geometryVars = {
   '--moyu-top-h': `${TOP_BAR_H}px`,
   '--moyu-address-h': `${ADDRESS_H}px`,
+  '--moyu-notice-h': `${NOTICE_H}px`,
   '--moyu-rail-w': `${RAIL_W}px`,
   '--moyu-ball-size': `${BALL_SIZE}px`,
   '--moyu-ball-margin': `${BALL_MARGIN}px`,
@@ -151,6 +157,13 @@ const geometryVars = {
       <div class="middle">
         <div class="main-col">
           <AddressBar v-if="addressOpen" :active-tab-id="activeTabId" :active-tab="activeTab" />
+
+          <!--
+            更新提示条排在地址栏之下、网页之上。
+            顺序有讲究：地址栏是用户自己的东西（他刚唤出来的），不该被一条提示
+            推着上下走；而提示说的是「网页里那条内容有新版本」，贴着网页才合情理。
+          -->
+          <UpdateNotice v-if="noticeVisible" />
 
           <!-- 中间留空：这一块由标签页视图覆盖 -->
           <div class="spacer" />

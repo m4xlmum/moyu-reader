@@ -23,6 +23,7 @@ import Icon from '../chrome/Icon.vue'
 import BallIconCropper from './BallIconCropper.vue'
 import { useBallIcon } from '../composables/useBallIcon'
 import { useTheme } from '../composables/useTheme'
+import { useUpdate } from '../composables/useUpdate'
 
 type SectionKey = 'general' | 'stealth' | 'hotkey' | 'data' | 'about'
 
@@ -76,6 +77,61 @@ const {
 } = useBallIcon()
 
 const cropperOpen = ref(false)
+
+/**
+ * 更新。
+ *
+ * 提示条是这件事的常用出口，这一页是它的另一半：查得到什么、下到哪儿了、
+ * 以及**撤销「忽略这个版本」**。两处听的是同一条广播，因此进度是同一个数。
+ */
+const {
+  state: update,
+  check: checkUpdate,
+  download: downloadUpdate,
+  install: installUpdate,
+  ignore: ignoreVersion
+} = useUpdate()
+
+/** 打包版才查更新。开发模式下按钮留着但禁用，并说清为什么——比点一下没反应好 */
+const updateEnabled = computed(() => update.value?.enabled ?? false)
+
+/**
+ * 状态那句话说给人听。
+ *
+ * 阶段是 error 而**版本号还在**，说明失败发生在下载那一步（检查失败时我们
+ * 根本不知道有没有新版，版本号是空的，见 updateService.setState）。
+ * 两种失败要说成两句话，否则「检查失败：服务器返回 404」会被读成「没有新版本」。
+ */
+const updateStatus = computed(() => {
+  const s = update.value
+  if (!s) return '读取中…'
+  if (!s.enabled) return '开发模式下不检查更新'
+  switch (s.phase) {
+    case 'checking':
+      return '正在检查…'
+    case 'none':
+      return '已是最新'
+    case 'available':
+      return `发现 ${s.version}，尚未下载`
+    case 'downloading':
+      return `正在下载 ${s.percent}%`
+    case 'ready':
+      return `${s.version} 已下载，重启后安装`
+    case 'error':
+      return s.version ? `下载失败：${s.message}` : `检查失败：${s.message}`
+    default:
+      return '未检查过'
+  }
+})
+
+/** 查完之后能做的事：下、或者装。其余阶段没有可做的动作 */
+const updateAction = computed<{ label: string; run: () => void } | null>(() => {
+  const s = update.value
+  if (!s?.enabled) return null
+  if (s.phase === 'ready') return { label: '重启并安装', run: () => installUpdate() }
+  if (s.phase === 'available') return { label: '下载', run: () => void downloadUpdate() }
+  return null
+})
 
 const fitHint = computed(() => BALL_CUSTOM_FITS.find((f) => f.id === ballFit.value)?.hint ?? '')
 
@@ -575,6 +631,55 @@ function setSizePreset(preset: SizePreset): void {
         <h2>关于</h2>
         <div class="card">
           <p><b>摸鱼阅读</b> · 版本 {{ APP_VERSION }}</p>
+
+          <div class="field">
+            <label>更新</label>
+            <div class="control">
+              <button :disabled="!updateEnabled" @click="checkUpdate()">检查更新</button>
+              <button v-if="updateAction" @click="updateAction.run()">
+                {{ updateAction.label }}
+              </button>
+              <span class="dim">{{ updateStatus }}</span>
+            </div>
+          </div>
+          <p class="hint">
+            下载走 GitHub 发布页，进度也显示在窗口顶部那条提示上。
+            <b>安装包没有代码签名</b>，完整性只靠 HTTPS 与发布信息里的校验和兜底，
+            因此 Windows SmartScreen 可能仍会提示一次。
+          </p>
+
+          <div class="field">
+            <label>自动检查更新</label>
+            <div class="control">
+              <input
+                type="checkbox"
+                :checked="config.update.autoCheck"
+                @change="
+                  patch({
+                    update: { autoCheck: ($event.target as HTMLInputElement).checked }
+                  })
+                "
+              />
+              <span class="dim">
+                启动约二十秒后在后台查一次，查到什么都不会弹出来。
+                关掉之后程序不再自己联网，上面那个按钮仍然可用
+              </span>
+            </div>
+          </div>
+
+          <!--
+            只要忽略过就显示这一行，而不是「恰好等于当前查到的版本」才显示：
+            关掉提示之后重启，那一版就再也不会被查到，这一行若也跟着消失，
+            用户就再没有把它放回来的入口了。
+          -->
+          <div class="field" v-if="config.update.ignoredVersion">
+            <label>已忽略的版本</label>
+            <div class="control">
+              <span class="dim">{{ config.update.ignoredVersion }} 不再提示</span>
+              <button @click="ignoreVersion(null)">仍然提示</button>
+            </div>
+          </div>
+
           <p class="hint">
             以 GPL-2.0-or-later 授权发布。你可以自由使用、修改与再分发，
             但衍生作品必须以同样的许可证开源。
