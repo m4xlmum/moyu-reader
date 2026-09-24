@@ -52,6 +52,14 @@ const PAPER = '#f4f5f7'
 const DIM = '#8b929c'
 const FAINT = '#5d646e'
 const FONT = `'Microsoft YaHei', 'PingFang SC', 'Segoe UI', system-ui, sans-serif`
+
+/**
+ * 封面右下角那枚版本号。
+ *
+ * 从 package.json 读，不在这里另抄一份：这一格写着 0.1.2 而版本早就走到 0.1.5 了，
+ * 图与代码对不上，而图是读者唯一会照着去下载的那个东西。
+ */
+const VERSION = require('../package.json').version
 /** 垫在透明界面底下的模拟桌面。截界面原图时故意不垫，留到版式里统一垫 */
 const DESK = 'radial-gradient(130% 100% at 18% 0%, #fbfcfd 0%, #eef1f5 45%, #dde2e8 100%)'
 /**
@@ -63,14 +71,20 @@ const DESK_MID = 'radial-gradient(120% 100% at 20% 0%, #d5dae0 0%, #c2c8cf 50%, 
 
 /** 用到的原图，一次列全。缺哪张就在启动时说清缺哪张，而不是猜 */
 const NEEDED = [
-  'chrome.png', //             界面底板，**带透明通道**：内容区是空的，等着垫网页
-  'chrome-bg0.png', //         同上，背景透明度拉到 0
+  /*
+   * 三套主题各有自己的一份界面底板，**都带透明通道**：内容区是空的，等着垫网页。
+   *
+   * 为什么不共用一张：主题现在管的是整个界面，顶栏与右栏也跟着换。把磷绿的起始页
+   * 衬在纸白的顶栏上，拼出来的那一帧是**切不出来**的一态——README 里的图只能是
+   * 用户真能看到的样子。因此每一张都由「同一套主题的底 + 同一套主题的页」拼成。
+   */
+  'chrome.png', //             界面底板 · 纸白
+  'chrome-night.png', //       界面底板 · 暗夜
+  'chrome-crt-green.png', //   界面底板 · 磷绿
+  'chrome-crt-green-bg0.png', // 同上，背景透明度拉到 0
   'home-paper.png', //         起始页 · 纸白（1280×720）
   'home-night.png', //         起始页 · 暗夜（1280×720）
   'home-crt-green.png', //     起始页 · 磷绿（1280×720）
-  'home-paper-480x270.png', // 起始页三套主题的迷你档（三格里用）
-  'home-night-480x270.png',
-  'home-crt-green-480x270.png',
   'settings.png', //           系统设置
   'popover.png', //            弹出面板（带透明通道，面板窗口本身是透明的）
   'ball.png' //                收起态那颗球（带透明通道）
@@ -105,9 +119,9 @@ function sizeOf(file) {
  * 网页由另一个 WebContentsView 画在「顶栏之下、右栏之左」那个矩形里。
  * 因此抓了两张图（界面一张带透明通道的、页面一张完整的），在同一个内容区矩形里对齐。
  *
- * `scale` 是相对 1280×720 的缩放。`chromeFile` 默认是常态那块界面底板，
- * 传 `chrome-bg0.png` 就得到「底板淡到 0」的一态——合成方式完全相同，只有那一层不同，
- * 于是两张图能直接比。
+ * `scale` 是相对 1280×720 的缩放。`chromeFile` 是与这一页**同一套主题**的那块界面
+ * 底板（见 CHROME_OF）；传 `chrome-crt-green-bg0.png` 就得到「底板淡到 0」的一态——
+ * 合成方式完全相同，只有那一层不同，于是两张图能直接比。
  */
 function appWindow(pageFile, scale, chromeFile = 'chrome.png') {
   const w = Math.round(WIN_W * scale)
@@ -177,6 +191,18 @@ const SHELL = `
  * 左边是名字与定位，右边是**真实的界面**。作品集级封面的常见做法是把界面图当主体、
  * 文字当标题——这里沿用：名字按海报字号给，界面图只承担「它长这样」。
  */
+/**
+ * 某套主题配哪一份界面底板。
+ *
+ * 顶栏与右栏现在跟着主题走，于是「页面用哪套主题」同时决定了「底板用哪一张」——
+ * 两者必须成套，否则拼出来的是切不出来的一态（见 NEEDED 里的说明）。
+ */
+const CHROME_OF = {
+  paper: 'chrome.png',
+  night: 'chrome-night.png',
+  'crt-green': 'chrome-crt-green.png'
+}
+
 function htmlBanner() {
   return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><style>${SHELL}
   .wrap { position: absolute; inset: 0; display: flex; align-items: center; gap: 76px; padding: 0 96px 0 116px; }
@@ -200,9 +226,9 @@ function htmlBanner() {
         <div class="latin">moyu-reader</div>
         <div class="tagline">把网页装进一颗<br>能藏起来的球里</div>
         <div class="note">可调透明、置顶，鼠标一离开就收起。<br>在工作场景下低调地读网页。</div>
-        <div class="tags"><span>开源 · GPL-2.0</span><span>0.1.2</span><span>代码完全独立实现</span></div>
+        <div class="tags"><span>开源 · GPL-2.0</span><span>${VERSION}</span><span>代码完全独立实现</span></div>
       </div>
-      <div class="right">${appWindow('home-night.png', 0.76)}</div>
+      <div class="right">${appWindow('home-night.png', 0.76, CHROME_OF.night)}</div>
     </div>
     ${footer('Windows 10/11 · GPL-2.0-or-later')}
   </body></html>`
@@ -227,7 +253,7 @@ function htmlFeatures() {
 
   /*
    * 「底板淡到 0」的两态对照：同一块顶栏，一次底板 100%、一次 0%，上下叠着放。
-   * 两张用的都是同一份合成（界面层 + 磷绿起始页），只有界面层那张底板不同——
+   * 两张用的都是同一份合成（磷绿的界面层 + 磷绿的起始页），只有界面层那张底板不同——
    * 于是读者一眼能看出变的只有那条底：页面纹丝不动，字与图标也没淡。
    */
   const CROP = { x: 640, w: 640, h: 132, out: 492 }
@@ -238,11 +264,18 @@ function htmlFeatures() {
       </div>
     </div>`
 
-  // 三套主题：各切一条同一位置的页头，宽 492 时与原尺寸几乎 1:1，皮的区别看得清
-  const MINI_CROP_H = 96
-  const tk = CROP.out / 480
-  const themeRow = (f) => `<div class="row" style="height:${(MINI_CROP_H * tk).toFixed(1)}px">
-      <img src="${f}" style="width:${CROP.out}px">
+  /*
+   * 三套主题：各切同一块地方——顶栏的右半截、网页的一角，外加最右边那条竖栏。
+   *
+   * 一处 1:1 地裁（不缩放）：宽 492 时窗里的字几乎就是原大小，三套皮的区别才看得清。
+   * 底板与页面**成套**取（见 CHROME_OF）——主题管的是整个界面，把磷绿的页衬在纸白的
+   * 顶栏上拼出来的那一帧，用户根本切不出来。
+   */
+  const THEME_CROP = { x: WIN_W - CROP.out, w: CROP.out, h: 96 }
+  const themeRow = (theme) => `<div class="crop" style="width:${THEME_CROP.w}px;height:${THEME_CROP.h}px">
+      <div style="left:${-THEME_CROP.x}px;top:0">
+        ${appWindow(`home-${theme}.png`, 1, CHROME_OF[theme])}
+      </div>
     </div>`
 
   return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><style>${SHELL}
@@ -274,9 +307,9 @@ function htmlFeatures() {
       ${card(
         `<div class="stack">
            <div class="tag-mini">界面底板 100%</div>
-           ${crop('chrome.png')}
+           ${crop(CHROME_OF['crt-green'])}
            <div class="tag-mini">界面底板 0%</div>
-           ${crop('chrome-bg0.png')}
+           ${crop('chrome-crt-green-bg0.png')}
          </div>`,
         'desk-mid',
         '底板可以淡到 0',
@@ -284,13 +317,13 @@ function htmlFeatures() {
       )}
       ${card(
         `<div class="stack" style="gap:9px">
-           ${themeRow('home-paper-480x270.png')}
-           ${themeRow('home-night-480x270.png')}
-           ${themeRow('home-crt-green-480x270.png')}
+           ${themeRow('paper')}
+           ${themeRow('night')}
+           ${themeRow('crt-green')}
          </div>`,
-        '',
-        '三套主题，一副骨架',
-        '纸白 / 暗夜 / 磷绿，<br>划分与操作完全一致。'
+        'desk-mid',
+        '三套主题，整个界面',
+        '顶栏、右栏、起始页一起换。<br>网页永远不受影响。'
       )}
     </div>
     ${footer('截图取自真实渲染的无头窗口')}
@@ -341,7 +374,7 @@ function htmlShots() {
       <p>顶栏一条、右侧栏一条，其余让给网页</p>
     </div>
     <div class="grid">
-      ${cell('界面骨架', '顶栏 · 右侧栏 · 网页', `${appWindow('home-crt-green.png', FRAME_W / WIN_W)}`)}
+      ${cell('界面骨架', '顶栏 · 右侧栏 · 网页', `${appWindow('home-crt-green.png', FRAME_W / WIN_W, CHROME_OF['crt-green'])}`)}
       ${cell('起始页', '纸白 / 暗夜 / 磷绿', `<img src="home-paper.png">`)}
       ${cell('系统设置', '窗口内的一页', `<img src="settings.png">`)}
       ${cell('弹出面板', '站点 / 历史 / 书签 / 显示', pad(`<img src="popover.png" style="width:340px">`))}
