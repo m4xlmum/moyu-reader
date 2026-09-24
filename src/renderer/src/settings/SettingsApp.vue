@@ -384,6 +384,33 @@ function setSizePreset(preset: SizePreset): void {
           </div>
 
           <div class="field">
+            <label>新标签页</label>
+            <div class="control">
+              <!--
+                只在 @change（失焦或回车）时才落盘，不是每敲一个字母都写一次配置。
+                :value 而不是 v-model，同一个道理：配置是这一格的唯一真相，
+                它回传什么这里就显示什么（顺手还能把用户多敲的空格收掉）。
+              -->
+              <input
+                class="url"
+                type="text"
+                spellcheck="false"
+                placeholder="https://www.google.com"
+                :value="config.browser.newTabUrl"
+                @change="
+                  patch({
+                    browser: { newTabUrl: ($event.target as HTMLInputElement).value.trim() }
+                  })
+                "
+              />
+            </div>
+          </div>
+          <p class="hint">
+            点标签条末尾那颗 <code>+</code> 时打开它。照地址栏的规矩写——
+            <code>douyin.com</code> 这种不带协议的也行。留空则回到 <code>google.com</code>。
+          </p>
+
+          <div class="field">
             <label>主题</label>
             <div class="control column">
               <div class="themes">
@@ -897,6 +924,20 @@ h2 {
 .key {
   min-width: 140px;
   font-family: Consolas, monospace;
+}
+
+/* 新标签页那一格。宽度与 .control 里那些按钮同量级，太长会把这一行撑满 */
+.url {
+  width: 260px;
+  padding: 4px 10px;
+  border: 1px solid var(--moyu-hairline);
+  border-radius: var(--moyu-radius);
+  background: var(--moyu-surface);
+  outline: none;
+}
+
+.url:focus {
+  border-color: var(--moyu-accent);
 }
 
 .capture {

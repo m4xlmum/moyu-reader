@@ -33,7 +33,15 @@ export interface AppContext {
   update: UpdateService
   /** 向所有界面窗口广播 */
   broadcast: (channel: string, payload: unknown) => void
+  /**
+   * 进入自家那一屏。两者都是窗口内的视图，**不是标签页**：
+   * 起始页是顶栏左上角那颗键的落点，设置是右栏栏底那一格。
+   * 窗口若正缩成球或藏在托盘里，这两条都会先叫回来。
+   */
+  openHome: () => void
   openSettings: () => void
+  /** 从上面那两屏原路返回进来之前那张网页（没有可回的就落回起始页） */
+  leaveScreen: () => void
   openPopover: (req: OpenPopoverRequest) => void
   closePopover: () => void
   quit: () => void

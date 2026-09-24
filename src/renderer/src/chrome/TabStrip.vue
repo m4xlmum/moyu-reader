@@ -1,6 +1,10 @@
 <script setup lang="ts">
 /**
- * 顶栏上的标签条：起始页、系统设置、各个网页各占一格，点一下就切过去。
+ * 顶栏上的标签条：各个**网页**各占一格，点一下就切过去。
+ *
+ * 起始页与系统设置不在这里：它们不是标签页，而是窗口里的两「屏」，
+ * 各有各的入口（顶栏左上角那颗键、右栏栏底那格「设置」），
+ * 停在它们上面时这一条里没有哪一格是高亮的。
  *
  * 为什么又把它拿回来：只有下拉清单时，「我现在开着哪些页」这件事在界面上
  * 完全看不见——清单要主动点开才知道，切换一个标签页得先点开、再找到、再点。
@@ -20,13 +24,20 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, useTemplateRef, watch } from 'vue'
-import { isOwnUrl } from '@shared/url'
 import type { TabState } from '@shared/types'
 import Icon from './Icon.vue'
 
 const props = defineProps<{
   tabs: TabState[]
   activeTabId: string | null
+  /**
+   * 正文区正停在自家哪一屏上时的名字（起始页 / 系统设置），看着网页时为 null。
+   *
+   * 只在让位成下拉清单时用得上：那时这一条缩成一枚按钮，按钮上写的是
+   * 「正在看什么」。停在自家那两屏上时没有哪个标签是当前页，写它的名字
+   * 才不会是一句「新标签页」那样的假话。
+   */
+  screenTitle: string | null
 }>()
 
 /** 标签之间的间距，与 .zone 的 gap 一致；算容量时要用到 */
@@ -54,16 +65,8 @@ const fits = ref(true)
 
 const activeTab = computed(() => props.tabs.find((t) => t.id === props.activeTabId) ?? null)
 
-const activeTitle = computed(() => activeTab.value?.title || '新标签页')
-
-/**
- * 自家页面（起始页、系统设置）画自己的图标：它们没有网站图标，
- * 留一个空位不如画个标记——一眼能认出「这一格不是网页」。
- */
-function ownIcon(tab: TabState): 'home' | 'settings' | null {
-  if (!isOwnUrl(tab.url)) return null
-  return tab.url.startsWith('moyu://settings') ? 'settings' : 'home'
-}
+/** 让位成下拉清单时按钮上的字：当前那张网页的标题，或者是自家那一屏的名字 */
+const activeTitle = computed(() => activeTab.value?.title || props.screenTitle || '标签页')
 
 function measure(): void {
   const z = zone.value
@@ -163,8 +166,7 @@ function hideBrokenIcon(event: Event): void {
         @mousedown.middle.prevent="close(tab.id)"
       >
         <span class="glyph" aria-hidden="true">
-          <Icon v-if="ownIcon(tab)" :name="ownIcon(tab)!" :size="12" />
-          <img v-else-if="tab.faviconUrl" :src="tab.faviconUrl" alt="" @error="hideBrokenIcon" />
+          <img v-if="tab.faviconUrl" :src="tab.faviconUrl" alt="" @error="hideBrokenIcon" />
           <span v-else class="dot" />
         </span>
         <span class="title">{{ tab.title || '新标签页' }}</span>

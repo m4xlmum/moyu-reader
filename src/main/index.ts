@@ -123,7 +123,9 @@ function bootstrap(): void {
     getPreloadPath: () => preloadPath,
     getConfig: () => config.get(),
     onStateChange: () => {
-      broadcast(BROADCAST.tabsState, { tabs: tabs.list(), activeTabId: tabs.getActiveId() })
+      // 标签条的内容、当前那张网页、以及正文区停在哪一屏，是三件不同的事，
+      // 但只有一处算得出来——快照是同一个，界面拿到手就不必自己拼
+      broadcast(BROADCAST.tabsState, tabs.snapshot())
     },
     onNavigated: (entry) => history.record(entry),
     // 新视图永远加在最上层，界面层若正需要待在上面就得重新抬一次
@@ -146,12 +148,35 @@ function bootstrap(): void {
   /**
    * 打开系统设置。
    *
-   * 它是窗口内的一页（与起始页同一种标签页），不是一扇独立窗口——
-   * 独立窗口会出现在任务栏与 Alt+Tab 里，等于把「我在摸鱼」写在脸上。
-   * 窗口若正缩成球或藏在托盘里，先叫回来：用户要的是看到设置。
+   * 它是窗口内的一屏（与起始页一样是自家的视图，**不是标签页**），
+   * 不是一扇独立窗口——独立窗口会出现在任务栏与 Alt+Tab 里，等于把
+   * 「我在摸鱼」写在脸上。窗口若正缩成球或藏在托盘里，先叫回来：
+   * 用户要的是看到设置。托盘菜单与悬浮球菜单里那一项走的就是它，**永远进去**。
    */
   function showSettings(): void {
     tabs.openSettings()
+    controller.showForeground()
+  }
+
+  /**
+   * 回到起始页。
+   *
+   * 与 showSettings 同一套：界面上的出口（同一条键再点一次）不叫它，
+   * 那条走 leaveScreen——这里只管「今天就要看起始页」这件事。
+   */
+  function showHome(): void {
+    tabs.openHome()
+    controller.showForeground()
+  }
+
+  /**
+   * 从起始页 / 设置原路返回到刚才那张网页。
+   *
+   * 回哪一张由 TabManager 记（lastGuestId），这里只负责把窗口叫到眼前：
+   * 收起成球或藏在托盘里时，「返回」这个词里就包含着「让我看见」。
+   */
+  function backToPage(): void {
+    tabs.leaveScreen()
     controller.showForeground()
   }
 
@@ -209,7 +234,9 @@ function bootstrap(): void {
     tray,
     update,
     broadcast,
+    openHome: () => showHome(),
     openSettings: () => showSettings(),
+    leaveScreen: () => backToPage(),
     openPopover: (req: OpenPopoverRequest) => popover.open(req),
     closePopover: () => popover.close(),
     quit

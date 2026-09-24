@@ -9,19 +9,11 @@ import type { UaMode } from '@shared/ua'
 import type { AppContext } from '../context'
 
 export function registerBrowserIpc(ctx: AppContext): void {
-  ipcMain.handle(INVOKE.tabsList, () => ({
-    tabs: ctx.tabs.list(),
-    activeTabId: ctx.tabs.getActiveId()
-  }))
+  // 与 index.ts 里那条广播共用同一个快照：界面的初值与后续都是同一份形状
+  ipcMain.handle(INVOKE.tabsList, () => ctx.tabs.snapshot())
 
   ipcMain.handle(INVOKE.tabsCreate, (_e, input?: { url?: string; activate?: boolean }) => {
     const tabId = ctx.tabs.create(input ?? {})
-    return { tabId }
-  })
-
-  ipcMain.handle(INVOKE.tabsHome, () => {
-    const tabId = ctx.tabs.openHome()
-    ctx.controller.show()
     return { tabId }
   })
 
@@ -39,7 +31,9 @@ export function registerBrowserIpc(ctx: AppContext): void {
     ctx.tabs.reorder(input.tabId, input.toIndex)
   })
 
-  ipcMain.handle(INVOKE.navGoto, (_e, input: { tabId: string; input: string }) => {
+  // tabId 为 null 是「正文区此刻不在任何一张网页上」（停在起始页 / 设置上），
+  // 那一侧会另开一张标签页，见 TabManager.goto
+  ipcMain.handle(INVOKE.navGoto, (_e, input: { tabId: string | null; input: string }) => {
     ctx.tabs.goto(input.tabId, input.input)
   })
   ipcMain.handle(INVOKE.navBack, (_e, input: { tabId: string }) => ctx.tabs.back(input.tabId))

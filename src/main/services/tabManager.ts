@@ -1,5 +1,14 @@
 /**
- * 标签页管理：每个标签页一个 WebContentsView，叠加在 chrome 视图之上、限制在主体区域内。
+ * 视图管理：每个标签页一个 WebContentsView，叠加在 chrome 视图之上、限制在主体区域内。
+ *
+ * 这里管两种视图，它们不共用同一本账：
+ *
+ * - **网页标签**（kind = 'guest'）：标签条画的就是它们，`order` 记着它们的次序；
+ * - **自家的两屏**（起始页、系统设置）：也在这一层视图里（独立窗口会进任务栏与
+ *   Alt+Tab，等于把「我在摸鱼」写在脸上），但**不是标签页**——不进 `order`、
+ *   没有关闭键、各有各的入口（起始页是顶栏左上角那颗键，设置是右栏栏底那一格）。
+ *
+ * 两者共用同一套机制（视图、可见性、版面、广播），差别只在上面那本账。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -10,8 +19,15 @@ import {
   type WebContents,
   type WebFrameMain
 } from 'electron'
-import { HOME_TITLE, HOME_URL, SETTINGS_TITLE, SETTINGS_URL } from '@shared/constants'
-import type { Rect, TabState } from '@shared/types'
+import {
+  DEFAULT_NEW_TAB_URL,
+  HOME_TITLE,
+  HOME_URL,
+  SETTINGS_TITLE,
+  SETTINGS_URL
+} from '@shared/constants'
+import type { TabsStatePayload } from '@shared/ipc'
+import type { OwnScreen, Rect, TabState } from '@shared/types'
 import { resolveInput } from '@shared/url'
 import { uaFor, type UaMode } from '@shared/ua'
 import { injectPageStyles } from './pageStyler'
@@ -25,13 +41,12 @@ import { log } from './logger'
 export type TabKind = 'home' | 'settings' | 'guest'
 
 /** 自家页面：渲染产物名、对外伪地址与标签标题 */
-const OWN_PAGE: Record<'home' | 'settings', { page: 'home' | 'settings'; url: string; title: string }> =
-  {
-    home: { page: 'home', url: HOME_URL, title: HOME_TITLE },
-    settings: { page: 'settings', url: SETTINGS_URL, title: SETTINGS_TITLE }
-  }
+const OWN_PAGE: Record<OwnScreen, { page: 'home' | 'settings'; url: string; title: string }> = {
+  home: { page: 'home', url: HOME_URL, title: HOME_TITLE },
+  settings: { page: 'settings', url: SETTINGS_URL, title: SETTINGS_TITLE }
+}
 
-const isOwnPage = (kind: TabKind): kind is 'home' | 'settings' => kind !== 'guest'
+const isOwnPage = (kind: TabKind): kind is OwnScreen => kind !== 'guest'
 
 /**
  * 暂停网页里正在播放的音视频。**暂停，不是静音。**
@@ -99,6 +114,7 @@ export interface TabManagerDeps {
       hideScrollbars: boolean
       newWindowAsTab: boolean
       searchTemplate: string
+      newTabUrl: string
     }
   }
   onStateChange: () => void
@@ -126,9 +142,21 @@ let seq = 0
 const nextId = (): string => `tab-${Date.now().toString(36)}-${(seq++).toString(36)}`
 
 export class TabManager {
+  /** 全部视图：网页标签与自家那两屏都在这里（版面、显隐、广播按它走） */
   private tabs = new Map<string, TabEntry>()
+  /** **标签条的次序**：只有网页标签。自家那两屏不进来，于是 list/reorder/会话恢复都不必再过滤 */
   private order: string[] = []
+  /** 此刻画着的那一个（含自家那两屏）；对外只说成 activeTabId / screen 两份 */
   private activeId: string | null = null
+  /** 自家那两屏的视图 id。各自只建一个，常驻不关 */
+  private ownIds = new Map<OwnScreen, string>()
+  /**
+   * 上一次看着的那张网页。
+   *
+   * 从起始页 / 设置「原路返回」回的就是它。不需要另存一份「进屏之前的快照」：
+   * 进这两屏不改动它，只有切到别张网页（或它被关掉）才会变。
+   */
+  private lastGuestId: string | null = null
   /** 主体隐藏时为 true，此时所有标签页视图都不绘制且静音 */
   private bodyVisible = true
   /**
@@ -144,6 +172,7 @@ export class TabManager {
 
   // ------------------------------------------------------------ 查询
 
+  /** 标签条的内容。次序就是 `order` 的次序，自家那两屏不在其中 */
   list(): TabState[] {
     return this.order
       .map((id) => this.tabs.get(id))
@@ -163,16 +192,39 @@ export class TabManager {
       }))
   }
 
+  /**
+   * 正在看着的那张**网页**的 id；停在起始页 / 设置上时为 null。
+   *
+   * 自家那两屏在内部也占着 `activeId`（谁在上面只有一份账），但它们不是标签，
+   * 对外不该以 id 示人——界面拿着那个 id 只会想切它、关它。
+   */
   getActiveId(): string | null {
-    return this.activeId
+    const entry = this.activeId ? this.tabs.get(this.activeId) : null
+    return entry && entry.kind === 'guest' ? entry.id : null
   }
 
-  /** 供会话恢复使用的网址列表。首页不是访客内容，不参与恢复。 */
+  /** 正文区此刻是网页还是自家某一屏。看网页时为 null */
+  getScreen(): OwnScreen | null {
+    const entry = this.activeId ? this.tabs.get(this.activeId) : null
+    return entry && isOwnPage(entry.kind) ? entry.kind : null
+  }
+
+  /**
+   * 一份对外快照。
+   *
+   * 广播（index.ts）与 `tabs:list` 这两个出口共用它，省得两处各拼一份、
+   * 哪天加了一个字段只补了一边。
+   */
+  snapshot(): TabsStatePayload {
+    return { tabs: this.list(), activeTabId: this.getActiveId(), screen: this.getScreen() }
+  }
+
+  /** 供会话恢复使用的网址列表。起始页与设置不是访客内容，不参与恢复 */
   getOpenUrls(): string[] {
     const urls: string[] = []
     for (const id of this.order) {
       const entry = this.tabs.get(id)
-      if (entry && entry.kind === 'guest' && entry.url) urls.push(entry.url)
+      if (entry?.url) urls.push(entry.url)
     }
     return urls
   }
@@ -228,11 +280,17 @@ export class TabManager {
     view.setBackgroundColor('#00000000')
 
     const own = isOwnPage(kind) ? OWN_PAGE[kind] : null
+    /*
+     * 访客标签没给地址就是「新建标签页」：打开配置里的那一格（默认 google.com）。
+     * 原先这一种退到 about:blank——透明窗口里那是一块透出桌面的空档，没有意义。
+     * 地址仍走 goto 那条路解析，因此 `douyin.com` 这种不带协议的写法照旧认。
+     */
+    const url = own ? own.url : (input.url ?? this.newTabUrl())
     const entry: TabEntry = {
       id,
       kind,
       view,
-      url: own ? own.url : 'about:blank',
+      url,
       title: own ? own.title : '',
       isLoading: false,
       uaMode: cfg.defaultUaMode,
@@ -240,7 +298,12 @@ export class TabManager {
       muted: false
     }
     this.tabs.set(id, entry)
-    this.order.push(id)
+    /*
+     * 只有网页标签进标签条。自家那两屏在外面的身份是「屏」：各有各的入口、
+     * 没有关闭键，因此不进 order；它们的 id 记在 ownIds 里，各自只建一个。
+     */
+    if (isOwnPage(kind)) this.ownIds.set(kind, id)
+    else this.order.push(id)
 
     win.contentView.addChildView(view)
     this.layoutTab(entry)
@@ -252,10 +315,10 @@ export class TabManager {
       view.webContents.loadURL(rendererUrl(own.page)).catch((err) => {
         log.error(`加载${own.title}失败`, err)
       })
-    } else if (input.url && input.url !== 'about:blank') {
+    } else if (url && url !== 'about:blank') {
       // about:blank 是视图的初始状态，再 loadURL 一次会被 Chromium 判为
       // 中止的导航并抛出 ERR_ABORTED，没有意义
-      this.goto(id, input.url)
+      this.goto(id, url)
     }
 
     if (input.activate !== false) this.activate(id)
@@ -265,45 +328,91 @@ export class TabManager {
     return id
   }
 
-  /** 某一类自家页面的标签页 id（若存在） */
-  private findOwnTabId(kind: 'home' | 'settings'): string | null {
-    for (const id of this.order) {
-      if (this.tabs.get(id)?.kind === kind) return id
-    }
-    return null
-  }
-
   /**
-   * 打开首页：已有首页标签页就切过去，否则新建一个。
-   * 首页是常驻的一张标签页，不随导航消失——它是「回到起点」的落点。
-   */
-  openHome(): string {
-    return this.openOwn('home')
-  }
-
-  /**
-   * 打开系统设置。
+   * 进起始页：顶栏左上角那颗键的落点。
    *
-   * 与首页同一条路：它是窗口内的一页，而不是一扇独立窗口。独立窗口会出现在
+   * 它是常驻的一屏，不随导航消失——「回到起点」回到的就是它。
+   */
+  openHome(): void {
+    this.openOwn('home')
+  }
+
+  /**
+   * 进系统设置。
+   *
+   * 与起始页同一条路：窗口内的一屏，而不是一扇独立窗口。独立窗口会出现在
    * 任务栏与 Alt+Tab 里，等于把「我在摸鱼」写在脸上——那正是它原来的样子。
    */
-  openSettings(): string {
-    return this.openOwn('settings')
+  openSettings(): void {
+    this.openOwn('settings')
   }
 
-  private openOwn(kind: 'home' | 'settings'): string {
-    const existing = this.findOwnTabId(kind)
-    if (existing) {
+  /**
+   * 从这两屏原路返回：回到进来之前那张网页。
+   *
+   * 那张网页要么已经不在了、要么从来就没有（刚启动，或者用户把它们全关了），
+   * 这时落回起始页——正文区不能空着（透明窗口里空着就是一块透出桌面的空档）。
+   *
+   * 只在自家某一屏上时才动：看着网页时调它什么也不该发生，否则会莫名其妙
+   * 切到「上一次那张网页」上去。
+   */
+  leaveScreen(): void {
+    if (!this.getScreen()) return
+    const back = this.lastGuestId ? this.tabs.get(this.lastGuestId) : null
+    if (back && back.kind === 'guest') this.activate(back.id)
+    else this.openHome()
+  }
+
+  private openOwn(kind: OwnScreen): void {
+    const existing = this.ownIds.get(kind)
+    if (existing && this.tabs.has(existing)) {
       this.activate(existing)
-      return existing
+      return
     }
-    return this.create({ kind, activate: true })
+    this.create({ kind, activate: true })
   }
 
+  /**
+   * 「新建标签页」要打开的地址。
+   *
+   * 用户把设置里那一格写成空的时候回落到默认值——兜底只在这一处，
+   * 设置页与界面都不必各自再判一次空。
+   */
+  private newTabUrl(): string {
+    return this.deps.getConfig().browser.newTabUrl.trim() || DEFAULT_NEW_TAB_URL
+  }
+
+  /**
+   * 关掉一张网页标签。
+   *
+   * 自家那两屏关不掉：界面上没有它们的关闭键，也就无从发出它们的 id；
+   * 退出时由 destroyAll 直接拆。这条守卫是防着哪天多出一条路来。
+   */
   close(tabId: string): void {
     const entry = this.tabs.get(tabId)
     if (!entry) return
+    if (isOwnPage(entry.kind)) return
 
+    this.dispose(entry)
+    if (this.lastGuestId === tabId) this.lastGuestId = null
+
+    if (this.activeId === tabId) {
+      this.activeId = null
+      const next = this.order[this.order.length - 1]
+      /*
+       * 关掉的是正在看着的那一张：还有网页就切到最后一张（既有规矩，不动），
+       * 一张都不剩就落回起始页——正文区不能空着，透明窗口里空着就是一块
+       * 透出桌面的空档。
+       */
+      if (next) this.activate(next)
+      else this.openHome()
+    }
+
+    this.deps.onStateChange()
+  }
+
+  /** 拆掉一个视图：从窗口上摘下来、关掉它的 webContents、退掉全屏记账 */
+  private dispose(entry: TabEntry): void {
     // 视图下面就要被关掉了，全屏记账要用的 id 得先拿到手
     const wcId = this.webContentsId(entry)
     const win = this.deps.getWindow()
@@ -320,8 +429,9 @@ export class TabManager {
       log.warn('关闭标签页 webContents 失败', err)
     }
 
-    this.tabs.delete(tabId)
-    this.order = this.order.filter((id) => id !== tabId)
+    this.tabs.delete(entry.id)
+    if (isOwnPage(entry.kind)) this.ownIds.delete(entry.kind)
+    else this.order = this.order.filter((id) => id !== entry.id)
 
     /*
      * 关掉一个正在全屏的标签页，与用户自己按退出全屏是一回事：
@@ -329,20 +439,14 @@ export class TabManager {
      * 交给同一个入口，判据（跃变）与所有权（autoMaximized）都只有那一条。
      */
     if (wcId !== null) this.setPageFullscreen(wcId, false)
-
-    if (this.activeId === tabId) {
-      this.activeId = null
-      const next = this.order[this.order.length - 1]
-      if (next) this.activate(next)
-    }
-
-    this.deps.onStateChange()
   }
 
   activate(tabId: string): void {
     const entry = this.tabs.get(tabId)
     if (!entry) return
     this.activeId = tabId
+    // 记下「刚才看着的是哪张网页」，起始页 / 设置上的「原路返回」回的就是它
+    if (entry.kind === 'guest') this.lastGuestId = tabId
 
     for (const [id, t] of this.tabs) {
       const visible = id === tabId && this.bodyVisible
@@ -439,13 +543,23 @@ export class TabManager {
 
   // ------------------------------------------------------------ 导航
 
-  goto(tabId: string, input: string): void {
-    const entry = this.tabs.get(tabId)
-    if (!entry) return
+  /**
+   * 在某个视图里打开一个地址。
+   *
+   * `tabId` 为 null 指的是「正文区此刻不在任何一张网页上」——停在起始页或
+   * 系统设置上时就是这样。两条路都另开一张网页标签并切过去：
+   *
+   * - 没有当前视图；
+   * - 当前视图是自家那两屏。它们不承载访客内容——带着 preload，
+   *   网页进去就等于把主进程能力交给任意网页。原屏始终留在原处。
+   *
+   * 于是停在起始页上时，地址栏回车、点书签、点历史都是「新开一张网页」。
+   * 解析仍走 resolveInput，`douyin.com` 那种写法照旧认。
+   */
+  goto(tabId: string | null, input: string): void {
+    const entry = tabId ? this.tabs.get(tabId) : undefined
 
-    // 自家页面不承载访客内容——它们带着 preload。
-    // 在它们上面打开网址意味着另开一个访客标签页，原页面始终留在原处。
-    if (entry.kind !== 'guest') {
+    if (!entry || entry.kind !== 'guest') {
       this.create({ url: input, activate: true })
       return
     }
@@ -726,8 +840,18 @@ export class TabManager {
     })
   }
 
-  /** 窗口销毁时释放全部标签页 */
+  /**
+   * 窗口销毁时释放全部视图。
+   *
+   * 遍历的是视图总表而不是标签条那一份次序：自家那两屏不在 order 里，
+   * 照着 order 关就会漏掉它们——漏掉视图不拆、webContents 不关，
+   * 那是两个渲染进程。
+   */
   destroyAll(): void {
-    for (const id of [...this.order]) this.close(id)
+    for (const entry of [...this.tabs.values()]) this.dispose(entry)
+    this.ownIds.clear()
+    this.order = []
+    this.activeId = null
+    this.lastGuestId = null
   }
 }

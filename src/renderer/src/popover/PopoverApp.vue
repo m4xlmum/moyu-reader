@@ -69,10 +69,15 @@ async function refreshAll(): Promise<void> {
   }
 }
 
+/**
+ * 打开一个网址（站点、历史、书签三处都是它）。
+ *
+ * `tabId` 可以为 null：正文区正停在起始页或系统设置上时就是它。那两屏不承载
+ * 访客内容，主进程会另开一张网页标签并切过去——用户点了一条书签，
+ * 要的当然是看到那一页，而不是「什么也没发生」。
+ */
 function open(url: string): void {
-  const tabId = activeTabId.value
-  if (!tabId) return
-  void window.moyu.nav.goto({ tabId, input: url })
+  void window.moyu.nav.goto({ tabId: activeTabId.value, input: url })
   void window.moyu.ui.closePopover()
 }
 
@@ -109,6 +114,11 @@ async function clearHistory(): Promise<void> {
   history.value = []
 }
 
+/*
+ * 这两条要作用在**某一页**上（改它的 UA、改它的缩放），而停在起始页 /
+ * 系统设置上时没有那一页——面板还把上一次读到的那一页的状态显示着，
+ * 因此必须挡住，不能拿它去改别的页面。
+ */
 function setUa(mode: 'desktop' | 'mobile'): void {
   const tabId = activeTabId.value
   if (!tabId) return

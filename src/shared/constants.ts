@@ -208,20 +208,34 @@ export const HISTORY_LIMIT = 2000
 export const DEFAULT_SEARCH_TEMPLATE = 'https://www.bing.com/search?q=%s'
 
 /**
- * 首页在标签条上的伪地址。
+ * 新建标签页默认打开的地址。
+ *
+ * 顶栏标签条末尾那颗 `+` 打开的就是它（设置 → 通用 → 新标签页里能改）。
+ * 这一份是两处的共用的默认值：配置的默认值（configStore）与运行时的兜底
+ * （用户把那一格填成空的时候，见 TabManager.newTabUrl）。
+ */
+export const DEFAULT_NEW_TAB_URL = 'https://www.google.com'
+
+/**
+ * 首页的伪地址。
  *
  * 首页是「自家页面」，需要 preload 才能读到站点与历史；
- * 而访客页面刻意不注入任何 preload。两者因此是不同类型的标签页，
+ * 而访客页面刻意不注入任何 preload。两者因此是不同的 kind，
  * 由 TabManager 的 kind 区分，绝不共用同一个视图。
+ *
+ * 它**不进标签条**：起始页是顶栏左上角那颗键的落点，是窗口里的一「屏」，
+ * 不是标签页。这个伪地址只用来对外说清「显示的是哪一屏」——
+ * 真实的 file:// 路径既不显示，也不该显示。
  */
 export const HOME_URL = 'moyu://home'
 export const HOME_TITLE = '起始页'
 
 /**
- * 系统设置在标签条上的伪地址。
+ * 系统设置的伪地址。
  *
  * 与首页同属「自家页面」：带 preload、能读写配置，但它不再是一扇独立窗口——
  * 那扇窗口会出现在任务栏与 Alt+Tab 里，等于把「我在摸鱼」写在脸上。
+ * 与首页一样不进标签条：入口是右侧栏栏底那一格「设置」。
  */
 export const SETTINGS_URL = 'moyu://settings'
 export const SETTINGS_TITLE = '系统设置'

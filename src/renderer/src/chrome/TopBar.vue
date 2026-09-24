@@ -13,9 +13,9 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed } from 'vue'
-import { isOwnUrl } from '@shared/url'
+import { HOME_TITLE, SETTINGS_TITLE } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
-import type { TabState } from '@shared/types'
+import type { OwnScreen, TabState } from '@shared/types'
 import Icon from './Icon.vue'
 import Ball from './Ball.vue'
 import TabStrip from './TabStrip.vue'
@@ -25,6 +25,8 @@ const props = defineProps<{
   tabs: TabState[]
   activeTabId: string | null
   activeTab: TabState | null
+  /** 正文区此刻停在自家哪一屏上；看着网页时为 null */
+  screen: OwnScreen | null
   /** 地址栏当前是否展开，来自主进程回传的窗口状态 */
   addressOpen: boolean
   /** 右侧栏当前是否占位，同时决定开关按钮的高亮 */
@@ -42,15 +44,22 @@ const emit = defineEmits<{
 /** 整条栏可拖动。按在按钮、地址栏开关、标签条上是操作，其余地方都是拖窗口 */
 const drag = useWindowDrag()
 
+/** 当前那一屏的名字；看着网页时为 null。地址栏开关与标签条都读它 */
+const screenTitle = computed(() =>
+  props.screen === 'settings' ? SETTINGS_TITLE : props.screen === 'home' ? HOME_TITLE : null
+)
+
 /**
  * 当前页的域名，显示在地址栏开关上。
  *
- * 自家页面（起始页、系统设置）显示自己的标题：它们没有域名，
- * 而真实的 file:// 路径既不好看，也暴露了本机目录结构。
+ * 停在起始页 / 系统设置上时显示那一屏的名字：这两屏不在标签状态里
+ * （它们不是标签页），域名也就无从谈起。真实的那条 file:// 路径既不显示，
+ * 也不该显示。
  */
 const siteLabel = computed(() => {
+  if (screenTitle.value) return screenTitle.value
   const url = props.activeTab?.url
-  if (!url || isOwnUrl(url)) return props.activeTab?.title || '起始页'
+  if (!url) return HOME_TITLE
   try {
     return new URL(url).host || url
   } catch {
@@ -127,8 +136,15 @@ function winClose(): void {
   void window.moyu.win.close()
 }
 
+/**
+ * 左上角那颗键：起始页的入口，也是它自己的出口。
+ *
+ * 再点一次就是「原路返回」——回到进来之前那张网页（没有可回的就落回
+ * 起始页，那一侧判）。判据在这里而不是主进程：只有界面看得见此刻停在哪一屏，
+ * 而托盘菜单里那些入口是明确意图，不该跟着变成开关。
+ */
 function goHome(): void {
-  void window.moyu.tabs.home()
+  void (props.screen === 'home' ? window.moyu.ui.leaveScreen() : window.moyu.ui.openHome())
 }
 </script>
 
@@ -141,7 +157,14 @@ function goHome(): void {
   >
     <!-- 导航 -->
     <div class="group">
-      <button class="icon" title="回到起始页" @click="goHome"><Icon name="home" /></button>
+      <button
+        class="icon"
+        :class="{ on: screen === 'home' }"
+        :title="screen === 'home' ? '回到刚才那张网页' : '回到起始页'"
+        @click="goHome"
+      >
+        <Icon name="home" />
+      </button>
       <button class="icon" title="后退" :disabled="!activeTab?.canGoBack" @click="navBack">
         <Icon name="back" />
       </button>
@@ -166,7 +189,7 @@ function goHome(): void {
       标签条。它自己占住中间那一整块，也自己决定放不下时退回下拉清单，
       新建按钮跟着它走——浏览器里那个「+」也是挨着最后一个标签。
     -->
-    <TabStrip :tabs="tabs" :active-tab-id="activeTabId">
+    <TabStrip :tabs="tabs" :active-tab-id="activeTabId" :screen-title="screenTitle">
       <button class="icon" title="新建标签页" @click="newTab">
         <Icon name="plus" />
       </button>
@@ -181,6 +204,7 @@ function goHome(): void {
       <button
         class="icon"
         :class="{ on: mobile }"
+        :disabled="!activeTab"
         :title="mobile ? '切回电脑版网页' : '切换到手机版网页'"
         @click="toggleUa"
       >

@@ -102,8 +102,20 @@ export function registerWindowIpc(ctx: AppContext): void {
     ctx.closePopover()
   })
 
+  ipcMain.handle(INVOKE.uiOpenHome, () => {
+    ctx.openHome()
+  })
+
   ipcMain.handle(INVOKE.uiOpenSettings, () => {
     ctx.openSettings()
+  })
+
+  /*
+   * 自家那一屏的出口。界面上是哪两处发这条，见 shared/ipc.ts 里 uiLeaveScreen
+   * 的注释——判据在界面那一侧，主进程只认「退出来」这件事。
+   */
+  ipcMain.handle(INVOKE.uiLeaveScreen, () => {
+    ctx.leaveScreen()
   })
 
   // ---------------------------------------------------------------- 老板键

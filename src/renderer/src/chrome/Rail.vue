@@ -19,7 +19,7 @@ import {
   OPACITY_MIN
 } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
-import type { AppConfig, TabState } from '@shared/types'
+import type { AppConfig, OwnScreen, TabState } from '@shared/types'
 import Icon from './Icon.vue'
 import OpacitySlider from './OpacitySlider.vue'
 import { useWindowDrag } from '../composables/useWindowDrag'
@@ -27,6 +27,8 @@ import { useWindowDrag } from '../composables/useWindowDrag'
 const props = defineProps<{
   config: AppConfig | null
   activeTab: TabState | null
+  /** 正文区此刻停在自家哪一屏上；看着网页时为 null */
+  screen: OwnScreen | null
   /** 顶栏已隐藏，球浮在本栏顶端，需要给它让出一段空白 */
   ballGapTop: boolean
 }>()
@@ -55,6 +57,10 @@ function openPopover(kind: PopoverKind, event: MouseEvent): void {
   })
 }
 
+/**
+ * 缩放这三格。它们作用在**某一页**上，因此停在起始页 / 设置上时没有可作用的对象
+ * ——那三格显示的是默认值，点了也不会发生什么，于是干脆禁掉，而不是装作能点。
+ */
 function zoom(op: 'in' | 'out' | 'reset'): void {
   const tabId = props.activeTab?.id
   if (!tabId) return
@@ -92,8 +98,14 @@ function togglePauseOnCollapse(): void {
 }
 
 // 模板里的 window 指向组件实例而非全局对象，因此全局调用都要包一层方法
-function openSettings(): void {
-  void window.moyu.ui.openSettings()
+/**
+ * 栏底那格「设置」：系统设置的入口，也是它自己的出口。
+ *
+ * 与顶栏左上角那颗键同一个意思——再点一次就原路返回进来之前那张网页。
+ * 托盘菜单与悬浮球菜单里那一项不走这条路：菜单是明确意图，不是开关。
+ */
+function toggleSettings(): void {
+  void (props.screen === 'settings' ? window.moyu.ui.leaveScreen() : window.moyu.ui.openSettings())
 }
 </script>
 
@@ -129,9 +141,30 @@ function openSettings(): void {
 
       <div class="sep" />
 
-      <button class="item" title="放大" @click="zoom('in')"><Icon name="plus" :size="13" /></button>
-      <button class="item percent" title="重置缩放" @click="zoom('reset')">{{ zoomPercent }}%</button>
-      <button class="item" title="缩小" @click="zoom('out')"><Icon name="minus" :size="13" /></button>
+      <button
+        class="item"
+        :disabled="!activeTab"
+        title="放大"
+        @click="zoom('in')"
+      >
+        <Icon name="plus" :size="13" />
+      </button>
+      <button
+        class="item percent"
+        :disabled="!activeTab"
+        title="重置缩放"
+        @click="zoom('reset')"
+      >
+        {{ zoomPercent }}%
+      </button>
+      <button
+        class="item"
+        :disabled="!activeTab"
+        title="缩小"
+        @click="zoom('out')"
+      >
+        <Icon name="minus" :size="13" />
+      </button>
 
       <div class="sep" />
 
@@ -156,7 +189,14 @@ function openSettings(): void {
 
     <!-- 设置固定在栏底：它是最常走的一个出口，不该被滚出视野。
          按钮上是简称——栏宽 48px 放不下「系统设置」，全名给 tooltip -->
-    <button class="item foot" title="系统设置" @click="openSettings">设置</button>
+    <button
+      class="item foot"
+      :class="{ on: screen === 'settings' }"
+      :title="screen === 'settings' ? '回到刚才那张网页' : '系统设置'"
+      @click="toggleSettings"
+    >
+      设置
+    </button>
   </aside>
 </template>
 
@@ -220,9 +260,14 @@ function openSettings(): void {
   transition: background 120ms ease-out, color 120ms ease-out;
 }
 
-.item:hover {
+.item:hover:not(:disabled) {
   background: var(--moyu-surface-hover);
   color: var(--moyu-ink);
+}
+
+/* 没有当前网页时缩放那三格是禁用的：默认值摆在那里，但点了什么都不会发生 */
+.item:disabled {
+  color: var(--moyu-text-faint);
 }
 
 .item.on {

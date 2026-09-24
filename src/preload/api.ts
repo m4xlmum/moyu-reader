@@ -69,8 +69,8 @@ export const api: MoyuApi = {
   },
 
   tabs: {
+    // 不给 url 就是「新建标签页」：打开配置里的 browser.newTabUrl（默认 google.com）
     create: (input) => ipcRenderer.invoke(INVOKE.tabsCreate, input) as Promise<{ tabId: string }>,
-    home: () => ipcRenderer.invoke(INVOKE.tabsHome) as Promise<{ tabId: string }>,
     close: (input) => ipcRenderer.invoke(INVOKE.tabsClose, input) as Promise<void>,
     activate: (input) => ipcRenderer.invoke(INVOKE.tabsActivate, input) as Promise<void>,
     reorder: (input) => ipcRenderer.invoke(INVOKE.tabsReorder, input) as Promise<void>,
@@ -138,7 +138,10 @@ export const api: MoyuApi = {
     openPopover: (req: OpenPopoverRequest) =>
       ipcRenderer.invoke(INVOKE.uiOpenPopover, req) as Promise<void>,
     closePopover: () => ipcRenderer.invoke(INVOKE.uiClosePopover) as Promise<void>,
-    openSettings: () => ipcRenderer.invoke(INVOKE.uiOpenSettings) as Promise<void>
+    openHome: () => ipcRenderer.invoke(INVOKE.uiOpenHome) as Promise<void>,
+    openSettings: () => ipcRenderer.invoke(INVOKE.uiOpenSettings) as Promise<void>,
+    // 同一条键再点一次就是它——判据（此刻停在哪一屏）在界面这一侧
+    leaveScreen: () => ipcRenderer.invoke(INVOKE.uiLeaveScreen) as Promise<void>
   },
 
   hotkey: {

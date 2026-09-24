@@ -9,7 +9,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { onMounted, ref, watch } from 'vue'
-import { isOwnUrl } from '@shared/url'
 import type { TabState } from '@shared/types'
 import { useWindowDrag } from '../composables/useWindowDrag'
 
@@ -27,14 +26,15 @@ const field = ref<HTMLInputElement | null>(null)
 
 /**
  * 未编辑时地址栏跟随当前标签页；编辑时不抢用户的输入。
- * 自家页面（起始页、系统设置）在地址栏里留空：它们没有网址，
- * 而真实的 file:// 路径既不好看，也暴露了本机目录结构。
+ *
+ * 停在起始页 / 系统设置上时留空：此刻没有当前网页（那两个视图不在标签状态里），
+ * 而这两屏里本来也没有网址可显示。
  */
 watch(
   () => props.activeTab?.url,
   (url) => {
     if (editing.value) return
-    input.value = !url || isOwnUrl(url) ? '' : url
+    input.value = url ?? ''
   },
   { immediate: true }
 )
@@ -49,13 +49,20 @@ function close(): void {
   window.moyu.win.setAddressOpen({ open: false })
 }
 
+/**
+ * 回车即打开。
+ *
+ * `tabId` 可以是 null——正文区正停在起始页或系统设置上时就是它。
+ * 那两屏不承载访客内容，主进程会另开一张网页标签并切过去（见 TabManager.goto）。
+ * 因此这里不必先挡一道「没有当前页就别提交」：那样按回车会毫无反应，
+ * 而用户的意图是明确的。
+ */
 function submit(): void {
-  const tabId = props.activeTabId
   const value = input.value.trim()
-  if (!tabId || !value) return
+  if (!value) return
   editing.value = false
   close()
-  void window.moyu.nav.goto({ tabId, input: value })
+  void window.moyu.nav.goto({ tabId: props.activeTabId, input: value })
 }
 </script>
 

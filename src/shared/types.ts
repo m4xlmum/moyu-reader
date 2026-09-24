@@ -98,6 +98,14 @@ export interface BrowserConfig {
   searchTemplate: string
   /** target=_blank 转为新标签页，而非弹出新窗口 */
   newWindowAsTab: boolean
+  /**
+   * 点标签条末尾那颗 `+` 时打开的地址（默认见 DEFAULT_NEW_TAB_URL）。
+   *
+   * 归在 browser 段而不是 ui：它是**浏览器行为**，与 searchTemplate 同一类，
+   * 与「界面长什么样」无关。写什么都行（`douyin.com` 这种不带协议的也认，
+   * 走的是地址栏那条 resolveInput）；空值在 TabManager 那一侧回落到默认值。
+   */
+  newTabUrl: string
 }
 
 /**
@@ -206,6 +214,15 @@ export interface TabState {
   zoom: number
   muted: boolean
 }
+
+/**
+ * 自家那一屏：起始页或系统设置。
+ *
+ * 它们是窗口内的视图，但**不是标签页**——不进标签条、不给关闭键，
+ * 各有各的入口（起始页是顶栏左上角那颗键，设置是右栏栏底那一格）。
+ * 正文区显示的是网页还是某一屏，由这个值说清。
+ */
+export type OwnScreen = 'home' | 'settings'
 
 export interface WindowRuntime {
   mode: WindowMode

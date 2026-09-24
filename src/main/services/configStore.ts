@@ -16,6 +16,7 @@ import {
   BACKGROUND_OPACITY_MIN,
   DEFAULT_BOSS_MINIMIZE,
   DEFAULT_HOME_THEME,
+  DEFAULT_NEW_TAB_URL,
   DEFAULT_SEARCH_TEMPLATE,
   HIDE_DELAY_MS,
   HOME_THEMES,
@@ -77,7 +78,8 @@ export function defaultConfig(): AppConfig {
       defaultZoom: 1,
       hideScrollbars: true,
       searchTemplate: DEFAULT_SEARCH_TEMPLATE,
-      newWindowAsTab: true
+      newWindowAsTab: true,
+      newTabUrl: DEFAULT_NEW_TAB_URL
     },
     update: {
       // 默认开：装完就再也收不到消息的软件，等于把用户留在旧版本里。
@@ -182,6 +184,13 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
   if (typeof b.searchTemplate !== 'string' || !b.searchTemplate.includes('%s')) {
     b.searchTemplate = d.browser.searchTemplate
   }
+  /*
+   * 只挡「不是字符串」。**空串是合法的**：设置页里把那一格清空就是这样，
+   * 它表示「用默认的 google.com」，而那个兜底只有一处（TabManager.newTabUrl）。
+   * 在这里把它改成默认值也能跑，但用户清空的字段会自己弹回一个网址，
+   * 看着像是没改成功。
+   */
+  if (typeof b.newTabUrl !== 'string') b.newTabUrl = d.browser.newTabUrl
   if (!Array.isArray(ls.openUrls)) ls.openUrls = []
   if (typeof ui.topBarOpen !== 'boolean') ui.topBarOpen = d.ui.topBarOpen
   if (typeof ui.railOpen !== 'boolean') ui.railOpen = d.ui.railOpen

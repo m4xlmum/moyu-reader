@@ -8,6 +8,7 @@ import type {
   Bookmark,
   HistoryEntry,
   HotkeyInfo,
+  OwnScreen,
   PresetSite,
   Rect,
   ResizeEdge,
@@ -40,7 +41,6 @@ export const INVOKE = {
   bookmarksUpdate: 'bookmarks:update',
 
   tabsCreate: 'tabs:create',
-  tabsHome: 'tabs:home',
   tabsClose: 'tabs:close',
   tabsActivate: 'tabs:activate',
   tabsReorder: 'tabs:reorder',
@@ -78,6 +78,15 @@ export const INVOKE = {
   uiOpenPopover: 'ui:openPopover',
   uiClosePopover: 'ui:closePopover',
   uiOpenSettings: 'ui:openSettings',
+  uiOpenHome: 'ui:openHome',
+  /**
+   * 从起始页 / 设置这两屏「原路返回」：回到进来之前那张网页。
+   *
+   * 顶栏左上角那颗键与右栏栏底那格「设置」共用这一条——它们在自己的那一屏上
+   * 再被点一次就是这个意思。切换的判据在界面那一侧（它看得见此刻停在哪一屏），
+   * 而托盘与悬浮球菜单里那两项不走这条路：菜单是明确意图，不是开关。
+   */
+  uiLeaveScreen: 'ui:leaveScreen',
 
   hotkeyList: 'hotkey:list',
   hotkeySet: 'hotkey:set',
@@ -160,8 +169,12 @@ export type ConfigPatch = {
 }
 
 export interface TabsStatePayload {
+  /** 标签条画的就是它：只有网页标签，自家那两屏不在其中 */
   tabs: TabState[]
+  /** 正在看着的那张网页；停在起始页 / 设置上时为 null（那时没有哪一格是高亮的） */
   activeTabId: string | null
+  /** 起始页 / 系统设置哪一屏正在上面；看着网页时为 null */
+  screen: OwnScreen | null
 }
 
 export interface OpenPopoverRequest {
@@ -216,9 +229,14 @@ export interface MoyuApi {
     update(input: { id: string; patch: Partial<Bookmark> }): Promise<Bookmark[]>
   }
   tabs: {
+    /**
+     * 新建一张网页标签。
+     *
+     * 不给 `url` 就是「新建标签页」：打开配置里的那一格（browser.newTabUrl，
+     * 默认 google.com）。原先这一种退到 about:blank——透明窗口里那是一块
+     * 透出桌面的空档，没有意义。
+     */
     create(input?: { url?: string; activate?: boolean }): Promise<{ tabId: string }>
-    /** 打开首页：已有则切过去，否则新建 */
-    home(): Promise<{ tabId: string }>
     close(input: { tabId: string }): Promise<void>
     activate(input: { tabId: string }): Promise<void>
     reorder(input: { tabId: string; toIndex: number }): Promise<void>
@@ -226,7 +244,14 @@ export interface MoyuApi {
     onState(cb: (payload: TabsStatePayload) => void): () => void
   }
   nav: {
-    goto(input: { tabId: string; input: string }): Promise<void>
+    /**
+     * 打开一个地址。
+     *
+     * `tabId` 为 null（正文区正停在起始页 / 设置上，没有当前网页）时另开一张
+     * 标签页并切过去——自家那两屏不承载访客内容，它们带着 preload。
+     * 这也是起始页上那颗「打开」的一贯规矩：起始页始终留在原处。
+     */
+    goto(input: { tabId: string | null; input: string }): Promise<void>
     back(input: { tabId: string }): Promise<void>
     forward(input: { tabId: string }): Promise<void>
     reload(input: { tabId: string }): Promise<void>
@@ -297,13 +322,21 @@ export interface MoyuApi {
     openPopover(req: OpenPopoverRequest): Promise<void>
     closePopover(): Promise<void>
     /**
-     * 打开系统设置。
+     * 进入系统设置。
      *
-     * 它和起始页一样是窗口内的一页，不开独立窗口：独立窗口会出现在任务栏
-     * 与 Alt+Tab 里，等于把「我在摸鱼」写在脸上。已有这一页就切过去，
-     * 不重复开。
+     * 它和起始页一样是窗口内的一屏，不开独立窗口：独立窗口会出现在任务栏
+     * 与 Alt+Tab 里，等于把「我在摸鱼」写在脸上。已有这一屏就切过去，
+     * 不重复开。托盘菜单与悬浮球菜单里那两项走的就是这条，**永远进去**。
      */
     openSettings(): Promise<void>
+    /** 进入起始页。顶栏左上角那颗键在别的屏上时走这条 */
+    openHome(): Promise<void>
+    /**
+     * 从这两屏原路返回进来之前那张网页（没有可回的就落回起始页）。
+     *
+     * 只有界面发这条：两颗键各自在自己那一屏上再被点一次时才是这个意思。
+     */
+    leaveScreen(): Promise<void>
   }
   hotkey: {
     list(): Promise<{ bossMinimize: HotkeyInfo; bossHideToTray: HotkeyInfo }>
