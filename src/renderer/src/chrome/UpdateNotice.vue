@@ -12,7 +12,9 @@
  *
  * 那一枚 ✕ 是「忽略这个版本」而不是「稍后」：一次点击就把这一版收掉、且落盘，
  * 下次启动不再冒出来。撤销的入口在设置页（关于 → 已忽略 N.N.N〔仍然提示〕）——
- * 「稍后」只是把同一件事推迟到下次开机再问一遍，那更烦人。
+ * 「稍后」只是把同一件事推迟到下次开机再问一遍，那更烦人。下载中也给这一枚：
+ * 下载可能是「手动查一下」自己带起来的，用户总得有个出口，而它现在真的会把
+ * 在下的那一份中止掉（见 updateService 的 ignore）。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -22,18 +24,23 @@ import { useUpdate } from '../composables/useUpdate'
 import { useWindowDrag } from '../composables/useWindowDrag'
 import Icon from './Icon.vue'
 
-const { state, download, install, ignore } = useUpdate()
+const { state, install, ignore } = useUpdate()
 
 /** 这一行也能拖窗口：按在按钮上是操作，按在别处（文字、留白）都是拖 */
 const drag = useWindowDrag()
 
 const phase = computed(() => state.value?.phase ?? 'idle')
 const version = computed(() => state.value?.version ?? null)
+/** 用户已经按过「更新并重启」，只是还没下完——下完自己装 */
+const pending = computed(() => state.value?.pendingInstall ?? false)
 
 const text = computed(() => {
   switch (phase.value) {
     case 'downloading':
-      return `正在下载更新 ${state.value?.percent ?? 0}%`
+      // 按过「更新并重启」的人要的是「接下来会自己发生什么」，那正是这句话
+      return pending.value
+        ? `正在下载更新 ${state.value?.percent ?? 0}%，下完自动重启安装`
+        : `正在下载更新 ${state.value?.percent ?? 0}%`
     case 'ready':
       // 不说「重启」，说清楚是「重启之后才会装上」：现在点别的都不会装
       return `摸鱼阅读 ${version.value} 已下载，重启后安装`
@@ -45,13 +52,23 @@ const text = computed(() => {
 })
 
 /**
- * 主操作。下载中不给按钮——这一段时间里没有别的可做，
- * 而 ✕ 也不给（见模板）：下到一半收掉提示，留下的半截文件没人管。
+ * 主操作。它只有一个意思：**更新并重启**。
+ *
+ * 「下载」不再是单独一颗按钮——按下去之后该下的先下、该排队的排队、能装的立刻
+ * 装，都由 updateService.install 一处决定，这一行只要把「用户要的是更新」这件事
+ * 说出去就够了。
+ *
+ * pendingInstall 之后不再画按钮：已经没什么可按的了，而且再按一次也没有第二种
+ * 结果。失败那一支仍然是「打开发布页」——网络不通时那是唯一还走得通的路。
  */
 const action = computed<{ label: string; run: () => void } | null>(() => {
-  if (phase.value === 'ready') return { label: '重启并安装', run: install }
   if (phase.value === 'error') return { label: '打开发布页', run: openReleases }
-  if (phase.value === 'available') return { label: '下载', run: () => void download() }
+  if (phase.value === 'available' || phase.value === 'ready') {
+    return { label: '更新并重启', run: install }
+  }
+  if (phase.value === 'downloading' && !pending.value) {
+    return { label: '更新并重启', run: install }
+  }
   return null
 })
 
@@ -82,8 +99,12 @@ function dismiss(): void {
       {{ action.label }}
     </button>
 
+    <!--
+      忽略键。下载中也留着：下载可能是「手动查一下」自己带起来的，用户得有个
+      出口，而按它会**真的把在下的那一份中止掉、把半截文件删掉**（见
+      updateService 的 ignore）——不然这一版会在他说了「不要」之后继续下完。
+    -->
     <button
-      v-if="phase !== 'downloading'"
       class="notice-btn icon"
       :title="`忽略 ${version}，不再提示`"
       :aria-label="`忽略 ${version}，不再提示`"
@@ -147,7 +168,7 @@ function dismiss(): void {
 }
 
 /*
- * 主操作（下载 / 重启并安装 / 打开发布页）用强调色，与顶栏上那些「开着」的
+ * 主操作（更新并重启 / 打开发布页）用强调色，与顶栏上那些「开着」的
  * 按钮同一套：平时是 accent-soft 上的强调色字，悬停才填满。
  * 这一条本来就只有 30px 高，填满的红或蓝一条会把整行变成一个色块。
  */

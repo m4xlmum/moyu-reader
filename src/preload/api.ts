@@ -166,7 +166,6 @@ export const api: MoyuApi = {
   update: {
     get: () => ipcRenderer.invoke(INVOKE.updateGet) as Promise<UpdateState>,
     check: () => ipcRenderer.invoke(INVOKE.updateCheck) as Promise<UpdateState>,
-    download: () => ipcRenderer.invoke(INVOKE.updateDownload) as Promise<UpdateState>,
     install: () => ipcRenderer.invoke(INVOKE.updateInstall) as Promise<void>,
     ignore: (input) => ipcRenderer.invoke(INVOKE.updateIgnore, input) as Promise<UpdateState>,
     onState: (cb) => on<UpdateState>(BROADCAST.updateState, cb)

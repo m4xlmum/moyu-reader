@@ -39,8 +39,9 @@
  *   # 注意：--home / --settings 看的是**那一份文档**自己长什么样；
  *   #      --screen home|settings 看的是**界面处在「停在它上面」那一态**（见上）
  *   npx electron spike/preview.js --bg 0.35        # 界面底板透明度：底板该淡，字不该淡
- *   npx electron spike/preview.js --notice 1.1.0    # 更新提示条：查到新版、可以下载
+ *   npx electron spike/preview.js --notice 1.1.0    # 更新提示条：查到新版，点一下更新并重启
  *   npx electron spike/preview.js --notice 1.1.0 --notice-phase downloading --notice-percent 42
+ *   npx electron spike/preview.js --notice 1.1.0 --notice-phase downloading --notice-pending
  *   npx electron spike/preview.js --notice 1.1.0 --notice-phase ready --theme night
  *   npx electron spike/preview.js --drag-probe     # 逐个位置按一下，问「这里按下去起的是拖动还是缩放」
  *   npx electron spike/preview.js --popover --bg 0.35   # 弹出面板也是另一份文档，同样要问一遍
@@ -328,7 +329,9 @@ const BALL_FIT = (() => {
  * --notice <版本>：摆出「查到这一版」那一态，于是提示条占一行。
  *
  * 形态由 --notice-phase 挑（available / downloading / ready / error），
- * 下载中那一条进度线要 --notice-percent 才有长度，失败那一句要 --notice-message。
+ * 下载中那一条进度线要 --notice-percent 才有长度，失败那一句要 --notice-message，
+ * 而「下载中且已经按过更新并重启」那一态要 --notice-pending（那句话会变长、
+ * 按钮会收起来——两件事都只在那一态下看得出来）。
  * 不给 --notice 就一条提示都没有——那正是「没有新版本」的正常样子，
  * 因此它同时也是「平时窗口长什么样」的基准。
  */
@@ -347,6 +350,9 @@ const NOTICE_PHASE = (() => {
   const known = ['available', 'downloading', 'ready', 'error']
   return known.includes(value) ? value : 'available'
 })()
+
+/** --notice-pending：「更新并重启」已经按过了（配 downloading 用才是它那个样子） */
+const NOTICE_PENDING = args.includes('--notice-pending')
 
 const NOTICE_PERCENT = Math.min(100, Math.max(0, num('--notice-percent', 42)))
 
@@ -432,6 +438,7 @@ ipcMain.on('preview:options', (event) => {
     ballImage: BALL_IMAGE_DATA,
     notice: NOTICE,
     noticePhase: NOTICE_PHASE,
+    noticePending: NOTICE_PENDING,
     noticePercent: NOTICE_PERCENT,
     noticeMessage: NOTICE_MESSAGE,
     openFile: OPEN_FILE,
@@ -1531,10 +1538,13 @@ app.whenReady().then(async () => {
   const themeTag = page === 'home' || theme !== 'paper' ? `-${theme}` : ''
   /*
    * 提示条的形态也写进名字：四种形态各是一张图，跑第二轮时彼此不能覆盖。
+   * 「已按过更新并重启」那一态另加一段后缀——它是另一种文案，会被上一种盖掉。
    * 只有 chrome 那一页会画它，别的页面上这个开关没有任何作用。
    */
   const noticeTag =
-    page === 'chrome' && NOTICE ? `-notice${NOTICE_PHASE === 'available' ? '' : `-${NOTICE_PHASE}`}` : ''
+    page === 'chrome' && NOTICE
+      ? `-notice${NOTICE_PHASE === 'available' ? '' : `-${NOTICE_PHASE}`}${NOTICE_PENDING ? '-pending' : ''}`
+      : ''
   /*
    * 停在哪一屏也写进名字：起始页与设置是两张不同的图，不能互相覆盖。
    * 不给 --screen 时一个字都不加——默认那几张图的名字 README 在用。

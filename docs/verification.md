@@ -195,7 +195,7 @@ npx electron spike/update-check.js
 探「自动检查更新」这条路上的每一段：查、比版本、下载、校验、装。esbuild 把真的
 `updateService.ts` / `configStore.ts` / `version.ts` 打成一包再 `require`（验真的，
 不验抄本），配置写在临时目录里，本机起一只 `http.createServer` 当假 GitHub——**它自己
-记着收到过几次请求**，所以「开关关掉就不许联网」是数出来的，不是看返回值。十二问：
+记着收到过几次请求**，所以「开关关掉就不许联网」是数出来的，不是看返回值。十五问：
 
 - **先钉死「不行的那条路」**：feed 供同版本 → 不提示；feed 指向一个已经关掉的端口 →
   `error`，且窗口里**一条提示都不冒**（不是「反正没显示」，而是 `setNoticeVisible`
@@ -210,16 +210,25 @@ npx electron spike/update-check.js
 - **网络不通**（feed 指向关掉的端口）立刻 `error`；**只接不答的服务器** 15 秒收场
   （`ClientRequest` 在 Electron 里没有 `setTimeout`，见 Q34）
 - **开关关掉就不许联网**：`autoCheck: false` 时自动那一次**一次请求都不发**，
-  而手动那一次照发
+  而手动那一次照发——**并且查完自己就开始下**（Q8）。这一条是「两下」的第一下的全部内容：
+  按下「检查更新」的人要的就是更新，不该再让他点一次「下载」
+- **没人按过的东西不会自己开始下**（Q8b）：手动那一次下起来之后，spawn 替身**一次都没被调用**
+  ——下载是下载，装与重启是另一下按出来的
+- **下载途中按「更新并重启」**（Q8c）：那一刻只记下意图（`pendingInstall`），
+  **不许当场装**；下载走完那一份自己接上——恰好一次 spawn、随后恰好一次 quit
+- **下载中按 ✕**（Q8d）：那一份真的被中止（请求 abort、盘上不留 `.part` 也不留正名）、
+  状态落回 `available` 且**不许被写成「下载失败」**（那是错怪网络），撤销忽略之后能从头再来
 - **忽略的版本不再提示**：忽略之后 `available` 仍在（设置页看得见）、提示条不出；
   换个版本又出来；`ignore(null)` 能撤销，并且**落盘**——换一个新的 `ConfigStore`
   从同一个目录读回来才算数
-- **没校验通过不许起安装程序**：`idle` / `available` / 下载一半时调 `install()`，
-  spawn 替身**一次都没被调用**；`ready` 之后恰好一次，路径是那个 exe，
-  无实参、`detached`、`stdio: 'ignore'`，随后 quit 恰好一次
+- **没校验通过不许起安装程序**：`idle` / `none` / `error` 上调 `install()`，
+  spawn 替身**一次都没被调用**（拒绝并记一条日志）；`available` / `downloading` 上
+  同样**一次 spawn 都不许有**——只排队；`ready` 之后恰好一次，路径是那个 exe，
+  **参数逐字是 `['/S','--updated','--force-run']`**（少一枚就没有「装完自己回来」，
+  见 docs/spike-findings.md 的 Q48）、`detached`、`stdio: 'ignore'`，随后 quit 恰好一次
 - **已经下过的那一份会被认出来**：再查一次直接 `ready`，且**没有第二次下载请求**
 - **真实的那一份 `release/latest.yml`** 解析得出来：url、sha512、size 与盘上那个
-  1.0.0 的 exe 逐项对得上（喂给它的是真构建产物，不是手写的样例）
+  exe 逐项对得上（喂给它的是真构建产物，不是手写的样例）
 
 ```bash
 npx electron spike/update-check.js --net
@@ -274,7 +283,7 @@ npx electron spike/preview.js --no-topbar
 | `--popover --kind tabs` | 面板有五张（站点 / 历史记录 / 书签 / 显示 / 标签页），换一张看 |
 | `--bg 0.35` | 把界面底板透明度设成这个值。看的是「底板淡了、字没淡」 |
 | `--maximized` | 已最大化：没有两栏也没有正文，只在右上角那一小块里浮着「还原键 + 球」。不给尺寸时按那一小块的尺寸开窗（80×48） |
-| `--notice 1.1.0` | 界面里多出更新提示条那一行（地址栏与网页之间）。`--notice-phase ready\|downloading\|error` 换那一态，`--notice-percent 42` 给下载中那条进度线一个长度，`--notice-message` 给失败那一句原因。不给 `--notice` 就一条提示都没有——那正是「没有新版本」的正常样子 |
+| `--notice 1.1.0` | 界面里多出更新提示条那一行（地址栏与网页之间）。`--notice-phase ready\|downloading\|error` 换那一态，`--notice-percent 42` 给下载中那条进度线一个长度，`--notice-message` 给失败那一句原因。`--notice-pending` 是「下载中、且用户已经按过『更新并重启』」那一态：那句话变成「下完自动重启安装」、**那颗按钮收起来**（该按的都按完了，没什么可再点的），而 ✕ 照旧在。不给 `--notice` 就一条提示都没有——那正是「没有新版本」的正常样子 |
 | `--ball-icon <id>` | 球面上画哪一枚内置图标（八枚之一：书页 / 眯眼 / 摸鱼 / 咖啡 / 月亮 / 猫 / 代码 / 耳机），或 `custom` |
 | `--ball-image <路径>` | 把这张本地图当作「用户上传过的那张自定义图标」 |
 | `--ball-fit cover\|glyph` | 自定义图标落进球里的方式：铺满球面 / 中央图案 |

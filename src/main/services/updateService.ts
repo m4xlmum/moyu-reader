@@ -18,10 +18,24 @@
  *    四十多秒，见 src/main/index.ts 的 will-quit）。也就是说「退出时自动装」
  *    在这里本来就不可靠，而绕开它只能自己 spawn 安装程序。
  * 3. 它最值钱的是差量下载（.blockmap），代价是要一直维护 .blockmap 并把它的
- *    下载器一起吞下来。本项目的更新是「用户点一下才下」，全量可接受。
+ *    下载器一起吞下来。本项目的更新是「用户按下那一下才开始下」，全量可接受。
  *
  * 自己写的代价是**每次更新都全量下载**（1.0.0 的安装包 111MB）。换来的是零新
  * 依赖、退出流程不动、以及安装那一步完全在自己手里。
+ *
+ * ## 用户只按两下
+ *
+ * 第一下是「检查更新」，第二下是「更新并重启」。之后全自动：
+ *
+ *   - **第一下之后**：手动查到的那个版本自己开始下载（那 111MB 是用户挑明的，
+ *     不必再让他点一次「下载」）；而启动二十秒后那次静默检查仍然只提示、不下
+ *     ——它后面没有人按过任何东西。两条入口因此走的是同一个 check()，
+ *     差别只在 manual 这一枚参数上。
+ *   - **第二下之后**：还没下的先下再装，正在下的一边下一边等（下完自己装），
+ *     已经下好的立刻装。安装是**静默**的、装完把应用自己叫回来（见 install）。
+ *
+ * 于是「下载」这个动作不再是界面上的一颗按钮，而是这句话的前半截。它仍然
+ * 只由用户发起——没有任何一条路上会不问自取地开始下 111MB。
  *
  * ## 状态只有一份
  *
@@ -33,7 +47,7 @@
  *
  * 查不到、下不动、校验不过——一律只在设置页那一行里写一句，**界面上不弹任何
  * 东西**。这是个隐身软件：一次网络抖动不该在屏幕上冒出一条东西来。唯一的例外
- * 是「已经知道有新版本、用户按了下载、下载失败」——那时提示条本来就在，
+ * 是「已经知道有新版本、用户按了更新并重启、下载失败」——那时提示条本来就在，
  * 它改成说一句「下载失败」，并给一个去发布页的出口。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -160,6 +174,25 @@ function reasonOf(err: unknown): string {
   return text === '' ? '未知错误' : text
 }
 
+/**
+ * 静默安装要的三枚参数，一枚都不能少。
+ *
+ * - `/S` 不走向导、也不选目录。装到哪儿**由安装程序自己记住**：上一次装在
+ *   `HKCU\Software\<某个 UUID>\InstallLocation` 里（那个 UUID 由 appId 推出来），
+ *   静默装回的是同一个目录，因此用户当初选在哪儿、升级就落在哪儿，不会多出一份。
+ * - `--updated` 说明「这是升级」。它让安装程序容忍还有一个实例在跑（睡一会儿、
+ *   再收掉，而不是弹一个「请先关闭」的框），也跳过桌面快捷方式的重建。
+ * - `--force-run` **装完把应用启动回来**。这一枚是我们这个形状（assisted
+ *   installer，即 oneClick: false）专有的：electron-builder 的
+ *   templates/nsis/installSection.nsh 里，`!ifdef ONE_CLICK` 那一支才是「静默也
+ *   重启」，我们这一支的判据是 `${isForceRun} ${andIf} ${Silent}`。少了它，
+ *   安装程序装完就静默退出，没有人把应用叫回来——「全自动」就断在最后一步上。
+ *
+ * 这三枚一起加上，等于把「用户点下一步」的那几步全部替他按了。代价是升级期间
+ * 看不见任何界面，因此**只有用户自己按了「更新并重启」才许走这条路**（见 install）。
+ */
+const SILENT_INSTALL_ARGS: readonly string[] = ['/S', '--updated', '--force-run']
+
 export class UpdateService {
   private state: UpdateState
   private manifest: UpdateManifest | null = null
@@ -167,6 +200,14 @@ export class UpdateService {
   private installerPath: string | null = null
   private checking = false
   private downloading = false
+  /**
+   * 这一次下载是**被用户中止**的（按了「忽略这一版」），不是失败了。
+   *
+   * 中止同样会让那条 promise 走进 catch，而 catch 里默认写的是「下载失败：xxx」
+   * ——一句话错怪了网络，还让设置页把那句挂在最显眼的位置。有了这枚标志，
+   * catch 就知道该闭嘴：状态由 ignore() 自己落回去。
+   */
+  private aborting = false
   private inflight: ClientRequest | null = null
 
   constructor(private readonly deps: UpdateDeps) {
@@ -177,7 +218,8 @@ export class UpdateService {
       version: null,
       percent: 0,
       message: deps.enabled ? '' : '开发模式下不检查更新',
-      ignored: false
+      ignored: false,
+      pendingInstall: false
     }
   }
 
@@ -190,6 +232,8 @@ export class UpdateService {
    *
    * `manual` 是从设置页那个按钮来的：**开关管的是自动检查，不管手动**
    * ——用户关掉「自动检查更新」的意思是「别自己联网」，不是「把这个功能删掉」。
+   * 而且手动那一次查到新版就**接着下**：按下这颗键的人要的就是「更新」，
+   * 让他再点一次「下载」只是多一道手续（见文件头的「用户只按两下」）。
    */
   async check(options: { manual?: boolean } = {}): Promise<UpdateState> {
     if (!this.deps.enabled) return this.getState()
@@ -197,6 +241,7 @@ export class UpdateService {
     // 正在查或正在下时不叠第二次：并发请求对这件事没有任何好处
     if (this.checking || this.downloading) return this.getState()
 
+    let kickDownload = false
     this.checking = true
     this.setState({ phase: 'checking', message: '' })
     try {
@@ -214,7 +259,7 @@ export class UpdateService {
       if (!isNewer(manifest.version, this.deps.currentVersion)) {
         this.installerPath = null
         this.manifest = null
-        this.setState({ phase: 'none', version: null, percent: 0, message: '' })
+        this.setState({ phase: 'none', version: null, percent: 0, message: '', pendingInstall: false })
         return this.getState()
       }
 
@@ -227,7 +272,14 @@ export class UpdateService {
       }
 
       this.installerPath = null
-      this.setState({ phase: 'available', version: manifest.version, percent: 0, message: '' })
+      this.setState({
+        phase: 'available',
+        version: manifest.version,
+        percent: 0,
+        message: '',
+        pendingInstall: false
+      })
+      kickDownload = options.manual === true
     } catch (err) {
       log.warn(`检查更新失败：${reasonOf(err)}`)
       this.manifest = null
@@ -236,10 +288,25 @@ export class UpdateService {
     } finally {
       this.checking = false
     }
+
+    /*
+     * 起下载要等 `checking` 落回 false 之后。
+     *
+     * download() 自己的闸是「正在查或正在下就不进来」，在 try 块里直接调会被
+     * 这枚标志当场挡掉——什么都不发生，而外面看起来一切正常（这类「安静地没做
+     * 成」最难查）。等 finally 走完再起，走的是与手动下载完全同一条路。
+     */
+    if (kickDownload) void this.download()
     return this.getState()
   }
 
-  /** 下那个安装包，边下边算 sha512，下完比对 */
+  /**
+   * 下那个安装包，边下边算 sha512，下完比对。
+   *
+   * 手动的「检查更新」与「更新并重启」都会从这里走（见 check 与 install）。
+   * 下完之后如果用户已经按过「更新并重启」（pendingInstall），这里**直接接着装**
+   * ——那一下按的就是「下完自己装、自己重启」，不必让他再按第三次。
+   */
   async download(): Promise<UpdateState> {
     if (!this.deps.enabled) return this.getState()
     if (this.downloading || this.checking) return this.getState()
@@ -248,10 +315,20 @@ export class UpdateService {
 
     this.downloading = true
     this.setState({ phase: 'downloading', version: manifest.version, percent: 0, message: '' })
+    const target = join(this.deps.downloadDir, manifest.file.url)
     try {
       await mkdir(this.deps.downloadDir, { recursive: true })
-      const target = join(this.deps.downloadDir, manifest.file.url)
+      /*
+       * 起请求之前再看一眼有没有被中止。
+       *
+       * 「按下 ✕」与「请求真的发出去」之间隔着 mkdir 这一个 await：那几毫秒里
+       * inflight 还是 null，ignore() 的 abort() 落空，于是这一百多兆会在一句
+       * 「这一版不要了」之后照下不误、还照装。这枚标志是把那道缝堵上。
+       */
+      if (this.aborting) throw new Error('下载已被中止')
       const got = await this.downloadFile(target, manifest)
+      // 下完之后、改状态之前再看一眼：中止可能刚好发生在最后那一下
+      if (this.aborting) throw new Error('下载已被中止')
       if (got !== manifest.file.sha512) {
         // 校验不过的东西不许留在盘上——尤其不许留在「下一步就要执行它」的位置
         await rm(target, { force: true })
@@ -260,37 +337,70 @@ export class UpdateService {
       this.installerPath = target
       this.setState({ phase: 'ready', percent: 100, message: '' })
     } catch (err) {
-      log.warn(`下载更新失败：${reasonOf(err)}`)
-      this.installerPath = null
-      this.setState({ phase: 'error', percent: 0, message: reasonOf(err) })
+      if (this.aborting) {
+        // 用户按了「忽略这一版」把它中止的，不是失败：状态已经由 ignore() 落回去了。
+        // 半截的 .part 由 downloadFile 自己收拾，这里补一刀是防「中止赶在下完之后」
+        // ——那一份是完整的，因此得连正名一起删掉。两刀都 await，不留竞态给外人看
+        log.info('下载被用户中止')
+        await rm(`${target}.part`, { force: true })
+        await rm(target, { force: true })
+      } else {
+        log.warn(`下载更新失败：${reasonOf(err)}`)
+        this.installerPath = null
+        this.setState({ phase: 'error', percent: 0, message: reasonOf(err), pendingInstall: false })
+      }
     } finally {
       this.downloading = false
+      this.aborting = false
     }
+
+    // 「下完自己装」那一步。走的是同一个 install()，因此「没校验过不许装」那条
+    // 门槛也一并管着这里——installerPath 与 phase 是它自己看着的
+    if (this.state.phase === 'ready' && this.state.pendingInstall) this.install()
     return this.getState()
   }
 
   /**
-   * 起安装程序，然后退出。
+   * 「更新并重启」这一下走到头。三条路，按当前状态分：
    *
-   * 只有 phase 是 ready（这一版**下完并且校验通过**）才允许走到这里。别的状态
-   * 下一律拒绝并且什么都不做——一个没校验过的可执行文件不值得信任。
+   * - **ready**（这一版已下完并通过校验）→ 起安装程序、退出本进程。
+   * - **downloading / available** → 记下这个意图（pendingInstall），下完自己装；
+   *   available 时顺手把下载起起来。用户按的既然是「更新并重启」，就不该因为
+   *   「还没开始下」而什么都不发生。
+   * - **其余状态**（idle / none / error / 关掉）→ 拒绝并记一条日志。**永远不装在
+   *   没校验过的东西上**，这条门槛不许松：available 时 installerPath 是空的，
+   *   这里的拒绝正是把它挡住的那只手。
    *
-   * 不传 `/S`、也不传 electron-updater 那套 `--updated`：nsis 是 oneClick: false
-   * 且允许改安装目录，用户装过一次、知道那个向导长什么样，升级就走同一个向导
-   * （安装目录会记住上次选的那个）。静默安装等于绕过用户。
+   * 安装是**静默**的（`/S --updated --force-run`，见 SILENT_INSTALL_ARGS）：不走向导、
+   * 装回上次那个目录、装完把应用自己叫回来。走这条路的前提是**用户按了这一下**
+   * ——没有任何一条路上会自己装、自己重启。
    *
-   * 顺序是「先起、后退出」，这里唯一一处靠时序成立的地方：安装向导要用户点几下
-   * 才会真正复制文件，那时本进程早已退出，不存在 exe 被锁住覆盖不了的问题。
-   * detached 让安装程序在 app.exit(0) 之后活着；不 detach 会被一起带走。
+   * 顺序是「先起、后退出」：spawn 之后本进程马上就走，安装程序 detached 着活下来
+   * （不 detach 会被 app.exit(0) 一起带走）。
    */
   install(): void {
-    if (this.state.phase !== 'ready' || !this.installerPath) {
-      log.warn(`当前状态（${this.state.phase}）不允许安装，已拒绝`)
+    const phase = this.state.phase
+    if (phase === 'ready' && this.installerPath) {
+      this.spawnInstaller()
       return
     }
+    if (phase === 'available' || phase === 'downloading') {
+      const needsDownload = phase === 'available'
+      this.setState({ pendingInstall: true })
+      if (needsDownload) void this.download()
+      return
+    }
+    log.warn(`当前状态（${phase}）没有可装的东西，已拒绝`)
+  }
+
+  /** 起安装程序并退出。只有 install() 走得到这里，且只在 ready 那一支 */
+  private spawnInstaller(): void {
     const spawn = this.deps.spawn ?? ((f, a, o) => nodeSpawn(f, a as string[], o))
-    log.info(`起安装程序：${this.installerPath}`)
-    const child = spawn(this.installerPath, [], { detached: true, stdio: 'ignore' })
+    log.info(`静默安装并重启：${this.installerPath}`)
+    const child = spawn(this.installerPath as string, SILENT_INSTALL_ARGS, {
+      detached: true,
+      stdio: 'ignore'
+    })
     child.unref()
     this.deps.quit()
   }
@@ -299,10 +409,21 @@ export class UpdateService {
    * 忽略某个版本（`version` 传 null 是撤销）。
    *
    * 只忽略这一个版本：下一个版本照常提示。落盘，因此下次启动不再冒出来。
+   *
+   * 正在下的时候被忽略，就**把在下的那一份真的中止掉**：既然下载可能是「手动
+   * 查一下」自己带起来的，用户就得有个出口——不然那一百多兆会在他明确说了
+   * 「这一版不要」之后继续下完，还占着盘。撤销（传 null）不动下载：那不是
+   * 「不要这一版」的意思。
    */
   ignore(version: string | null): UpdateState {
     this.deps.config.set((c) => ({ ...c, update: { ...c.update, ignoredVersion: version } }))
-    this.setState({})
+    if (version !== null && version === this.state.version && this.downloading) {
+      this.aborting = true
+      this.inflight?.abort()
+      this.setState({ phase: 'available', percent: 0, message: '', pendingInstall: false })
+      return this.getState()
+    }
+    this.setState({ pendingInstall: false })
     return this.getState()
   }
 

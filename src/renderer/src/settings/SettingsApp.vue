@@ -83,11 +83,13 @@ const cropperOpen = ref(false)
  *
  * 提示条是这件事的常用出口，这一页是它的另一半：查得到什么、下到哪儿了、
  * 以及**撤销「忽略这个版本」**。两处听的是同一条广播，因此进度是同一个数。
+ *
+ * 没有单独的「下载」：那颗按钮就是「更新并重启」，按下去之后该下的先下、
+ * 该排队的排队、能装的立刻装（见 updateService 的 install）。
  */
 const {
   state: update,
   check: checkUpdate,
-  download: downloadUpdate,
   install: installUpdate,
   ignore: ignoreVersion
 } = useUpdate()
@@ -101,6 +103,9 @@ const updateEnabled = computed(() => update.value?.enabled ?? false)
  * 阶段是 error 而**版本号还在**，说明失败发生在下载那一步（检查失败时我们
  * 根本不知道有没有新版，版本号是空的，见 updateService.setState）。
  * 两种失败要说成两句话，否则「检查失败：服务器返回 404」会被读成「没有新版本」。
+ *
+ * 下载中分了两种说法：按过「更新并重启」的，要说清楚剩下的那段时间**不用他再
+ * 管**——这正是这一版改的东西。
  */
 const updateStatus = computed(() => {
   const s = update.value
@@ -114,7 +119,7 @@ const updateStatus = computed(() => {
     case 'available':
       return `发现 ${s.version}，尚未下载`
     case 'downloading':
-      return `正在下载 ${s.percent}%`
+      return s.pendingInstall ? `正在下载 ${s.percent}%，下完自动重启安装` : `正在下载 ${s.percent}%`
     case 'ready':
       return `${s.version} 已下载，重启后安装`
     case 'error':
@@ -124,12 +129,20 @@ const updateStatus = computed(() => {
   }
 })
 
-/** 查完之后能做的事：下、或者装。其余阶段没有可做的动作 */
+/**
+ * 查完之后能做的事：更新并重启。
+ *
+ * 三个阶段同一颗按钮、同一句话：已经下好的立刻装，正在下的排上队，还没下的
+ * 先把下载起起来——区别在 updateService.install 里，界面上不必分三种说法。
+ * 按过之后（pendingInstall）按钮收起来，因为剩下的都会自己发生。
+ */
 const updateAction = computed<{ label: string; run: () => void } | null>(() => {
   const s = update.value
   if (!s?.enabled) return null
-  if (s.phase === 'ready') return { label: '重启并安装', run: () => installUpdate() }
-  if (s.phase === 'available') return { label: '下载', run: () => void downloadUpdate() }
+  if (s.pendingInstall) return null
+  if (s.phase === 'available' || s.phase === 'downloading' || s.phase === 'ready') {
+    return { label: '更新并重启', run: () => installUpdate() }
+  }
   return null
 })
 
@@ -670,7 +683,9 @@ function setSizePreset(preset: SizePreset): void {
             </div>
           </div>
           <p class="hint">
-            下载走 GitHub 发布页，进度也显示在窗口顶部那条提示上。
+            下载走 GitHub 发布页，进度也显示在窗口顶部那条提示上。整件事只问你两次：
+            点一下「检查更新」（查到就自己开始下），再点一下「更新并重启」（之后
+            下载、校验、安装、重启都不再打扰你）。
             <b>安装包没有代码签名</b>，完整性只靠 HTTPS 与发布信息里的校验和兜底，
             因此 Windows SmartScreen 可能仍会提示一次。
           </p>
@@ -688,8 +703,8 @@ function setSizePreset(preset: SizePreset): void {
                 "
               />
               <span class="dim">
-                启动约二十秒后在后台查一次，查到什么都不会弹出来。
-                关掉之后程序不再自己联网，上面那个按钮仍然可用
+                启动约二十秒后在后台查一次，查到什么都不会弹出来，也不会自己开始下载
+                ——下载要你点过上面那颗按钮。关掉之后程序不再自己联网，那颗按钮仍然可用
               </span>
             </div>
           </div>

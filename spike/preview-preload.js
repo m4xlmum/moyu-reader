@@ -282,14 +282,15 @@ function syncNotice() {
 /**
  * 更新那条桥。
  *
- * 形态由命令行给（--notice 1.1.0 / --notice-phase ready / --notice-percent 42），
- * 因为要看的正是那几种形态各自长什么样。**点击是真的会改状态的**：
- * 「按了下载会走到已下载」「按了 ✕ 这一条会收掉」是这一版最要紧的两条往返，
- * 假桥要是把按钮当摆设，预览里点一下什么都不动，也就验不出按对了没有。
+ * 形态由命令行给（--notice 1.1.0 / --notice-phase ready / --notice-percent 42 /
+ * --notice-pending），因为要看的正是那几种形态各自长什么样。**点击是真的会改
+ * 状态的**：「按了更新并重启会走到已下载」「按了 ✕ 这一条会收掉」是这一版最
+ * 要紧的两条往返，假桥要是把按钮当摆设，预览里点一下什么都不动，也就验不出
+ * 按对了没有。
  *
  * 下载不去模拟 111MB 的进度：形态用 --notice-phase downloading --notice-percent 42
- * 直接摆出来（要验的是那一条进度线画在哪儿）。真进度只有主进程那边才走得通，
- * 由 spike/update-check.js 验。
+ * 直接摆出来（要验的是那一条进度线画在哪儿、以及按过之后那句话长了什么样）。
+ * 真进度只有主进程那边才走得通，由 spike/update-check.js 验。
  */
 const updateListeners = new Set()
 const updateState = {
@@ -299,7 +300,8 @@ const updateState = {
   version: opts.notice ?? null,
   percent: opts.noticePercent ?? 0,
   message: opts.noticeMessage ?? '',
-  ignored: false
+  ignored: false,
+  pendingInstall: opts.noticePending === true
 }
 let installCalls = 0
 /** 整体透明度那条滑块发过来的请求，供 --drag-opacity 那一问来读（见下） */
@@ -682,15 +684,20 @@ contextBridge.exposeInMainWorld('moyu', {
      * 在真机上由 updateService 决定。这里只保证按钮点得动、回得来。
      */
     check: () => Promise.resolve({ ...updateState }),
-    download: () => {
-      // 按了下载就走到底（真进度要 111MB，见上面 updateState 的说明）
-      updateState.phase = 'ready'
-      updateState.percent = 100
-      emitUpdate()
-      return Promise.resolve({ ...updateState })
-    },
+    /*
+     * 「更新并重启」这一下真的会改状态，改法与 updateService.install 一致：
+     * 已下好的直接装（界面看不出变化，除了 installCalls 记了一笔）；正在下的
+     * 只记下意图（pendingInstall），那句话就会变成「下完自动重启安装」、按钮收起；
+     * 还没下的先把下载起起来——真机上那一瞬间就是 downloading + 0%。
+     */
     install: () => {
-      installCalls += 1
+      if (updateState.phase === 'ready') installCalls += 1
+      else if (updateState.phase === 'available') {
+        updateState.phase = 'downloading'
+        updateState.percent = 0
+        updateState.pendingInstall = true
+      } else if (updateState.phase === 'downloading') updateState.pendingInstall = true
+      emitUpdate()
       return Promise.resolve()
     },
     /** --drag-probe 那套的同一招：把点击的账记下来，供探针来读 */
@@ -699,6 +706,13 @@ contextBridge.exposeInMainWorld('moyu', {
       config.update.ignoredVersion = input?.version ?? null
       updateState.ignored =
         updateState.version !== null && config.update.ignoredVersion === updateState.version
+      // 与 updateService.ignore 同一条：正在下的时候被忽略，那份下载就中止了，
+      // 状态落回 available（下半句「下完自动装」也跟着作废）
+      if (input?.version !== null && updateState.phase === 'downloading') {
+        updateState.phase = 'available'
+        updateState.percent = 0
+        updateState.pendingInstall = false
+      } else updateState.pendingInstall = false
       emitUpdate()
       syncNotice()
       return Promise.resolve({ ...updateState })

@@ -2,8 +2,11 @@
  * 更新状态的响应式镜像。
  *
  * 与 useWindowState / useConfig 逐字同构：挂载时拉一次、订阅广播、卸载退订。
- * 提示条与设置页各持有一份，靠同一条广播对齐——因此设置页点「下载」时，
+ * 提示条与设置页各持有一份，靠同一条广播对齐——因此设置页点「更新并重启」时，
  * 窗口顶部那条提示上的百分比是同一个数。
+ *
+ * 三个动作里没有「下载」：下载是「检查更新」与「更新并重启」各自的后半截，
+ * 界面上没有单独一颗下载按钮（见 updateService 的 check / install）。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -23,19 +26,21 @@ export function useUpdate() {
 
   onUnmounted(() => unsubscribe?.())
 
-  /** 查一次。手动查不受「自动检查更新」那个开关管 */
+  /**
+   * 查一次；查到比现在新就开始下。手动查不受「自动检查更新」那个开关管。
+   *
+   * 这一下要等的是**查**，不是下载：查完主进程就把下载起起来自己走了，回来时
+   * 状态已经是 downloading，之后每一步都由广播送过来。
+   */
   async function check(): Promise<void> {
     state.value = await window.moyu.update.check()
   }
 
-  async function download(): Promise<void> {
-    state.value = await window.moyu.update.download()
-  }
-
   /**
-   * 起安装程序并退出本进程。
+   * 更新并重启。已经下好就立刻装并退出；还在下就记下这个意图、下完自己装。
    *
-   * 不等回执也不用回执——这个调用成功的话，本进程马上就不在了。
+   * 不等回执也不用回执——这个调用成功的话，本进程马上就不在了（或者还要等
+   * 那一百多兆下完），两种情况都没有什么可等的。
    */
   function install(): void {
     void window.moyu.update.install()
@@ -46,5 +51,5 @@ export function useUpdate() {
     state.value = await window.moyu.update.ignore({ version })
   }
 
-  return { state, check, download, install, ignore }
+  return { state, check, install, ignore }
 }

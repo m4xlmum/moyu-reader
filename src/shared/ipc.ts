@@ -102,7 +102,6 @@ export const INVOKE = {
 
   updateGet: 'update:get',
   updateCheck: 'update:check',
-  updateDownload: 'update:download',
   updateInstall: 'update:install',
   updateIgnore: 'update:ignore',
 
@@ -367,20 +366,23 @@ export interface MoyuApi {
   /**
    * 检查更新。
    *
-   * 五个动作都返回**做完之后**的状态：界面不必自己猜主进程走到了哪一步
+   * 四个动作都返回**做完之后**的状态：界面不必自己猜主进程走到了哪一步
    * （下载进度这种一路在变的东西，猜出来的那一份必然是错的）。
    *
-   * 不提供「下载进度」这类单独的回调——一个 BROADCAST.updateState 就够，
-   * 提示条与设置页听的是同一条。
+   * 没有单独的「下载」——下载不是用户的一个动作，而是「检查更新」与「更新并重启」
+   * 各自的后半截（见 updateService 的 check / install）。进度不另设回调：
+   * 一个 BROADCAST.updateState 就够，提示条与设置页听的是同一条。
    */
   update: {
     get(): Promise<UpdateState>
-    /** 查一次。正在查或正在下时直接返回当前状态，不叠第二次 */
+    /** 查一次；查到的比现在新就开始下。正在查或正在下时直接返回当前状态，不叠第二次 */
     check(): Promise<UpdateState>
-    download(): Promise<UpdateState>
-    /** 起安装程序并退出。没下载完 / 没校验通过时拒绝，且什么都不做 */
+    /**
+     * 更新并重启。已经下好就立刻装；还在下就记下这个意图、下完自己装；
+     * 还没开始下就先把下载起起来。**没下完、没校验通过时不许装**。
+     */
     install(): Promise<void>
-    /** 忽略这个版本：整条提示收掉，且下次启动不再出现。传 null 是撤销 */
+    /** 忽略这个版本：整条提示收掉，且下次启动不再出现。正在下的话把那一份也中止掉。传 null 是撤销 */
     ignore(input: { version: string | null }): Promise<UpdateState>
     onState(cb: (state: UpdateState) => void): () => void
   }

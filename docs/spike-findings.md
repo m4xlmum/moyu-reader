@@ -24,6 +24,8 @@ Q18 起是「悬浮球图标 · 16:9 边缘缩放 · 最大化与还原 · 视�
 **Q46–Q47 来自「整体透明度滑块一松手就跳回 100%」那一版：前者是产品自己的一条线——
 配置改了要广播给界面，而广播只挂在一条 IPC 上；后者是探针在这一版里摔的一跤——
 Vue 的重画在微任务里，派事件那一个任务里读到的显示值是上一帧的**。
+**Q48 来自「更新压成两下」那一版，量的不是本机行为而是 electron-builder 的安装器模板：
+assisted installer（`oneClick: false`）要静默装完还把应用叫回来，命令行里到底缺哪一枚不行**。
 
 ## 结论
 
@@ -83,6 +85,7 @@ Vue 的重画在微任务里，派事件那一个任务里读到的显示值是�
 
 | Q46 | 「配置改了要告诉界面」这件事，广播挂在发起写入的那一条 IPC 上够不够 | **不够，而且这就是用户报的那条毛病。**原先只有 `INVOKE.configPatch` 那一条路广播 `config:changed`，而整体透明度走的是另一条：右栏那条滑块 → `win.setOpacity` → `WindowController.setOpacity()` → `config.set(...)`，它只发 `window:state`。`ConfigStore.subscribe()` 一直在、写得也对，但**订阅者是 0**——于是界面手里那份配置镜像停在挂载时读到的值（默认 100%）。实测（修之前）：拖动中配置已是 0.4、窗口确实 40%，**松手那一帧滑块显示 100%**。设置页里改同一条也会跳，只是那儿改完不松手 | 广播改挂在 `ConfigStore` 的订阅上（`src/main/index.ts` 里一句 `config.subscribe(...)`），**谁改的都算**：configPatch、setOpacity、setChrome、updateService.ignore、persistExpandedBounds、lastSession 全在这一句之下，不必逐条去补——补一条就还有下一条要走这条老路。`configPatch` 那个 handler 从此只留窗口那一侧的副作用。验证：`spike/live-app.js` A10（合成拖动）/ A11（不碰界面，直接调 `win.setOpacity(0.55)`，滑块也得跟着到 55%）、`spike/preview.js --drag-opacity 40` |
 | Q47 | 在派发 `input` 的那个任务里，紧接着读那一格渲染出来的文字，读到的是哪一帧 | **上一帧。**Vue 的重画在微任务里，而 `dispatchEvent` 是同步的——同一个 `executeJavaScript` 任务里读 `.value`、读元素高度这类**渲染结果**，拿到的是改动之前的值。摔的样子：拖动中那一次读出来 100%（配置已经是 0.4），于是「修正起效了没有」被自己的读数判红 | 写与读分成两次 `executeJavaScript`，中间等一次冲刷（`live-app.js` A10 与 `preview.js` 的 `--drag-opacity` 里都是 `await wait(50)` 再读）。它与 Q11（隐藏窗口抓图晚一帧）同属一类：**要读的是画出来的东西，就得让画先画完**。只读状态（`config.window.opacity` 这种由主进程给的值）不受影响，那个不是渲染结果 |
+| Q48 | assisted installer（`oneClick: false`）上，`安装包.exe /S --updated` 够不够让它在装完之后**把应用启动回来** | **不够，而且症状是静默的：装完了，没有人回来。**electron-builder 的 `templates/nsis/installSection.nsh` 里「装完启动应用」这一段分两支：`!ifdef ONE_CLICK` 那一支的判据是 `${Silent}`（静默就重启，所以 oneClick 的安装包天生全自动）；我们这一支（assisted）的判据是 `${isForceRun} ${andIf} ${Silent}`——**静默之外还要求 `--force-run`**。少了它，`/S` 让向导不出现、`--updated` 让旧实例自己退掉，然后安装程序一声不响地退出，「全自动」断在最后一步：用户点的是「更新并重启」，回来的是空桌面 | 三枚参数一起用，一枚都不能少（`src/main/services/updateService.ts` 的 `SILENT_INSTALL_ARGS`）：`/S`（不走向导）、`--updated`（这是升级：容忍还有一个实例在跑、跳过桌面快捷方式重建）、`--force-run`（装完启动应用）。**装到哪儿不归我们管**——`/S` 下不选目录，安装程序从 `HKCU\Software\<APP_GUID>\InstallLocation` 读回上次那个目录（`APP_GUID` = `UUID.v5(appId, ELECTRON_BUILDER_NS_UUID)`，`include/installer.nsh` 写、`multiUser.nsh` 读回 `$INSTDIR`），本机实测该键为 `8a1898f1-95fb-5c4a-9689-1796e9580e72` → `C:\Users\poem\Desktop\moyu-reader`，即用户当初选的目录，升级不会多出一份。验证：`spike/update-check.js` Q10 断言 spawn 的参数**逐字**等于这三枚——少了 `--force-run` 那一遍，Q10 当场红 |
 
 ## 对原设计的两处修正
 
@@ -150,14 +153,16 @@ Q4 显示被裁剪区域与桌面基线完全一致（差值 0），即区域外
   但「好不好看、等宽字体下的中文界面读着累不累」是量不出来的，只能真机看。
 - **起始页在终端世界里的滚动条**：圆角改成走 `--radius-sm` 之后会跟着归零，
   但起始页只在站点多到溢出时才出滚动条，无头截图里未必抓得到，真机顺手看一眼。
-- **真的下一次 111MB**：`spike/update-check.js` 验到的是「点下载 → 落盘 → 边收边算
-  sha512 → 对得上 → `spawn` 起安装程序 → 本进程退出」这一串（spawn 与 quit 都是替身，
-  数的是次数与参数）。再往后几步是安装程序自己的事，进程内看不见：向导走完装没装上、
-  装的时候**旧进程是不是已经退干净**（推理是「向导要用户点几下，那时进程早没了」，
-  但没在真机上走过）、以及 `%TEMP%\moyu-reader-update` 里那份 111MB 的安装包要不要清
-  ——现在留着（下次检查发现 sha512 仍对得上就直接判 `ready`，省一次下载），
-  换新版本时由 `sweep()` 删掉同目录下别的版本。
-- **免安装版（zip）点「重启并安装」**：它没有安装目录可更新，预期会**装出第二份**。
+- **真的下一次 111MB、并且真的静默装一遍**：`spike/update-check.js` 验到的是
+  「手动查一次 → 自己开始下 → 落盘 → 边收边算 sha512 → 对得上 → 用户按「更新并重启」
+  → `spawn(安装包, ['/S','--updated','--force-run'])` → 本进程退出」这一串（spawn 与 quit
+  都是替身，数的是次数与参数）。再往后几步是安装程序自己的事，进程内看不见，只能真机走一遍：
+  静默装完之后**应用有没有自己回来**（这正是 Q48 那一枚 `--force-run` 管的事）、
+  装的时候**旧进程是不是已经退干净**、以及新版本起来之后 `lastSession` 有没有把标签页
+  还回来。另外 `%TEMP%\moyu-reader-update` 里那份 111MB 的安装包**现在留着**
+  ——下次检查发现 sha512 仍对得上就直接判 `ready`，省一次下载——换新版本时由 `sweep()`
+  删掉同目录下别的版本。
+- **免安装版（zip）点「更新并重启」**：它没有安装目录可更新，预期会**装出第二份**。
   这是已知限制，真机上确认一下症状，好把 README 里那句话写准。
 - **「打开文件…」那个系统选文件框**：`spike/home-sections.js` 验到的是**它下游那一段**——
   选中的路径变成 `file://` 标签页、回来的是文件名、取消就什么都不开（Q39）。框本身长什么样

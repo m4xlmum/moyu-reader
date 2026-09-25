@@ -5,8 +5,9 @@
  * 而在三条「不行的那条路」：
  *
  * 1. **没下完、没校验通过时，绝不许起安装程序。** 允许执行一个来路不明（或者
- *    只下了一半）的可执行文件，比不更新严重得多。install() 在 idle / available /
- *    下载中一律拒绝，spawn 替身一次都不许被调用。
+ *    只下了一半）的可执行文件，比不更新严重得多。install() 在 idle / none /
+ *    error 上一律拒绝；在 available 与下载中只记下意图（pendingInstall），
+ *    **当场一次 spawn 都不许有**；只有 ready（下完并通过校验）才起安装程序。
  * 2. **校验不过的东西不许留在盘上。** 它躺的那个位置正是「下一步就要执行它」。
  *    篡改一个字节 → 必须 error，且那个文件当场消失。
  * 3. **失败是安静的。** 查不动、网不通时不许把提示条叫出来——这是个隐身软件，
@@ -15,6 +16,16 @@
  *
  * 另外几条只有在这里验得了：
  *
+ *   - **用户只按两下，后面全是自动的**（这一版新改的形状）：第一下「检查更新」
+ *     查到新版就自己开始下（Q8b），第二下「更新并重启」按下之后该下的先下、
+ *     该排队的排队、下完自己装、装完自己重启（Q8c）。这两条路**跨过了界面上的
+ *     点击**——没有人 await 它们，因此探针得自己盯着那一串走完（见 makeStage
+ *     的 settled）。
+ *   - **静默安装的三枚参数一枚不少**（Q10）：`/S --updated --force-run`。
+ *     少了 `--force-run`，assisted installer 装完不会把应用启动回来，
+ *     「全自动」就断在最后一步上（见 docs/spike-findings.md 的 Q48）。
+ *   - **下载中被忽略要真的中止**（Q8d）：不留 `.part`、不写成「下载失败」、
+ *     更不许把它装上；撤销之后能重来一遍。
  *   - **开关管的是自动检查，不管手动**：autoCheck=false 时 check() 一个请求都不
  *     发（用 HTTP 服务器的计数证明，不是看返回值），而手动 check({manual:true}) 照发。
  *   - **已经下过的那一份会被认出来**：再查一次直接 ready，不重下 111MB。
@@ -172,6 +183,11 @@ const tmpDir = (kind) => fs.mkdtempSync(path.join(os.tmpdir(), `moyu-update-${ki
  *
  * spawn / quit / setNoticeVisible / onState 四个出口全部换成记账的替身——
  * 「有没有起过安装程序」「提示条被拨成过什么」这两件事，正是这一版要问的。
+ *
+ * download() 被包了一层，把每一条下载的 promise 记下来，交给 settled() 去等。
+ * 要它是因为这一版有一半的路**没有人 await**：手动查一次会自己带起下载、
+ * 下完还会自己接着装，全是 fire-and-forget。探针要问「下完之后到底发生了什么」，
+ * 就得有个地方等那一串安静下来——等着不动，或者靠 sleep 猜时间，两种都验不准。
  */
 function makeStage(mods, options) {
   const config = new mods.configStore.ConfigStore(options.configDir)
@@ -196,6 +212,23 @@ function makeStage(mods, options) {
       return { unref() {} }
     }
   })
+
+  const inflight = new Set()
+  const rawDownload = service.download.bind(service)
+  service.download = (...callArgs) => {
+    const p = rawDownload(...callArgs)
+    inflight.add(p)
+    p.then(
+      () => inflight.delete(p),
+      () => inflight.delete(p)
+    )
+    return p
+  }
+  /** 等到「查 / 下 / 下完接着装」这一串全安静下来（最多转 200 圈，防死循环） */
+  const settled = async () => {
+    for (let i = 0; i < 200 && inflight.size; i += 1) await Promise.all([...inflight])
+  }
+
   return {
     service,
     config,
@@ -203,6 +236,7 @@ function makeStage(mods, options) {
     notices,
     spawns,
     quits: () => quits,
+    settled,
     last: () => events[events.length - 1]
   }
 }
@@ -441,21 +475,138 @@ async function main() {
     const before = state.requests.length
     const auto = await stage.service.check()
     const afterAuto = state.requests.length
+    const downloadsBeforeManual = state.downloads
     const manual = await stage.service.check({ manual: true })
     const afterManual = state.requests.length
     const bad = []
     if (afterAuto !== before) bad.push(`关掉自动检查之后，check() 还是发了 ${afterAuto - before} 次请求`)
     if (auto.phase !== 'idle') bad.push(`自动那次的 phase 是 ${auto.phase}，该停在 idle`)
+    if (state.downloads !== downloadsBeforeManual) {
+      bad.push('自动那一次什么都没按，却把安装包下起来了（那 111MB 只能由用户发起）')
+    }
     if (afterManual - afterAuto !== 1) {
       bad.push(`手动那次发了 ${afterManual - afterAuto} 次请求，该是 1 次——开关管的是自动，不是把这个功能删掉`)
     }
-    if (manual.phase !== 'available') bad.push(`手动那次的 phase 是 ${manual.phase}`)
-    check('Q8', '关掉「自动检查更新」→ 自动那次一个请求都没发（服务器计数为 0），手动照发', bad, {
+    // 手动查完就自己下：回来时状态已经是 downloading（下载由这一下带起来）
+    if (manual.phase !== 'downloading') bad.push(`手动那次的 phase 是 ${manual.phase}，该是 downloading`)
+    if (manual.pendingInstall) bad.push('只是查了一下，没有按过「更新并重启」，pendingInstall 不该是 true')
+    check('Q8', '关掉「自动检查更新」→ 自动那次一个请求都没发（服务器计数为 0）；手动照发，且查完自己开始下', bad, {
       requestsAuto: afterAuto - before,
       requestsManual: afterManual - afterAuto,
       manualPhase: manual.phase
     })
   }
+
+  // ------------------------------------------------------------ Q8b 手动查就自己下
+
+  {
+    // 一个干净现场：谁都没有调过 download()，只有 check({manual:true}) 这一下
+    const configDir = tmpDir('config')
+    const downloadDir = tmpDir('dl')
+    const stage = makeStage(mods, { configDir, downloadDir, feedBase: base })
+    state.manifest = manifestText('1.1.0', sha, asset.length)
+    const downloadsBefore = state.downloads
+    const s = await stage.service.check({ manual: true })
+    const bad = []
+    if (state.downloads - downloadsBefore !== 1) {
+      bad.push(`手动查完之后的下载请求是 ${state.downloads - downloadsBefore} 次，该正好 1 次`)
+    }
+    // 回来的那一刻是 downloading（还没下完），下完之后自己变成 ready
+    if (s.phase !== 'downloading') bad.push(`check() 回来时 phase 是 ${s.phase}，该是 downloading`)
+    await stage.settled()
+    if (stage.last().phase !== 'ready') bad.push(`下完之后 phase 是 ${stage.last().phase}，该是 ready`)
+    const target = path.join(downloadDir, assetName('1.1.0'))
+    if (!fs.existsSync(target)) bad.push('下完之后盘上没有那一份')
+    // 没有按过「更新并重启」，因此**不许**起安装程序
+    if (stage.spawns.length) bad.push('只查了一下就起了安装程序——「更新并重启」那一下才允许装')
+    if (stage.quits()) bad.push('只查了一下就把进程退了')
+    check('Q8b', '手动「检查更新」→ 没人按过下载，那一份自己下起来了；但**没有**自己装、自己重启', bad, {
+      phaseOnReturn: s.phase,
+      phaseAfter: stage.last().phase,
+      downloads: state.downloads - downloadsBefore,
+      spawns: stage.spawns.length
+    })
+  }
+
+  // ------------------------------------------------------------ Q8c 下完自己装
+
+  {
+    // 「更新并重启」按在下载途中：这一下要一路走到装完（下完自己装、自己重启）
+    const configDir = tmpDir('config')
+    const downloadDir = tmpDir('dl')
+    const stage = makeStage(mods, { configDir, downloadDir, feedBase: base })
+    state.manifest = manifestText('1.1.0', sha, asset.length)
+    const bad = []
+
+    // 还没下、也没查过时按它：拒绝（也验一遍 available 之前的那道门）
+    stage.service.install()
+    if (stage.spawns.length) bad.push('idle 时就起了安装程序')
+
+    const checked = await stage.service.check({ manual: true })
+    if (checked.phase !== 'downloading') bad.push(`手动查完是 ${checked.phase}，该是 downloading`)
+    stage.service.install() // 下载途中按的那一下
+    if (!stage.service.getState().pendingInstall) bad.push('按过之后 pendingInstall 该是 true')
+    const mid = stage.service.getState()
+    if (mid.phase !== 'downloading') bad.push(`排队之后 phase 是 ${mid.phase}，该仍是 downloading`)
+    if (stage.spawns.length) bad.push('还没下完就起了安装程序——那一下只是排队')
+
+    await stage.settled()
+    if (stage.spawns.length !== 1) bad.push(`下完之后起了 ${stage.spawns.length} 次安装程序，该是 1 次`)
+    else {
+      const got = stage.spawns[0]
+      const want = path.join(downloadDir, assetName('1.1.0'))
+      if (got.file !== want) bad.push(`起的是 ${got.file}，该是 ${want}`)
+    }
+    if (stage.quits() !== 1) bad.push(`quit 调了 ${stage.quits()} 次，该是 1 次`)
+    check('Q8c', '下载途中按「更新并重启」→ 只排队不动手；下完自己起安装程序并退出', bad, {
+      pendingInstall: mid.pendingInstall,
+      spawns: stage.spawns.map((x) => path.basename(x.file)),
+      quits: stage.quits()
+    })
+  }
+
+  // ------------------------------------------------------------ Q8d 下载中被忽略
+
+  {
+    // 下载中按 ✕：那一份要真的中止掉，盘上不留半截文件，状态落回 available
+    const configDir = tmpDir('config')
+    const downloadDir = tmpDir('dl')
+    const stage = makeStage(mods, { configDir, downloadDir, feedBase: base })
+    state.manifest = manifestText('1.1.0', sha, asset.length)
+    const bad = []
+
+    await stage.service.check({ manual: true })
+    if (stage.service.getState().phase !== 'downloading') bad.push('前提不成立：手动查完没有开始下')
+    stage.service.install() // 先按一下「更新并重启」，看它会不会被忽略一起作废
+    const s = stage.service.ignore('1.1.0')
+    if (s.phase !== 'available') bad.push(`忽略之后 phase 是 ${s.phase}，该落回 available`)
+    if (!s.ignored) bad.push('忽略之后 ignored 该是 true')
+    if (s.pendingInstall) bad.push('忽略之后 pendingInstall 该作废——那一版已经不要了')
+    if (s.version !== '1.1.0') bad.push(`version 是 ${s.version}，该留着（设置页要靠它显示「已忽略」）`)
+    if (stage.notices[stage.notices.length - 1] !== false) bad.push('被忽略之后提示条该收掉')
+
+    await stage.settled()
+    // 被中止之后：不许写成「下载失败」（用户自己按的，不是网络出了问题），也不许装
+    const end = stage.last()
+    if (end.phase === 'error') bad.push(`中止被记成了下载失败（${end.message}）——那是用户自己按的`)
+    if (stage.spawns.length) bad.push('已经不要那一版了，却还是把它装上了')
+    if (stage.quits()) bad.push('已经不要那一版了，却还是把进程退了')
+    const target = path.join(downloadDir, assetName('1.1.0'))
+    if (fs.existsSync(`${target}.part`)) bad.push('.part 还留在盘上')
+    if (fs.existsSync(target)) bad.push('中止之后那份文件却完整地留在盘上')
+    // 撤销之后要能重新来一遍
+    const undone = stage.service.ignore(null)
+    if (undone.ignored) bad.push('撤销之后 ignored 该是 false')
+    await stage.service.check({ manual: true })
+    await stage.settled()
+    if (stage.last().phase !== 'ready') bad.push(`撤销后重来一遍，最后是 ${stage.last().phase}，该是 ready`)
+    check('Q8d', '下载中按 ✕ → 那一份真的被中止（不留 .part、不写成失败、也不装），撤销之后能重来', bad, {
+      phaseAfterIgnore: s.phase,
+      downloads: state.downloads,
+      lastPhase: stage.last().phase
+    })
+  }
+
 
   // ------------------------------------------------------------ Q9 忽略
 
@@ -499,63 +650,140 @@ async function main() {
 
   // ------------------------------------------------------------ Q10 安装的门槛
 
-  const ready = (() => {
-    const configDir = tmpDir('config')
-    const downloadDir = tmpDir('dl')
-    return { downloadDir, stage: makeStage(mods, { configDir, downloadDir, feedBase: base }) }
-  })()
   {
-    const stage = ready.stage
     const bad = []
-    const phases = []
+    const refused = []
 
-    stage.service.install()
-    phases.push('idle')
+    // ① 还没查过
+    {
+      const stage = makeStage(mods, {
+        configDir: tmpDir('config'),
+        downloadDir: tmpDir('dl'),
+        feedBase: base
+      })
+      stage.service.install()
+      refused.push(`idle → ${stage.service.getState().phase}`)
+      if (stage.spawns.length) bad.push('idle 时就起了安装程序')
+      if (stage.quits()) bad.push('idle 时就把进程退了')
 
-    state.manifest = manifestText('1.1.0', sha, asset.length)
-    await stage.service.check()
-    stage.service.install()
-    phases.push('available')
-
-    const inflight = stage.service.download()
-    stage.service.install()
-    phases.push('downloading')
-    await inflight
-
-    if (stage.spawns.length) {
-      bad.push(`还没 ready 就起了 ${stage.spawns.length} 次安装程序（${phases.join(' / ')}）`)
+      // ② 源上就是当前版本：没有任何东西可装
+      state.manifest = manifestText('1.0.0', sha, asset.length)
+      await stage.service.check()
+      stage.service.install()
+      refused.push(`none → ${stage.service.getState().phase}`)
+      if (stage.service.getState().phase !== 'none') {
+        bad.push(`同版本那一次 phase 是 ${stage.service.getState().phase}`)
+      }
+      if (stage.spawns.length) bad.push('none 时就起了安装程序')
     }
-    if (stage.quits()) bad.push('还没 ready 就把进程退了')
 
-    const s = stage.service.install()
-    if (s !== undefined) bad.push('install() 是同步的，不该有返回值')
-    if (stage.spawns.length !== 1) bad.push(`ready 之后起了 ${stage.spawns.length} 次安装程序，该是 1 次`)
-    else {
-      const got = stage.spawns[0]
-      const want = path.join(ready.downloadDir, assetName('1.1.0'))
-      if (got.file !== want) bad.push(`起的是 ${got.file}，该是 ${want}`)
-      if (got.args.length) bad.push(`带了参数 ${JSON.stringify(got.args)}，该一个都不带（不静默安装）`)
-      if (got.spawnOpts.detached !== true) bad.push('没 detach——安装程序会被一起带走')
-      if (got.spawnOpts.stdio !== 'ignore') bad.push(`stdio 是 ${got.spawnOpts.stdio}`)
+    // ③ 查都查不到（源连不上）：同样不许动
+    {
+      const dead = await freePort()
+      const stage = makeStage(mods, {
+        configDir: tmpDir('config'),
+        downloadDir: tmpDir('dl'),
+        feedBase: `http://127.0.0.1:${dead}`
+      })
+      await stage.service.check()
+      stage.service.install()
+      refused.push(`error → ${stage.service.getState().phase}`)
+      if (stage.service.getState().phase !== 'error') {
+        bad.push(`连不上那一次 phase 是 ${stage.service.getState().phase}`)
+      }
+      if (stage.spawns.length) bad.push('error 时就起了安装程序')
     }
-    if (stage.quits() !== 1) bad.push(`quit 调了 ${stage.quits()} 次，该是 1 次`)
-    check('Q10', '没下完不许装：idle / available / 下载中各拒绝一次，ready 之后起一次安装程序并退出', bad, {
-      refused: phases,
-      spawn: stage.spawns.map((s) => ({ file: path.basename(s.file), args: s.args, detached: s.spawnOpts.detached })),
-      quits: stage.quits()
-    })
+
+    // ④ 有新版但盘上还没有：按下那一下**只排队**，当场不许装
+    //    （下完自己装是另一条路，由 Q8c 单独问）
+    {
+      const stage = makeStage(mods, {
+        configDir: tmpDir('config'),
+        downloadDir: tmpDir('dl'),
+        feedBase: base
+      })
+      state.manifest = manifestText('1.1.0', sha, asset.length)
+      await stage.service.check()
+      if (stage.service.getState().phase !== 'available') bad.push('前提不成立：这会儿该是 available')
+      stage.service.install()
+      const s = stage.service.getState()
+      refused.push(`available → ${s.phase}`)
+      if (!s.pendingInstall) bad.push('available 上按一下，pendingInstall 该记成 true（下完自己装）')
+      if (s.phase === 'ready') bad.push('刚按下就变成 ready 了——盘上根本还没有那一份')
+      if (stage.spawns.length) bad.push('还没下完就起了安装程序')
+      if (stage.quits()) bad.push('还没下完就把进程退了')
+    }
+
+    // ⑤ 下完并通过校验：恰好一次，参数一枚不少
+    const ready = (() => {
+      const downloadDir = tmpDir('dl')
+      return {
+        downloadDir,
+        stage: makeStage(mods, { configDir: tmpDir('config'), downloadDir, feedBase: base })
+      }
+    })()
+    {
+      const stage = ready.stage
+      state.manifest = manifestText('1.1.0', sha, asset.length)
+      await stage.service.check({ manual: true })
+      await stage.settled()
+      if (stage.service.getState().phase !== 'ready') {
+        bad.push(`前提不成立：下完之后是 ${stage.service.getState().phase}，该是 ready`)
+      }
+      if (stage.spawns.length) bad.push('没人按过「更新并重启」，却自己装上了')
+
+      const returned = stage.service.install()
+      if (returned !== undefined) bad.push('install() 是同步的，不该有返回值')
+      if (stage.spawns.length !== 1) bad.push(`ready 之后起了 ${stage.spawns.length} 次安装程序，该是 1 次`)
+      else {
+        const got = stage.spawns[0]
+        const want = path.join(ready.downloadDir, assetName('1.1.0'))
+        if (got.file !== want) bad.push(`起的是 ${got.file}，该是 ${want}`)
+        // 三枚参数一枚都不能少：少了 --force-run，装完就没有人把应用叫回来
+        const wantArgs = ['/S', '--updated', '--force-run']
+        if (JSON.stringify(got.args) !== JSON.stringify(wantArgs)) {
+          bad.push(`参数是 ${JSON.stringify(got.args)}，该逐字是 ${JSON.stringify(wantArgs)}`)
+        }
+        if (got.spawnOpts.detached !== true) bad.push('没 detach——安装程序会被 app.exit(0) 一起带走')
+        if (got.spawnOpts.stdio !== 'ignore') bad.push(`stdio 是 ${got.spawnOpts.stdio}`)
+      }
+      if (stage.quits() !== 1) bad.push(`quit 调了 ${stage.quits()} 次，该是 1 次`)
+    }
+    check(
+      'Q10',
+      '没下完、没校验过就不许装（idle / none / error / available 各拒绝一次），'
+        + 'ready 之后起一次静默安装程序（/S --updated --force-run）并退出',
+      bad,
+      {
+        refused,
+        spawn: ready.stage.spawns.map((s) => ({
+          file: path.basename(s.file),
+          args: s.args,
+          detached: s.spawnOpts.detached
+        })),
+        quits: ready.stage.quits()
+      }
+    )
   }
 
   // ------------------------------------------------------------ Q11 下过的不重下
 
   {
-    const stage = ready.stage
+    const stage = makeStage(mods, {
+      configDir: tmpDir('config'),
+      downloadDir: tmpDir('dl'),
+      feedBase: base
+    })
+    state.manifest = manifestText('1.1.0', sha, asset.length)
+    await stage.service.check({ manual: true })
+    await stage.settled()
     const before = state.downloads
     const s = await stage.service.check()
     const bad = []
     if (s.phase !== 'ready') bad.push(`phase 是 ${s.phase}，该直接是 ready`)
     if (s.percent !== 100) bad.push(`percent 是 ${s.percent}`)
     if (state.downloads !== before) bad.push(`又下了一次（${state.downloads - before} 次请求）`)
+    if (stage.spawns.length) bad.push('再查一次不该重装（没人按过「更新并重启」）')
     check('Q11', '已经下过且校验对得上的那一份会被认出来：再查一次直接 ready，不重下', bad, {
       phase: s.phase,
       extraDownloadRequests: state.downloads - before
