@@ -1,0 +1,30 @@
+/*
+ * 起始页自己带的那份展示字。
+ *
+ * 只有起始页引这一份（home.html），因为只有它的报头与栏目线是**展示面**——
+ * 顶上那两个字、栏目线上那六个词。界面其余部分（顶栏、右栏、设置页）说的是
+ * 界面的话，用平台自己的字正好。
+ *
+ * 为什么必须自己带一份：展示字是一个页面的门面，门面用别人机器上的默认脸，
+ * 这一页就没有门面——它在谁的机器上就长成谁的界面。上游是 Noto Serif SC
+ * （OFL 1.1，可再分发），子集到这一页真的会说的那些字，做法与出处见
+ * scripts/make-display-font.mjs 与同目录的 OFL.txt。
+ *
+ * 只声明字重范围（400–700）不声明具体字重：一份可变字体当两份用，
+ * 报头是粗的、栏目线是细的，而文件只有一个。
+ *
+ * `swap` 而不是 `block`：它是本机文件，几乎不会等；万一真没加载上，
+ * 宁可先看见回落的衬线字（--font-display 那一串里的后一个），也不要让
+ * 报头空三秒。
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+@font-face {
+  font-family: 'Moyu Display Serif';
+  /* 就写 woff2：可变这一层由 format 后缀（`woff2-variations`）去说是老写法，
+     现行浏览器认 `woff2` 就够了 */
+  src: url('../assets/fonts/moyu-display-serif.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}

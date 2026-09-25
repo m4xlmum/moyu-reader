@@ -26,8 +26,12 @@
  *   npx electron spike/preview.js --home --click-plate video  # 照完「全部」再点一下「视频」栏
  *   npx electron spike/preview.js --home --plate local --open-file 斗破苍穹.txt,三体（全集）.pdf
  *   # 上一行：点一下「打开文件…」，让对话框返回这两本，看那一圈走完之后是什么样
- *   npx electron spike/preview.js --home --plate local --width 448 --height 297   # 迷你档那一栏
- *   npx electron spike/preview.js --home --theme crt-green --width 448 --height 297
+ *   npx electron spike/preview.js --home --themes --body      # 按**正文区**的尺寸渲染（见 --body）
+ *   npx electron spike/preview.js --home --body --plate local --width 480 --height 270  # 迷你档那一栏
+ *   npx electron spike/preview.js --home --body --theme crt-green --width 480 --height 270
+ *   npx electron spike/preview.js --home --body --address-open  # 地址栏展开时正文区更矮那一档
+ *   npx electron spike/preview.js --home --reduced-motion      # 系统开着「减少动态效果」时的那一页
+ *   npx electron spike/preview.js --home --no-reduced-motion   # 反过来：那一档里才量得到换栏的那条动画
  *   npx electron spike/preview.js --theme night    # 界面也跟主题走，换一套配色看顶栏与右栏
  *   npx electron spike/preview.js --settings --theme crt-green   # 设置页同理
  *   npx electron spike/preview.js --settings --width 560 --height 400
@@ -50,7 +54,9 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 const { app, BrowserWindow, ipcMain } = require('electron')
+const esbuild = require('esbuild')
 const fs = require('node:fs')
+const os = require('node:os')
 const path = require('node:path')
 
 const args = process.argv
@@ -100,6 +106,21 @@ const PAGE_FILE = {
  */
 const WIDTH = num('--width', MAXIMIZED ? 80 : 960)
 const HEIGHT = num('--height', MAXIMIZED ? 48 : 540)
+
+/*
+ * --reduced-motion：把系统的「减少动态效果」打开再渲染。
+ *
+ * 起始页换栏那一下有一个被安排过的动作，而它在减少动态效果下必须是**没有**的——
+ * 这一条只写得出样式、量不到就等于没说。Chromium 有这个开关，
+ * 于是这一档问的是：开着它时 .rows 上算出来的 animation-name 是不是 none。
+ *
+ * 注意**这台机器本来就开着**（默认那几跑量出来 reducedMotion 就是 true），
+ * 所以真正要单独跑的是它的反面 --no-reduced-motion：只有那一档里
+ * document.getAnimations() 才问得到那条动画的名字、时长与缓动。
+ */
+if (has('--reduced-motion')) app.commandLine.appendSwitch('force-prefers-reduced-motion')
+
+
 /** 只留前 N 个标签页。标签条放不放得下是算出来的，得能用少几张试出「放得下」那一态 */
 const TABS = num('--tabs', 0)
 /**
@@ -205,6 +226,30 @@ const OUT = (() => {
   const i = args.indexOf('--out')
   return i >= 0 && args[i + 1] ? path.resolve(args[i + 1]) : path.join(__dirname, 'out')
 })()
+
+/*
+ * --body：按**正文区**的尺寸渲染这一页。
+ *
+ * 起始页在真机上不占整扇窗：界面层只画顶栏与右侧栏，这一页被摆在它们让出来的
+ * 那个矩形里（`windowController.getBodyRect()`，算的是 geometry.ts 的 `body`）。
+ * 因此「960×540 的窗口里这一页有多高」是一个**算出来的数**，不是窗口尺寸：
+ * 默认档它是 912×496，迷你档 432×226。
+ *
+ * 不给这个开关时，这一页按整扇窗渲染。那对「这一份文档自己长什么样」是够的，
+ * 但对**高度**不够用——比真机宽 48、高 44，而高度恰恰是这一页最紧的那一轴
+ * （见 .impeccable/surfaces/home.md 的 Constraints）。按整扇窗量出来的行数
+ * 比用户看到的多，换行点也偏后，于是一张「放得下」的图会是假的。
+ *
+ * 尺寸不在这里手抄：constants.ts 与 geometry.ts 各打成一包再 require，
+ * body 矩形由应用自己那个 `computeLayout` 算出来（同 home-sections.js 的路子，
+ * 理由也一样——抄一份的代价不会当场显形，只会在某次改了顶栏高度之后，
+ * 让这里量出来的行数悄悄多一行）。
+ *
+ * --address-open：地址栏也展开着（默认是折叠的，见 README）。它再吃掉 34px 高度。
+ * 这一档要的是**最紧的那个正文区**：地址栏开着时 960×540 只剩 912×462。
+ */
+const BODY = has('--body')
+const ADDRESS_OPEN = has('--address-open')
 
 /**
  * --desktop [light|dark|<css 颜色>]：在界面**背后**垫一层模拟桌面。
@@ -721,22 +766,131 @@ const PAGE_MEASURE = `(() => {
     /** 「离线阅读」那一栏的格式说明。别的栏目没有它 */
     note: document.querySelector('.note')?.textContent?.trim() ?? null,
     noteBox: box('.note'),
+    /*
+     * 收尾线：这一栏到底了才画的那一条短线。它该在的时候在、不该在的时候不在，
+     * 都得量——「行被上限截掉时不许画」是它唯一一条规矩。
+     */
+    endRule: box('.lines .end'),
+    /*
+     * 换栏那一下被安排成了什么。
+     *
+     * fill: both 让动画跑完之后仍留在 document.getAnimations() 里，因此这里问得到
+     * 它的名字、时长与缓动。「这一页有过一个被安排的动作」也是量出来的，
+     * 不是从样式表里读出来的。
+     */
+    animations: document.getAnimations().map((a) => {
+      const frames = a.effect?.getKeyframes?.() ?? []
+      return {
+        name: a.animationName ?? null,
+        ms: Math.round(a.effect?.getTiming?.().duration ?? 0),
+        /*
+         * 缓动读**第一帧**上那一条，不读 getTiming().easing。
+         *
+         * animation-timing-function 是被折进关键帧里的：时序上的 easing 一直
+         * 留在默认的 linear 上，真正那条曲线挂在每一帧的 easing 上。读错了地方，
+         * cubic-bezier(0.16, 1, 0.3, 1) 就会印成 linear——于是「这条曲线是不是
+         * 已经被改回 ease」永远量不出来。
+         */
+        easing: frames[0]?.easing ?? a.effect?.getTiming?.().easing ?? null,
+        // 关键帧的节点位置：只有 from/to 两点就是一步落定，没有中间站
+        offsets: frames.map((k) => k.offset),
+        state: a.playState
+      }
+    }),
+    /** 这一跑里「减少动态效果」开着没有（--reduced-motion 那一档） */
+    reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
     /** 行首那一格画的是什么：本机文件挂文件图标，站点要么图标要么首字母 */
     lineFavicons: [...document.querySelectorAll('.lines .line .favicon')].map((el) =>
       el.querySelector('svg') ? 'file' : el.querySelector('img') ? 'img' : 'initial'
     ),
     /*
-     * 行里露出来的文字若带着路径或 file: 就是漏了本机路径。起始页上本机文件
-     * 只该显示文件名（斗破苍穹.txt）；显示成 C:\Users\…\斗破苍穹.txt 就等于
-     * 把用户机器上的目录结构摆进了截图，这一项必须为空。
+     * 行里露出来的文字若带着本机路径就是漏了。起始页上本机文件只该显示
+     * 文件名（斗破苍穹.txt）；显示成 C:\Users\…\斗破苍穹.txt 就等于把用户
+     * 机器上的目录结构摆进了截图，这一项必须为空。
+     *
+     * 判据只认**本机路径**那三种写法，不认「有斜杠」：
+     *   file: 开头、盘符（C:\ 或 C:/）、UNC（\\主机\共享）。
+     * 先前写的是 /[\\/]|file:/，那一条把每一行网页站点的 title
+     * （https://www.zhihu.com/…）全当成了泄漏——它量的是「有没有斜杠」，
+     * 而这一项要问的是「有没有本机路径」，两件事。宽出来的那些命中会
+     * 把真的泄漏淹掉，因此这里收紧到本机路径本身。
      */
-    pathLeaks: [...document.querySelectorAll('.lines .line')]
-      .map((el) => {
-        const label = el.querySelector('.label')?.textContent ?? ''
-        const host = el.querySelector('.host')?.textContent ?? ''
-        return label + ' ' + host
-      })
-      .filter((text) => /[\\/]|file:/.test(text)),
+    pathLeaks: (() => {
+      const local = /(^|[\s"'(])file:|\b[a-zA-Z]:[\\/]|\\\\[^\s\\/]/
+      return [...document.querySelectorAll('.lines .line')]
+        .map((el) => {
+          const label = el.querySelector('.label')?.textContent ?? ''
+          const host = el.querySelector('.host')?.textContent ?? ''
+          return label + ' ' + host
+        })
+        .filter((text) => local.test(text))
+    })(),
+    /*
+     * 同一件事的另一半：**属性**里的路径。
+     *
+     * 上一轮漏掉的正是这一处——行上的文字是干净的，可那一行还挂着一个
+     * :title，悬停时浏览器把整条 file:///C:/Users/… 弹在屏幕上。只量文字
+     * 量不到它，因此这一项单列：凡是 page 上任何元素带的 title 里出现
+     * 本机路径（同上那三种写法），这里就得列出来。
+     */
+    titleLeaks: [...document.querySelectorAll('[title]')]
+      .map((el) => el.getAttribute('title') ?? '')
+      .filter((text) => /(^|[\s"'(])file:|\b[a-zA-Z]:[\\/]|\\\\[^\s\\/]/.test(text)),
+    /*
+     * 展示字到底有没有用上。
+     *
+     * 自带的那份字读不到时（子集不全、路径写错、CSP 挡掉），页面不会报错，
+     * 只会静默回落到 --font-display 那一串里的下一个——从截图上几乎看不出来。
+     * 因此这里问四件事：
+     *   faces   文档手上的那几份字叫什么、什么状态（error 就是没读上）
+     *   loaded  有没有一份「我们那份」真的读进来了——这是最硬的一条
+     *   covers  check() 认不认栏目线上这些字。**这一条弱**：按规范，家族压根
+     *           不存在时 check() 也返回 true（没有字需要加载），所以它单独
+     *           不能证明什么，只用来排除「声明了但子集缺字」
+     *   widths  同一个词在「我们那份」与两个兜底字体下各有多宽——
+     *           **相等就是没换上**：换上了一个字面，宽度就不会一样
+     *
+     * widths 量的是**拉丁词**而不是汉字。汉字在任何一个中文字体里都是 1em
+     * 见方（26px 的「摸鱼阅读」在哪一份字下都是 104px），拿它比宽窄问不出
+     * 任何事——上一轮量出三个 104 就是这么来的。拉丁字母的宽度逐字不同，
+     * 衬线那份与两个兜底才会分开。
+     */
+    fontFaces: [...document.fonts].map((f) => ({
+      family: f.family,
+      weight: f.weight,
+      status: f.status
+    })),
+    displayLoaded: [...document.fonts].some(
+      (f) => f.family === 'Moyu Display Serif' && f.status === 'loaded'
+    ),
+    displayVar: getComputedStyle(document.documentElement).getPropertyValue('--font-display').trim(),
+    displayCovers: document.fonts.check('26px "Moyu Display Serif"', '全部离线阅读'),
+    displayWidths: (() => {
+      const probe = document.createElement('span')
+      probe.style.cssText =
+        'position:absolute;visibility:hidden;white-space:nowrap;font-size:26px;font-weight:400'
+      document.body.appendChild(probe)
+      const width = (text, family) => {
+        probe.textContent = text
+        probe.style.fontFamily = family
+        return Math.round(probe.getBoundingClientRect().width * 10) / 10
+      }
+      const result = {
+        latin: {
+          ours: width('Moyu', '"Moyu Display Serif"'),
+          fallbackSerif: width('Moyu', '"SimSun"'),
+          fallbackSans: width('Moyu', '"Microsoft YaHei"')
+        },
+        /* 汉字这一行只为留个底：三份必然相等，见上面那段说明 */
+        han: {
+          ours: width('摸鱼阅读', '"Moyu Display Serif"'),
+          fallbackSerif: width('摸鱼阅读', '"SimSun"'),
+          fallbackSans: width('摸鱼阅读', '"Microsoft YaHei"')
+        }
+      }
+      probe.remove()
+      return result
+    })(),
     // 两套世界共用的主题选择器
     themeMenu: box('.theme-menu'),
     themePanel: box('.theme-menu .panel'),
@@ -998,10 +1152,64 @@ const DRAG_PROBE = `(() => {
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * 这一页在真机上拿到的那块矩形有多大（见上面 --body 的说明）。
+ *
+ * 把 constants.ts 与 geometry.ts 各打成一包再 require，用应用自己的
+ * `computeLayout` 算——所以这里回答的是「真机会给它多大」，不是「我猜多大」。
+ * 临时目录用完就删：require 已经把文件读进内存了，之后删掉不影响。
+ */
+async function bodyRectOf(width, height) {
+  const ROOT = path.join(__dirname, '..')
+  const outdir = fs.mkdtempSync(path.join(os.tmpdir(), 'moyu-body-'))
+  try {
+    await esbuild.build({
+      entryPoints: [
+        path.join(ROOT, 'src', 'shared', 'constants.ts'),
+        path.join(ROOT, 'src', 'main', 'services', 'geometry.ts')
+      ],
+      bundle: true,
+      format: 'cjs',
+      platform: 'node',
+      outdir,
+      outbase: path.join(ROOT, 'src'),
+      outExtension: { '.js': '.cjs' },
+      alias: { '@shared': path.join(ROOT, 'src', 'shared') },
+      external: ['electron'],
+      logLevel: 'silent'
+    })
+    const K = require(path.join(outdir, 'shared', 'constants.cjs'))
+    const { computeLayout } = require(path.join(outdir, 'main', 'services', 'geometry.cjs'))
+    return computeLayout(width, height, K.TOP_BAR_H, ADDRESS_OPEN ? K.ADDRESS_H : 0, 0, K.RAIL_W).body
+  } finally {
+    try {
+      fs.rmSync(outdir, { recursive: true, force: true })
+    } catch {
+      // 临时目录删不掉不影响结论
+    }
+  }
+}
+
 app.whenReady().then(async () => {
+  /*
+   * 真正开窗的那对尺寸。
+   *
+   * 不给 --body 时就是 --width / --height（这一份文档自己占满整扇窗）；
+   * 给了就换成正文区——这一页在真机上的视口是什么样，窗口就开成什么样，
+   * 于是下面量出来的每一行、每一次换行，都是用户会看到的那一份。
+   */
+  const rect = BODY ? await bodyRectOf(WIDTH, HEIGHT) : null
+  const viewW = rect ? rect.width : WIDTH
+  const viewH = rect ? rect.height : HEIGHT
+  if (rect) {
+    console.log(
+      `BODY 窗口 ${WIDTH}×${HEIGHT}${ADDRESS_OPEN ? '（地址栏展开）' : '（地址栏折叠）'} → 正文区 ${viewW}×${viewH}`
+    )
+  }
+
   const win = new BrowserWindow({
-    width: WIDTH,
-    height: HEIGHT,
+    width: viewW,
+    height: viewH,
     show: false,
     /*
      * 无边框，与真实窗口一致。带上系统边框时 --width 给的是**外框**尺寸，
@@ -1023,8 +1231,39 @@ app.whenReady().then(async () => {
    * 不带参数时它自己是默认的「站点」那一张。
    */
   await win.loadFile(pagePath, page === 'popover' ? { search: `?kind=${KIND}` } : undefined)
+
+  /*
+   * --no-reduced-motion 的反面那一档：把「减少动态效果」**覆写掉**再量。
+   *
+   * 这一档是必需的，因为**这台机器本身就开着减少动态效果**：不给任何开关时，
+   * 无头窗口里 matchMedia('(prefers-reduced-motion: reduce)') 量出来就是 true
+   * （每一跑都印着 reducedMotion: true、animations: []）。于是「换栏那一下有没有
+   * 一个被安排的动作」在默认那几跑里根本量不到——样式里那条动画被自己的 media
+   * 查询撤掉了，而那正是它该做的事。
+   *
+   * Chromium 只有「强制打开」那个开关（--reduced-motion 用的就是它），没有
+   * 「强制关掉」的，所以这一档走 CDP：Emulation.setEmulatedMedia 覆写这一项。
+   *
+   * **必须在 loadFile 之后**：sendCommand 等的是渲染进程的回应，而它在 loadFile
+   * 之前还不存在——上一版写在 loadFile 之前，于是那条命令永远等不到回应，
+   * 整个探针就停在 BODY 那一行不动了。覆写来得晚一步不影响结果：样式重算之后
+   * 那条动画照样从头走一遍（fill: both，量的是它的名字、时长与缓动）。
+   */
+  if (has('--no-reduced-motion')) {
+    win.webContents.debugger.attach('1.3')
+    await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', {
+      features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }]
+    })
+  }
+
   // 渲染进程是异步拉状态再渲染的，等它把首帧摆好
   await wait(1200)
+  // 展示字是异步加载的，量宽度之前得等它到齐，否则量到的是兜底那份。
+  // 末尾接一个 true：document.fonts.ready 兑现的是 FontFaceSet 本身，
+  // 那不是能被 executeJavaScript 搬回来的值——直接等它就卡在这里。
+  if (page === 'home' || page === 'settings') {
+    await win.webContents.executeJavaScript('document.fonts.ready.then(() => true)')
+  }
 
   /*
    * 模拟桌面垫在 html 上：界面自己的底板画在它上面，而界面留白的地方透出来
@@ -1098,6 +1337,20 @@ app.whenReady().then(async () => {
           maximized: live?.maximized ?? MAXIMIZED,
           theme,
           bg: BG,
+          /*
+           * 这一份图是在多大的视口里渲染的。
+           *
+           * `window` 是窗口，`body` 是起始页 / 设置页这类自家一屏在真机上真正
+           * 拿到的那块矩形（不给 --body 时按整扇窗渲染，两者相等）。读这份 JSON
+           * 的人正是拿它当证据的，因此这张图代表哪一态必须写在里面。
+           */
+          viewport: {
+            window: { width: WIDTH, height: HEIGHT },
+            body: rect ? { width: rect.width, height: rect.height } : { width: WIDTH, height: HEIGHT },
+            renderIsBody: BODY,
+            addressOpen: ADDRESS_OPEN,
+            rendered: { width: viewW, height: viewH }
+          },
           reportedBallRect,
           measured,
           dragProbe
@@ -1131,12 +1384,47 @@ app.whenReady().then(async () => {
           })}`
         )
       }
+    } else {
+      /*
+       * 起始页 / 设置页：几件只有量了才知道的事，当场印出来。
+       *
+       * 其中两件是上一轮**文字干净、属性漏了**那一类：pathLeaks 看的是行上的
+       * 字，titleLeaks 看的是 title 属性；displayWidths 看的是展示字到底换上了
+       * 没有（拉丁那一行里 ours 与两个兜底不相等就是换上了）。
+       *
+       * lines 两档都印：终端世界的行在 .term 底下，现代世界的在 .modern 底下，
+       * 一次只会有一个是数（另一个是 0）。先前写的是 `lineCount ?? termLineCount`，
+       * 而 0 不是 nullish，终端那一跑因此印成 0——数在，被 `??` 挡住。
+       */
+      console.log(
+        `PAGE ${JSON.stringify({
+          lines: measured.lineCount || measured.termLineCount || null,
+          area: measured.lines ?? measured.termLines ?? null,
+          plate: measured.plateOn ?? null,
+          stat: measured.stat ?? null,
+          note: measured.note ?? null,
+          endRule: measured.endRule ?? null,
+          animations: measured.animations ?? null,
+          reducedMotion: measured.reducedMotion ?? null,
+          pathLeaks: measured.pathLeaks ?? null,
+          titleLeaks: measured.titleLeaks ?? null,
+          displayLoaded: measured.displayLoaded ?? null,
+          displayCovers: measured.displayCovers ?? null,
+          displayWidths: measured.displayWidths ?? null
+        })}`
+      )
     }
   }
 
   const run = (js) => win.webContents.executeJavaScript(js)
-  // 尺寸与非默认的标签数都写进名字：同一台机器上跑几档下来，别互相覆盖
-  const size = WIDTH !== 960 || HEIGHT !== 540 ? `-${WIDTH}x${HEIGHT}` : ''
+  /*
+   * 尺寸与非默认的标签数都写进名字：同一台机器上跑几档下来，别互相覆盖。
+   *
+   * 写的是**这一页实际拿到的那块**（--body 时是正文区，不是窗口）：图名要说的是
+   * 「这张图里的文档有多宽多高」，写窗口尺寸的话，912×496 的那一张会挂着 960×540
+   * 的名字，而这两个数在高度上差 44——正好是这一页最紧的那一轴。
+   */
+  const size = viewW !== 960 || viewH !== 540 ? `-${viewW}x${viewH}` : ''
   const tabs = TABS ? `-${TABS}tabs` : ''
   // 底板透明度同理：跑了 0.35 那一档之后，默认那一档的图不该被它盖掉
   const bg = BG !== 1 ? `-bg${BG}` : ''

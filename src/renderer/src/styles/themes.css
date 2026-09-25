@@ -69,6 +69,19 @@
   --radius-pill: 999px;
   --font: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', system-ui, sans-serif;
 
+  /*
+   * 展示字：起始页报头与栏目线的字。它与上面那条 --font 是两件事——
+   * --font 是**界面**的字，用平台自己的正好；展示字是那一页的门面，
+   * 必须是自己带着的（assets/fonts/moyu-display-serif.woff2，
+   * 做法与出处见 scripts/make-display-font.mjs）。
+   *
+   * 后面那几串是兜底，不是候选：都是衬线中文，真轮到它们时排版意图还在，
+   * 只是不精确。**不要**把无衬线往这一串里塞。
+   */
+  --font-display: 'Moyu Display Serif', 'Noto Serif SC', 'Source Han Serif SC', 'SimSun',
+    'Songti SC', serif;
+
+
   /* 界面 */
   --moyu-surface-rgb: 255 255 255;
   --moyu-surface-hover-rgb: 243 244 246;
@@ -259,6 +272,10 @@ html[data-world='terminal'] {
   --radius-sm: 0;
   --radius: 0;
   --radius-pill: 0;
+
+  /* 终端世界的展示字就是它那套等宽字：命令行里没有第二个字面，
+     报头与栏目线也一样。那一页在终端世界里换的是**排版**，不是字体 */
+  --font-display: var(--font);
 
   --moyu-font: 'Cascadia Mono', Consolas, 'Sarasa Mono SC', 'Microsoft YaHei', monospace;
   --moyu-radius: 0;

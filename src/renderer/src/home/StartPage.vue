@@ -83,6 +83,22 @@ const { visible, sel, pick, reset, onKeydown, onSubmit } = useRowList(filtered, 
   clearQuery: () => emit('update:query', '')
 })
 
+/**
+ * 这一栏是不是**真的**到底了。
+ *
+ * 只有整栏都渲染出来时才算：行数被上限截掉时，收尾那条线就成了「后面还有」
+ * 的反话。相等（正好铺满）也不算——那时列底下没有留白，不需要收尾。
+ */
+const closed = computed(() => visible.value.length > 0 && visible.value.length < limit.value)
+
+/**
+ * 这一列的身份。栏变了、进出搜索了，都是**另一列**；打字本身不是。
+ *
+ * 拿它当模板里的 key，换栏时那一棵子树被整块换掉，动画也就跟着走一遍。
+ */
+const columnKey = computed(() => `${props.plate}${searching.value ? ':q' : ''}`)
+
+
 // 换一栏，光标回到第一行：新一栏的行与上一栏没有任何关系
 watch(() => props.plate, reset)
 
@@ -258,43 +274,57 @@ function onRootClick(event: MouseEvent): void {
     </nav>
 
     <div ref="area" class="lines">
-      <button
-        v-for="(row, i) in visible"
-        :key="row.key"
-        class="line"
-        :class="{ sel: i === sel, resume: row.verb === 'resume', file: row.verb === 'open-file' }"
-        :title="row.url"
-        @click="pick(row)"
-        @mouseenter="sel = i"
-      >
-        <!--
-          动词列固定宽度，两套世界共用。站点名称因此永远对齐在同一列上，
-          而「继续」「打开文件」这两行的话也是从这一列说出来的。
-        -->
-        <span class="verb">{{ verbOf(row) }}</span>
-        <!--
-          图标是这一套世界的皮：终端那边只有字。
-          本机文件的那些行（以及「打开文件…」）画文件，站点画图标，
-          两边都没有的落到首字母那一格上——每一格都填满 18px，后面的名称才对得齐。
-        -->
-        <span v-if="!terminal" class="favicon">
-          <Icon v-if="row.local" name="file" :size="14" />
-          <template v-else-if="row.icon">
-            <img
-              :src="row.icon"
-              alt=""
-              @error="($event.target as HTMLImageElement).style.display = 'none'"
-            />
-          </template>
-          <span v-else class="initial">{{ initialOf(row.label) }}</span>
-        </span>
-        <span class="label">{{ row.label }}</span>
-        <span class="host">{{ row.host }}</span>
-      </button>
-      <p v-if="!visible.length" class="none">
-        <span v-if="terminal" class="verb">--</span>
-        <span class="label">{{ emptyText }}</span>
-      </p>
+      <!--
+        一列行。换栏时整块重排，因此这一格带 key：栏变了就是新的一列，
+        Vue 换掉这棵子树，下面那条动画跟着走一遍。打字过滤时**不**重放——
+        那是同一个动作的延续，不是新的一栏；key 只看栏目与「在不在搜索」，
+        不看输入框里那几个字。
+      -->
+      <div class="rows" :key="columnKey">
+        <button
+          v-for="(row, i) in visible"
+          :key="row.key"
+          class="line"
+          :class="{ sel: i === sel, resume: row.verb === 'resume', file: row.verb === 'open-file' }"
+          :title="row.local ? undefined : row.url"
+          @click="pick(row)"
+          @mouseenter="sel = i"
+        >
+          <!--
+            动词列固定宽度，两套世界共用。站点名称因此永远对齐在同一列上，
+            而「继续」「打开文件」这两行的话也是从这一列说出来的。
+          -->
+          <span class="verb">{{ verbOf(row) }}</span>
+          <!--
+            图标是这一套世界的皮：终端那边只有字。
+            本机文件的那些行（以及「打开文件…」）画文件，站点画图标，
+            两边都没有的落到首字母那一格上——每一格都填满 18px，后面的名称才对得齐。
+          -->
+          <span v-if="!terminal" class="favicon">
+            <Icon v-if="row.local" name="file" :size="14" />
+            <template v-else-if="row.icon">
+              <img
+                :src="row.icon"
+                alt=""
+                @error="($event.target as HTMLImageElement).style.display = 'none'"
+              />
+            </template>
+            <span v-else class="initial">{{ initialOf(row.label) }}</span>
+          </span>
+          <span class="label">{{ row.label }}</span>
+          <span class="host">{{ row.host }}</span>
+        </button>
+        <p v-if="!visible.length" class="none">
+          <span v-if="terminal" class="verb">--</span>
+          <span class="label">{{ emptyText }}</span>
+        </p>
+      </div>
+
+      <!--
+        收尾线：这一栏**真的**到底了才画。行被上限截掉时它就是在说谎——
+        而这一页从不滚动，截掉的那些只能靠输入框找回来。
+      -->
+      <span v-if="closed" class="end" aria-hidden="true" />
     </div>
 
     <!--
@@ -343,8 +373,9 @@ function onRootClick(event: MouseEvent): void {
 }
 
 .wordmark {
+  font-family: var(--font-display);
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.1em;
   color: var(--text);
   /* 标识折行就不是标识了；挤不下时宁可挤旁边的读数 */
@@ -478,12 +509,6 @@ function onRootClick(event: MouseEvent): void {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .cursor.lit {
-    animation: none;
-  }
-}
-
 /* ---------------------------------------------------------------- 栏目线 */
 
 /*
@@ -516,6 +541,10 @@ function onRootClick(event: MouseEvent): void {
 .plate {
   position: relative;
   padding-bottom: 6px;
+  /* 栏目线是这一页报头的一部分，因此整条都用展示字：
+     它是一行**排出来的字**，不是一排控件。字大小的差别承担层级，
+     字面从头到尾是同一个 */
+  font-family: var(--font-display);
   font-size: 12px;
   line-height: 1.15;
   color: var(--text-tertiary);
@@ -532,7 +561,9 @@ function onRootClick(event: MouseEvent): void {
   color: var(--text);
 }
 
-/* 当前那一栏的强调色短线，正好压在下划线上 */
+/* 当前那一栏的强调色短线，正好压在下划线上。
+   它从左边画出来（而不是直接出现）：换栏这一下与底下那一列的落定是同一个
+   动作的两半，因此同一个时长、同一条缓动。 */
 .plate.on::after {
   content: '';
   position: absolute;
@@ -541,6 +572,17 @@ function onRootClick(event: MouseEvent): void {
   bottom: 0;
   height: 2px;
   background: var(--accent);
+  transform-origin: left center;
+  animation: rule-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes rule-in {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 /* 终端世界不画下划线：它用块光标。直角那一组里多一条 2px 的横杠，
@@ -575,6 +617,43 @@ function onRootClick(event: MouseEvent): void {
   min-height: 0;
   margin-top: 8px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * 一列行。换栏时整块重排（见模板里那个 key），因此它是这一页唯一一个
+ * 被安排过的动作：新的一列从**已经看得见**的那一档（0.55）落定下来，
+ * 不是从无到有。指数缓出，180ms，一次就完。
+ */
+.rows {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  animation: settle 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes settle {
+  from {
+    opacity: 0.55;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * 收尾线：这一栏到底了（行都在，没有被上限截掉），压在列的最下面、
+ * 居中一条短线。报纸收尾画的就是这个——不是「更多」，是「完了」。
+ */
+.end {
+  flex: 0 0 auto;
+  margin: auto auto 0;
+  width: 56px;
+  height: 1px;
+  background: var(--divider-strong);
 }
 
 .line,
@@ -583,6 +662,8 @@ function onRootClick(event: MouseEvent): void {
   align-items: center;
   gap: 10px;
   width: 100%;
+  /* 一列行不缩：行高是量出来的一档，被挤扁就不是那一档了 */
+  flex: 0 0 auto;
   height: var(--row-h);
   padding: 0 8px;
   text-align: left;
@@ -661,9 +742,11 @@ function onRootClick(event: MouseEvent): void {
   height: 18px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-pill);
+  /* 直角那一套世界里没有圆：这一格是方的，跟着 --radius-sm 走，
+     换到终端世界（全部归零）它就是正方的 */
+  border-radius: var(--radius-sm);
   background: var(--tile);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-secondary);
 }
 
@@ -701,7 +784,7 @@ function onRootClick(event: MouseEvent): void {
 }
 
 .compact .note {
-  font-size: 10px;
+  font-size: 11px;
   padding-top: 4px;
 }
 
@@ -718,9 +801,12 @@ function onRootClick(event: MouseEvent): void {
   color: var(--text-tertiary);
 }
 
+/* 迷你档整组降一档，但读数与主题键**不降到 11px 以下**：
+   它们是这一页上唯一两处「现在是什么状态」，而这一页的全部意义是
+   在别人看过来之前让人自己知道现在是什么状态 */
 .modern.compact .status,
 .term.compact .status {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .status .stat {
@@ -744,5 +830,20 @@ function onRootClick(event: MouseEvent): void {
 /* 主题菜单自己带 flex 布局，这里只把它钉在右端 */
 .status :deep(.theme-menu) {
   flex: 0 0 auto;
+}
+
+/*
+ * 撤掉动画的位置在整份样式的最后：这几条与上面那几条**同等特异**，
+ * 只有排在后面才压得住它们。
+ *
+ * 撤掉的是动画，不是结果——换栏那一下仍然是换了一栏，只是当场换完；
+ * 方块光标仍然是「等你打字」的那一格，只是不闪。
+ */
+@media (prefers-reduced-motion: reduce) {
+  .cursor.lit,
+  .rows,
+  .plate.on::after {
+    animation: none;
+  }
 }
 </style>
