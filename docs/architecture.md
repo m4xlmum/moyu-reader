@@ -1,0 +1,154 @@
+# 架构要点
+
+有十六处实现与直觉相反，都是被真机验证倒逼出来的，改动前请先读
+[spike-findings.md](spike-findings.md)：
+
+1. **每个 `WebContentsView` 都必须调用 `setBackgroundColor('#00000000')`。**
+   默认背景是不透明白色，漏掉这一行整个透明方案就不成立。
+
+2. **收起与展开就是同一扇窗的两套矩形**，靠 `setBounds` 切换。
+   窗口的展开尺寸由真实的尺寸变化维护，**绝不在切换过程中从
+   `win.getBounds()` 反推**——那一刻窗口还停在旧尺寸上，反推会把记住的
+   展开尺寸覆盖成球的尺寸，展开就再也长不回去了。
+
+3. **所有窗口级 surface 属性只能经 `windowSurface.ts` 一处设置。**
+   `transparent: true` 与 `setOpacity` 在 Windows 上是两条不同的合成路径，
+   从多处反复折腾它们会出问题。调用顺序在 `apply()` 里有注释说明，不要重排。
+
+4. **`'closed'` 是在窗口销毁之后才触发的**，那时除了 `win.isDestroyed()`，
+   读任何属性都会抛 `Object has been destroyed`——`win.id` 也是属性。
+   所以 id 要在**建窗口时**记下来，清理代码里只用记下的值。主进程未捕获
+   异常会弹出 Electron 的错误框，退出时那个框正是这么来的（`spike/destroyed.js`）。
+
+5. **注入的网页样式绝不能碰自家页面。** 「让网页背景透明」这条规则是
+   user origin 的 `!important`，在层叠顺序里压过作者样式表——系统设置的底板
+   原本就写在 `html, body` 上，于是被抹掉，打开它时窗口整个透出桌面。
+   两条防线：`TabManager.applyPageStyles()` 只对访客页注入，自家页面的底板
+   另外画一层（起始页 `.page`、系统设置 `.layout`，`spike/ownpage-bg.js`）。
+
+6. **子组件的根元素会带上父组件的作用域属性。** 于是父组件里任何一条
+   `.类名[data-v-父]` 的规则都可能落到子组件头上：主题菜单的根元素曾经带着
+   `cards` 这个类（`variant` 的值被当类名用），正好撞上当时那套世界根元素的类名，
+   结果它被 `StartCards`（已由 `StartModern` 取代）的整页排版规则排了一遍——
+   标识被挤成两行、菜单横跨整幅页眉，而两边单独看都没有错。
+   现在 `variant` 取 `modern` / `terminal`，与两套世界根元素的类名**依旧同名**，
+   因此这条约束是活的：**给子组件传形态用属性（`data-variant`）而不是类名。**
+   查这类串味用 `spike/which-rules.js`。
+
+7. **顶栏里放不放得下一条标签条，只能量，不能猜。** 猜窗口宽度是不行的：
+   导航、站点标识、新标签按钮先分走各自那一段，剩下的才轮得到标签条。
+   而「量」有个陷阱——放不下时若把它 `display: none`，下次量出来就是 0，
+   于是「放得下」→ 显示 → 又放不下，一帧一个样地抖。
+   做法是让它一直挂着：放不下时 `position: absolute; visibility: hidden`，
+   离开流（既不占宽度，也不把后面的按钮挤走）但仍能量出自己的自然宽度。
+   容量与需求两把尺子在两态下都成立，判断就不会来回翻（`chrome/TabStrip.vue`）。
+
+8. **`visibility: hidden` 挡住了子孙，但子孙可以自己走回来。** 整条标签条让位时
+   是隐藏的，可 `visibility` 是可继承属性——当前那一格的关闭键写着
+   `visibility: visible`，于是它照样画在下拉按钮右边，成了一个孤零零的 ✕
+   （还能被 Tab 键选中，按一下就关掉标签页）。**整块隐藏时，块内凡是有
+   自己 `visibility` 声明的地方都要一并算进去**：露出关闭键的那两条规则现在
+   挂在「标签条显示中」这一态上。同时，判断某个元素究竟画没画出来要用
+   `checkVisibility({ visibilityProperty: true })`，它会把祖先算进去；
+   `getComputedStyle(el).visibility` 只看那一层自己的值，祖先被隐藏它照样报
+   「可见」——这个 ✕ 就是那么混过了第一轮自查（`chrome/TabStrip.vue`）。
+
+9. **自定义属性里的 `var()` 是在「声明它的那个元素」上完成替换的。**
+   底板的颜色令牌写在 `:root` 上：`--moyu-surface: rgb(255 255 255 / var(--moyu-alpha))`，
+   而 `--moyu-alpha` 原本写在组件自己的根节点（`.root` / `.panel`）上——于是
+   `:root` 上早就把它替换成了一个定值（默认 1），再继承下去的颜色根本不参与替换。
+   实测症状极其安静：`--moyu-alpha` 读到 0.35，顶栏的实测底色却仍是
+   `rgb(255, 255, 255)`——滑块在动，画面纹丝不动。**两者必须落在同一层**，
+   也就是 `document.documentElement`（`composables/useBackgroundAlpha.ts`）。
+   这条关系现在由 `spike/preview.js --bg 0.35` 的 `surfaces` 逐项盯着。
+
+10. **`setInterval` 的间隔会被向上取整到 Windows 的系统时钟滴答（约 15.6ms）。**
+    请求 16ms 得到的是 **p50 30.2ms**（两个滴答），拖动就成了每帧一顿；请求 8ms
+    才落到一个滴答（15.1ms）——这不是「越小越流畅」，而是「不小于滴答就翻倍」。
+    拖动循环因此取 `DRAG_TICK_MS = 8`，并去掉每帧那次 `win.getBounds()` 往返
+    （位置按按下时的锚点**绝对**算，不做增量累加：卡住过一次的增量会越拖越偏，
+    绝对算法下一帧就抹掉了）。数据见 `spike/dragTicks.js`。
+
+11. **「哪儿能拖」不能交给 CSS 的 `-webkit-app-region`。** 那条路要求栏上
+    留着没被 `no-drag` 盖住的像素，而顶栏中间是 `flex: 1 1 auto` 的标签条、
+    右栏里是撑满的功能栈——两条栏被盖得只剩几像素的内边距，用户的结论就是
+    「只能拖悬浮球」，而这从代码上看不出来。现在是一条读得懂的规则：
+    **按在控件上是操作，按在别处都是拖窗口**（`composables/useWindowDrag.ts`，
+    控件选择器定义在同一处），可拖区域不再随版面变化而悄悄消失。
+    这条规则由 `spike/preview.js --drag-probe` 逐个位置问一遍界面自己。
+
+12. **叠在一起的 `WebContentsView`，指针事件只到最上面那一层，CSS 管不了。**
+    子视图是原生视图，不是 DOM——底下的视图收不到指针事件，`pointer-events`
+    是浏览器里的概念，在这里一点用都没有（`spike/vieworder.js`）。这条否掉了
+    「最大化时铺一张透明的整窗浮层」的画法：浮层一铺，整块网页就点不动了。
+    现在的做法是**把界面层缩到右上角一小块**（80×48，`ChromeApp.vue` 的
+    `.float`）并把它抬到最上层（`View.addChildView` 对**已在场**的子视图是
+    「重排到最上层」，不是多插一份）。左、下两条边的缩放手柄同理，只能靠
+    「光标进入边带时把界面层抬起来」——那 8px 边带因此是**惰性的**：抬起来之前
+    落在上面的点击归网页，这是这套机制明码标价的代价。
+
+13. **网页进全屏，窗口那一侧必须由我们接管，否则会大一圈。**
+    `TabManager.create()` 里那一行 `disableHtmlFullscreenWindowResize: true`
+    不是可选项：带电不带它，差别实测得出来——不带它时 Chromium 自己把窗口
+    铺到**整块显示器**（本机 1920×1080，连任务栏一起盖住），而我们要的是
+    **工作区**（1920×1032）。那 48px 就是「两边同时动手」会跳的那一下
+    （`spike/fullscreen.js control`）。同时，窗口是谁最大化的要记清楚：
+    `autoMaximized` 只标「这扇窗是视频全屏捎带出来的」，因此用户本来手动
+    最大化的窗口，看个视频再退出全屏**不会**被缩回去（`windowController.ts`）。
+
+14. **自定义球图标不进配置。** 那是一张 5–20KB 的 WebP data URI，而配置的
+    写入与广播是**全量**的——把它塞进 `config.ui`，拖动透明度滑块每动一格都会
+    把它推一遍。它落在 `userData/ball-icon.json`（`services/ballIconStore.ts`，
+    与配置同用 `jsonFile.ts` 的原子写），配置里只留「选了哪一枚」与「怎么落」。
+    同理，球在各种形态下**盒子尺寸都不能变**：收起态的窗口正好等于球的尺寸，
+    球涨一点点就会被窗口边缘切出四个方角。
+
+15. **按钮与输入框不继承颜色。** UA 样式表给它们各自带一份（`buttontext` /
+    `fieldtext`），作者样式表不写 `color: inherit` 就压不过它。四份文档是四份
+    文档，这一条要在每一页各写一遍；系统设置那一页不加载 `base.css`，漏了它那一页
+    就是**黑底黑字**——暗夜下探针量出来 1.18:1，而纸白下看不出来，因为 UA 给的那个
+    黑与正文色几乎一样（`styles/settings.css`，`spike/theme-chrome.js` 的 Q9）。
+
+16. **「占多少版面」只能是主进程的状态。** 网页是原生视图，它那一块矩形只由
+    `computeLayout()` 算出来——界面里自己画的东西再多，也不会真的把网页推走。
+    更新提示条因此是**一行版面**（`NOTICE_H = 30`），照地址栏那套走：
+    `WindowRuntime.noticeVisible` 与 `addressOpen` 同类，改它要 `recomputeLayout()`
+    再广播；而这一行**写什么**（版本号、进度、失败原因）走 `BROADCAST.updateState`
+    那条单独的路。两份状态各有各的主人，谁都不去猜对方在什么状态。
+    另一头是**别把状态塞进版面开关**：收起成球、藏进托盘时 `recomputeLayout`
+    直接返回（那一块只有 40×40，塞不下），提示条跟着不见，展开时重排一次自己就
+    回来了——为它另存一份「收起前有没有提示」是多余的（`UpdateNotice.vue`）。
+
+> 早期版本用 `setShape` 裁剪窗口的命中区域来实现「隐藏区域点击穿透」。
+> 改为收起成球之后这套机制已整体移除：窗口真的缩小了，就不需要再靠裁剪
+> 去欺骗命中测试，`setShape` 也不再有存在的理由。
+
+## 目录
+
+```
+src/shared/    三个进程共享的类型、IPC 契约、常量
+src/main/      主进程：窗口编排、状态机、浏览器、数据存储
+src/preload/   唯一的 contextBridge 桥
+src/renderer/  chrome 界面 / 弹出面板 / 系统设置
+```
+
+关键文件：
+
+| 文件 | 职责 |
+|---|---|
+| `src/main/services/windowSurface.ts` | 所有窗口级属性的唯一入口 |
+| `src/main/services/windowController.ts` | 窗口编排与状态机：状态、合法迁移、守卫 |
+| `src/main/services/windowLeaveWatcher.ts` | 光标轮询、迟滞、挂起门控 |
+| `src/main/services/geometry.ts` | 版面矩形计算，坐标判断的唯一来源 |
+| `src/main/services/updateService.ts` | 更新那一路：查 `latest.yml` → 比版本 → 下载并校验 sha512 → 起安装程序。**不用 electron-updater** 的三条理由写在文件头 |
+| `src/renderer/src/home/useRows.ts` | 起始页的行模型与交互：三套主题共用，世界组件只负责画 |
+| `src/renderer/src/composables/useWindowDrag.ts` | 「按控件是操作、按别处是拖窗口」的唯一判据，界面各处共用 |
+| `src/renderer/src/composables/useBackgroundAlpha.ts` | 底板透明度写进文档根（必须与令牌同层，见架构要点第 9 条） |
+| `src/renderer/src/composables/useTheme.ts` | 主题与形态写进文档根，四份文档各调一次（它们之间没有继承路径） |
+| `src/renderer/src/chrome/TabStrip.vue` | 顶栏标签条，含「放不下就让位给下拉清单」的实测判断 |
+| `src/renderer/src/styles/themes.css` | 三套主题的配色与两套世界的形态，四份文档共用这一份 |
+| `src/renderer/src/styles/home.css` | 起始页自己的排版，以及**只在起始页**出现的扫描线与暗角 |
+| `src/shared/ipc.ts` | 三个进程共享的通道与载荷契约 |
+
+> 计划里原本把状态机拆成独立的 `windowStateMachine.ts`，实现时发现它与窗口编排放一起
+> 内聚性更好（状态迁移总是伴随窗口动作），故合并进 `windowController.ts`。
