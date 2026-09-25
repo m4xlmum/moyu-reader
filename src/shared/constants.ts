@@ -241,6 +241,56 @@ export const SETTINGS_URL = 'moyu://settings'
 export const SETTINGS_TITLE = '系统设置'
 
 /**
+ * 起始页的栏目。
+ *
+ * 这一页要回答的是「今天摸哪条鱼」，所以它是一次**分类**：顶上一排栏目键，
+ * 点哪个下面换哪一摊。栏目的划分取自墨鱼阅读那份使用指南（网页 / 离线），
+ * 再按本站预置站点表里本来就有、却一直混在一列里的那几类细分。
+ *
+ * 这份表是**唯一的一份**：起始页画它，探针按 id 点它，站点的归属（presets.ts
+ * 的 sectionOfUrl）也指着它。id 同时是对外的名字（CSS、探针参数、页面状态）。
+ *
+ * `local` 那一栏不是站点栏——它底下排的是本机文件，只有它一个。标出来是因为
+ * 「这一栏的内容从哪儿来」这件事在别处都要判一次（见 HomeApp 的 rowsOfSection）。
+ */
+export type SectionId = 'all' | 'video' | 'reading' | 'news' | 'quiz' | 'local'
+
+/** 站点能归到哪一栏。不含「全部」与「离线阅读」：那两栏不是站点栏 */
+export type SiteSection = Exclude<SectionId, 'all' | 'local'>
+
+export const SECTIONS: ReadonlyArray<{
+  id: SectionId
+  label: string
+  /** 栏目线放不下时用的两字缩写（照 TabStrip 让位那条路数） */
+  short: string
+  /** 是不是「本机文件」那一栏 */
+  local?: boolean
+}> = [
+  { id: 'all', label: '全部', short: '全部' },
+  { id: 'video', label: '视频', short: '视频' },
+  { id: 'reading', label: '阅读', short: '阅读' },
+  { id: 'news', label: '资讯', short: '资讯' },
+  { id: 'quiz', label: '刷题', short: '刷题' },
+  { id: 'local', label: '离线阅读', short: '离线', local: true }
+]
+
+/** 打开起始页时落在哪一栏。落在「全部」上：打开就想看全，再自己往细里点 */
+export const DEFAULT_SECTION: SectionId = 'all'
+
+/** 栏目的名字。id 认不出来时如实回落到「全部」，不编一个不存在的栏目 */
+export function sectionTitle(id: SectionId): string {
+  return SECTIONS.find((s) => s.id === id)?.label ?? SECTIONS[0].label
+}
+
+/**
+ * 离线阅读那一栏里写明的格式界限。
+ *
+ * 写在常量里而不是页面里，是因为它同时要出现在探针的读数里：这条界线
+ * （能读什么、不能读什么）是这一栏对用户说过的话里最容易失效的一句。
+ */
+export const LOCAL_FORMATS_NOTE = 'TXT / PDF 直接读；EPUB / MOBI / AZW3 暂不支持（见路线图）'
+
+/**
  * 起始页的两套世界。
  *
  * 主题不只是配色，它决定这一页**长成什么形态**：

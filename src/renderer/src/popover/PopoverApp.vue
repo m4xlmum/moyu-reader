@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { sectionTitle } from '@shared/constants'
 import type { Bookmark, HistoryEntry, PresetSite, SiteRecord, TabState } from '@shared/types'
 import { useConfig } from '../composables/useConfig'
 import { useBackgroundAlpha } from '../composables/useBackgroundAlpha'
@@ -184,7 +185,7 @@ function zoom(op: 'in' | 'out' | 'reset'): void {
         <div class="section">热门站点</div>
         <div v-for="site in presets" :key="site.id" class="row" @click="open(site.url)">
           <span class="row-title">{{ site.title }}</span>
-          <span class="tag">{{ site.category }}</span>
+          <span class="tag">{{ sectionTitle(site.section) }}</span>
         </div>
       </template>
 

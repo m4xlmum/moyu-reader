@@ -3,9 +3,17 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import type { BallCustomFit, BallIconChoice, HomeTheme } from './constants'
+import type { BallCustomFit, BallIconChoice, HomeTheme, SiteSection } from './constants'
 
-export type { BallCustomFit, BallIcon, BallIconChoice, HomeTheme, SizePreset } from './constants'
+export type {
+  BallCustomFit,
+  BallIcon,
+  BallIconChoice,
+  HomeTheme,
+  SectionId,
+  SiteSection,
+  SizePreset
+} from './constants'
 
 // ---------------------------------------------------------------- 配置
 
@@ -159,7 +167,8 @@ export interface PresetSite {
   id: string
   title: string
   url: string
-  category: string
+  /** 归属起始页的哪一栏。表里的站点都有栏，用户自己加的站点不在表里 */
+  section: SiteSection
 }
 
 export interface Bookmark {

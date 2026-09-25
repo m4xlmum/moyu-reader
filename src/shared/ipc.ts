@@ -91,6 +91,15 @@ export const INVOKE = {
   hotkeyList: 'hotkey:list',
   hotkeySet: 'hotkey:set',
 
+  /**
+   * 打开本机文件（离线阅读）。
+   *
+   * 主进程弹系统选文件框，选中的路径转成 file:// 打开成一张普通的网页标签
+   * ——TXT 与 PDF 交给 Chromium 自己渲染，不需要新的视图种类。
+   * 回来的是**文件名**数组，不是路径（见 @shared/url.ts 的 fileNameOf）。
+   */
+  fileOpenLocal: 'file:openLocal',
+
   updateGet: 'update:get',
   updateCheck: 'update:check',
   updateDownload: 'update:download',
@@ -344,6 +353,16 @@ export interface MoyuApi {
       which: 'bossMinimize' | 'bossHideToTray'
       accelerator: string
     }): Promise<{ ok: boolean; accelerator: string; reason?: string }>
+  }
+  /**
+   * 本机文件（离线阅读）。
+   *
+   * 只有一个动作，因为这条路刻意做得最短：**系统选文件框选中的那几本直接
+   * 开成普通的网页标签**，没有「书架」这种中间态要维护。回到的是文件名数组
+   * （用户取消时是空的），只用来给界面一句回话——路径不出主进程。
+   */
+  files: {
+    openLocal(): Promise<string[]>
   }
   /**
    * 检查更新。

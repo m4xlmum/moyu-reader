@@ -92,3 +92,33 @@ export function sameSite(a: string, b: string): boolean {
   if (!ha || !hb) return false
   return registrableDomain(ha) === registrableDomain(hb)
 }
+
+/**
+ * 本机文件的名字：`file:///C:/书/斗破苍穹.txt` 得到 `斗破苍穹.txt`。
+ *
+ * 只给 `file:` 用，而且**只有它**能给出一件可以显示的东西——本机路径
+ * （`C:\Users\…\Documents\…`）是这台机器的目录结构，显示它等于把用户名
+ * 和目录习惯摊在屏幕上，而这个程序的全部意义是别人看不出你在干什么。
+ * 因此凡是 `file:` 的条目要写要给人看时，一律走这里取名字。
+ *
+ * 不是 `file:` 的地址返回 null（`hostOf` 对 file: 返回空串，不能用它兜）。
+ * 浏览器的 file: URL 会把路径逐段百分号编码（空格是 %20），所以认得出
+ * 编码就解回来；断掉的编码（半截 UTF-8）原样返回，宁可显示得别扭，
+ * 也不要抛异常把整页带下去。
+ */
+export function fileNameOf(url: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  if (parsed.protocol !== 'file:') return null
+  const raw = parsed.pathname.split('/').filter(Boolean).pop()
+  if (!raw) return null
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
+}

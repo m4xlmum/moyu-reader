@@ -158,6 +158,11 @@ export const api: MoyuApi = {
       }>
   },
 
+  // 离线阅读：选中的本机文件由主进程开成普通的网页标签，回来的是文件名
+  files: {
+    openLocal: () => ipcRenderer.invoke(INVOKE.fileOpenLocal) as Promise<string[]>
+  },
+
   update: {
     get: () => ipcRenderer.invoke(INVOKE.updateGet) as Promise<UpdateState>,
     check: () => ipcRenderer.invoke(INVOKE.updateCheck) as Promise<UpdateState>,

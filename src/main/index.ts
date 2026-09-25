@@ -13,6 +13,7 @@ import type { Rect } from '@shared/types'
 import type { AppContext } from './context'
 import { registerBrowserIpc } from './ipc/registerBrowserIpc'
 import { registerDataIpc } from './ipc/registerDataIpc'
+import { registerFileIpc } from './ipc/registerFileIpc'
 import { registerUpdateIpc } from './ipc/registerUpdateIpc'
 import { registerWindowIpc } from './ipc/registerWindowIpc'
 import { BookmarkStore } from './services/bookmarkStore'
@@ -283,6 +284,7 @@ function bootstrap(): void {
 
     registerDataIpc(ctx)
     registerBrowserIpc(ctx)
+    registerFileIpc(ctx)
     registerWindowIpc(ctx)
     registerUpdateIpc(ctx)
 
