@@ -1,0 +1,37 @@
+/*
+ * 本机 PDF 阅读页的全局几条。
+ *
+ * 只有寥寥几条，因为这个页面上的东西本来就少：一张画布、一条浮层。剩下的都在
+ * PdfApp.vue 的 scoped 样式里（它们只作用在那两个元素上）。
+ *
+ * 关键的一条是**不画底色**：整个程序的窗口是逐像素透明的，这一页要让桌面透过纸
+ * 照进来，所以 html/body 上一点背景都不能有。canvas 自己没有内容的地方本来就是
+ * 透明的，键控又把纸写成了 alpha 0——三层合起来才是「只剩字」。
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later
+ */
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: transparent;
+  /* 滚动只发生在正文区那一个容器里（见 PdfApp 的 .stage）；
+     文档自己再能滚，翻页时的 scrollTop 就在两个滚动容器之间打架 */
+  overflow: hidden;
+}
+
+/* 浮层的尺寸都按它除回去，见 PdfApp 的 .hud。第一页画成之前它是 1 */
+:root {
+  --moyu-zoom: 1;
+}
+
+#app {
+  position: absolute;
+  inset: 0;
+}
+
+/* 这一页没有可选中、可拖走的东西：它是一张画布。选中高亮只会在拖窗口时闪一下 */
+body {
+  user-select: none;
+  cursor: default;
+}

@@ -1,10 +1,12 @@
 /**
  * 本机文件类 IPC：离线阅读。
  *
- * 这条路刻意做得最短：**系统选文件框选中的那几本直接开成普通的网页标签**，
- * 没有「书架」这种要维护的中间态。TXT 与 PDF 交给 Chromium 自己渲染
- * （PDF 有内置阅读器），因此这里不需要新的视图种类、新的样式注入，
- * 也不需要新的导航白名单——`file:` 早就在 sessionSetup 那份名单里。
+ * 这条路刻意做得最短：**系统选文件框选中的那几本直接开成标签页**，
+ * 没有「书架」这种要维护的中间态。TXT 交给 Chromium 自己渲染；PDF 开成
+ * 自家的阅读页（pdf.js 画进 canvas，白纸才去得掉，见 services/pdfReader.ts）。
+ * 而「哪一本该走哪一路」不在这里判：地址交给 TabManager.create，它只认一条
+ * 判据（@shared/url.ts 的 isLocalPdf）——会话恢复、网页里点一个 file: 链接
+ * 走的也是那一处，本文件因此不必知道两种格式的分别。
  *
  * 路径不出主进程：回来的是文件名（见 @shared/url.ts 的 fileNameOf）。
  * 这个程序的全部意义是别人看不出你在干什么，而一条 `C:\Users\…\Documents\…`
@@ -26,7 +28,8 @@ import type { AppContext } from '../context'
  * 是一句明确的话，而这一栏的说明里也写着 EPUB 暂不支持、指向路线图。
  *
  * 过滤器名字要能自己说清「你能选什么」：Chromium 按扩展名猜内容类型，
- * 不认识的扩展名一律变成下载，因此这里只能收它认得的。
+ * 不认识的扩展名一律变成下载，因此这里只能收它认得的。PDF 早已认得——
+ * 这一版起它不再进 Chromium 内置的那个阅读器，而是开成自家的阅读页。
  */
 const FILTERS: Electron.FileFilter[] = [{ name: '文本与 PDF', extensions: ['txt', 'pdf'] }]
 

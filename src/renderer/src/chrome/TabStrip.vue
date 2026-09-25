@@ -40,7 +40,7 @@ const props = defineProps<{
    * 停在起始页 / 系统设置上时，让位后那一枚按钮代表的就是它——见 shownTab。
    * 与顶栏那个地址栏开关同一条规矩（见 TopBar 的 siteLabel）。
    */
-  lastGuestId: string | null
+  lastTabId: string | null
 }>()
 
 /** 标签之间的间距，与 .zone 的 gap 一致；算容量时要用到 */
@@ -72,7 +72,7 @@ const fits = ref(true)
  * 让位后那一枚按钮代表的那张网页。
  *
  * 看着网页时是当前那张；停在起始页 / 系统设置上时是**刚才那张**
- * （lastGuestId，也就是左上角那两颗键再点一次会回到的那一张）。
+ * （lastTabId，也就是左上角那两颗键再点一次会回到的那一张）。
  *
  * 于是切进切出自家那两屏时，这一枚**一个字都不变**——它写的是「一张网页」，
  * 而「此刻停在哪一屏」由那两颗键各自的高亮说（用户要求：点设置的时候这一块
@@ -80,7 +80,7 @@ const fits = ref(true)
  * 同一条规矩（见 TopBar 的 siteLabel）。
  */
 const shownTab = computed(() => {
-  const id = props.activeTabId ?? props.lastGuestId
+  const id = props.activeTabId ?? props.lastTabId
   return props.tabs.find((t) => t.id === id) ?? null
 })
 

@@ -19,6 +19,7 @@
 import { computed } from 'vue'
 import type { ConfigPatch } from '@shared/ipc'
 import type { OwnScreen, TabState } from '@shared/types'
+import { fileNameOf } from '@shared/url'
 import Icon from './Icon.vue'
 import Ball from './Ball.vue'
 import TabStrip from './TabStrip.vue'
@@ -29,7 +30,7 @@ const props = defineProps<{
   activeTabId: string | null
   activeTab: TabState | null
   /** 上一次看着的那张网页；停在自家那两屏上时地址栏开关写它，见 siteLabel */
-  lastGuest: TabState | null
+  lastTab: TabState | null
   /** 正文区此刻停在自家哪一屏上；看着网页时为 null */
   screen: OwnScreen | null
   /** 地址栏当前是否展开，来自主进程回传的窗口状态 */
@@ -57,15 +58,22 @@ const drag = useWindowDrag()
  * ——与标签条上那一格同一个道理（见 TabStrip 里那段注释，那里也是这么改的）。
  *
  * 此刻手里没有当前网页，就写「刚才那张」——也就是左上角那两颗键再点一次会回到的
- * 那一个（主进程的 lastGuestId，见 tabManager.leaveScreen）。于是切进切出这两屏时，
+ * 那一个（主进程的 lastTabId，见 tabManager.leaveScreen）。于是切进切出这两屏时，
  * 这一格**一动不动**，而它说的话与那两颗键的提示语「回到刚才那张网页」是同一句。
  *
  * 一张网页都没有时（刚启动、又被关光了）它一个字都不写：没有网页就没有名字，
  * 那个开关只剩一枚放大镜。
+ *
+ * 本机文件写的是**文件名**，不是 `file:` 那个 host——`new URL('file:///C:/…')`
+ * 的 host 是空串，退回 `url` 就把整条 `C:\Users\…\Documents\斗破苍穹.txt`
+ * 写在了顶栏上。README 里那条「本机文件在界面上只显示文件名，从不显示路径」
+ * 是全程序一条硬规矩，这一格也不例外（见 @shared/url.ts 的 fileNameOf）。
  */
 const siteLabel = computed(() => {
-  const url = (props.activeTab ?? props.lastGuest)?.url
+  const url = (props.activeTab ?? props.lastTab)?.url
   if (!url) return ''
+  const name = fileNameOf(url)
+  if (name) return name
   try {
     return new URL(url).host || url
   } catch {
@@ -230,7 +238,7 @@ function toggleSettings(): void {
       标签条。它自己占住中间那一整块，也自己决定放不下时退回下拉清单，
       新建按钮跟着它走——浏览器里那个「+」也是挨着最后一个标签。
     -->
-    <TabStrip :tabs="tabs" :active-tab-id="activeTabId" :last-guest-id="lastGuest?.id ?? null">
+    <TabStrip :tabs="tabs" :active-tab-id="activeTabId" :last-tab-id="lastTab?.id ?? null">
       <button class="icon" title="新建标签页" @click="newTab">
         <Icon name="plus" />
       </button>

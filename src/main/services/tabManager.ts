@@ -1,14 +1,20 @@
 /**
  * 视图管理：每个标签页一个 WebContentsView，叠加在 chrome 视图之上、限制在主体区域内。
  *
- * 这里管两种视图，它们不共用同一本账：
+ * 这里管三种视图，它们不共用同一本账：
  *
  * - **网页标签**（kind = 'guest'）：标签条画的就是它们，`order` 记着它们的次序；
+ * - **本机 PDF 的阅读页**（kind = 'pdf'）：同样是标签条上的一格（它有标题、有 ✕、
+ *   能被切走），但它画的是自家那一页 pdf.js，不是网页——见 services/pdfReader.ts。
+ *   它对外示人的地址仍是那个 `file:///…/book.pdf`：历史、离线阅读那一行、地址栏
+ *   上的名字都按本机文件读，而视图里加载的是阅读页（`viewUrl`）。
  * - **自家的两屏**（起始页、系统设置）：也在这一层视图里（独立窗口会进任务栏与
  *   Alt+Tab，等于把「我在摸鱼」写在脸上），但**不是标签页**——不进 `order`、
  *   没有关闭键、各有各的入口（两者是顶栏最左并排的两颗键：起始页、设置）。
  *
- * 两者共用同一套机制（视图、可见性、版面、广播），差别只在上面那本账。
+ * 三者共用同一套机制（视图、可见性、版面、广播），差别只在上面那本账：
+ * **进标签条的是前两种**（isTab），**带 preload 的是后两种**（needsPreload）——
+ * 这两条判据在这一版之前是同一条（「不是访客页」），本机 PDF 一来就分家了。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -28,17 +34,19 @@ import {
 } from '@shared/constants'
 import type { TabsStatePayload } from '@shared/ipc'
 import type { OwnScreen, Rect, TabState } from '@shared/types'
-import { resolveInput } from '@shared/url'
+import { fileNameOf, isLocalPdf, resolveInput } from '@shared/url'
 import { uaFor, type UaMode } from '@shared/ua'
 import { injectPageStyles } from './pageStyler'
+import { pdfReaderUrl } from './pdfReader'
 import { rendererUrl } from './rendererUrl'
 import { log } from './logger'
 
 /**
- * 自家页面（带 preload，以伪地址示人）与访客页（纯网页，无 preload）。
- * 两者绝不共用视图：给访客页注入 preload 等于把主进程能力交给任意网页。
+ * 自家页面（带 preload，以伪地址示人）、网页（纯网页，无 preload）、
+ * 本机 PDF 的阅读页（自家的一页，画在标签条上）。
+ * 访客页绝不与另外两类共用视图：给访客页注入 preload 等于把主进程能力交给任意网页。
  */
-export type TabKind = 'home' | 'settings' | 'guest'
+export type TabKind = 'home' | 'settings' | 'guest' | 'pdf'
 
 /** 自家页面：渲染产物名、对外伪地址与标签标题 */
 const OWN_PAGE: Record<OwnScreen, { page: 'home' | 'settings'; url: string; title: string }> = {
@@ -46,7 +54,19 @@ const OWN_PAGE: Record<OwnScreen, { page: 'home' | 'settings'; url: string; titl
   settings: { page: 'settings', url: SETTINGS_URL, title: SETTINGS_TITLE }
 }
 
-const isOwnPage = (kind: TabKind): kind is OwnScreen => kind !== 'guest'
+/** 窗口里的「一屏」：起始页与系统设置。它们不是标签页，各有各的入口键 */
+const isScreen = (kind: TabKind): kind is OwnScreen => kind === 'home' || kind === 'settings'
+
+/** 进标签条的东西：网页与本机文件。清单、次序、关闭、会话恢复都按它走 */
+const isTab = (kind: TabKind): boolean => !isScreen(kind)
+
+/**
+ * 带 preload 的视图：自家那两屏，加本机 PDF 的阅读页。
+ *
+ * 阅读页要读配置（主题决定墨色、背景透明度决定它那一条浮层），
+ * 因此它与自家那两屏一样需要那座桥；网页则一律没有。
+ */
+const needsPreload = (kind: TabKind): boolean => kind !== 'guest'
 
 /**
  * 暂停网页里正在播放的音视频。**暂停，不是静音。**
@@ -92,7 +112,18 @@ interface TabEntry {
   id: string
   kind: TabKind
   view: WebContentsView
+  /** **对外示人**的地址。本机 PDF 写的是那个 file:///…/book.pdf（历史、会话恢复、地址栏都用它） */
   url: string
+  /**
+   * 视图里实际加载的地址，**只在它与 `url` 不同的时候**才有值。
+   *
+   * 今天只有本机 PDF 用它：对外它是一个本机文件，视图里却是自家的阅读页
+   * （`file:///…/pdf.html?doc=<token>`）。为它单开一个字段，而不是把 `url`
+   * 改成阅读页的地址，是因为那份地址不是「这本书在哪儿」——写进历史、
+   * 写进会话恢复、写进地址栏都会把内部结构泄到界面上，且下次启动恢复不了
+   * （token 是这次进程里现发的）。
+   */
+  viewUrl?: string
   title: string
   faviconUrl?: string
   isLoading: boolean
@@ -105,7 +136,7 @@ export interface TabManagerDeps {
   getWindow: () => BaseWindow | null
   getBodyRect: () => Rect
   getSession: () => Session
-  /** 首页标签页需要 preload 才能读到站点与历史 */
+  /** 自家那两屏与本机 PDF 的阅读页都要 preload：前者读站点/历史，后者读配置 */
   getPreloadPath: () => string
   getConfig: () => {
     browser: {
@@ -151,12 +182,12 @@ export class TabManager {
   /** 自家那两屏的视图 id。各自只建一个，常驻不关 */
   private ownIds = new Map<OwnScreen, string>()
   /**
-   * 上一次看着的那张网页。
+   * 上一次看着的那张**标签页**（网页或本机文件）。
    *
    * 从起始页 / 设置「原路返回」回的就是它。不需要另存一份「进屏之前的快照」：
-   * 进这两屏不改动它，只有切到别张网页（或它被关掉）才会变。
+   * 进这两屏不改动它，只有切到别张标签页（或它被关掉）才会变。
    */
-  private lastGuestId: string | null = null
+  private lastTabId: string | null = null
   /** 主体隐藏时为 true，此时所有标签页视图都不绘制且静音 */
   private bodyVisible = true
   /**
@@ -193,20 +224,20 @@ export class TabManager {
   }
 
   /**
-   * 正在看着的那张**网页**的 id；停在起始页 / 设置上时为 null。
+   * 正在看着的那张**标签页**（网页或本机文件）的 id；停在起始页 / 设置上时为 null。
    *
    * 自家那两屏在内部也占着 `activeId`（谁在上面只有一份账），但它们不是标签，
    * 对外不该以 id 示人——界面拿着那个 id 只会想切它、关它。
    */
   getActiveId(): string | null {
     const entry = this.activeId ? this.tabs.get(this.activeId) : null
-    return entry && entry.kind === 'guest' ? entry.id : null
+    return entry && isTab(entry.kind) ? entry.id : null
   }
 
-  /** 正文区此刻是网页还是自家某一屏。看网页时为 null */
+  /** 正文区此刻停在哪一屏；看着标签页（网页或本机文件）时为 null */
   getScreen(): OwnScreen | null {
     const entry = this.activeId ? this.tabs.get(this.activeId) : null
-    return entry && isOwnPage(entry.kind) ? entry.kind : null
+    return entry && isScreen(entry.kind) ? entry.kind : null
   }
 
   /**
@@ -220,11 +251,17 @@ export class TabManager {
       tabs: this.list(),
       activeTabId: this.getActiveId(),
       screen: this.getScreen(),
-      lastGuestId: this.lastGuestId
+      lastTabId: this.lastTabId
     }
   }
 
-  /** 供会话恢复使用的网址列表。起始页与设置不是访客内容，不参与恢复 */
+  /**
+   * 供会话恢复使用的网址列表。
+   *
+   * 记的是 `entry.url`——本机 PDF 因此记的是那个 file: 地址，下次启动照样开得回来
+   * （阅读页的 token 是进程内现发的，记它没有任何意义）。起始页与设置不是标签页，
+   * 不参与恢复。
+   */
   getOpenUrls(): string[] {
     const urls: string[] = []
     for (const id of this.order) {
@@ -257,15 +294,21 @@ export class TabManager {
     if (!win) throw new Error('窗口尚未就绪')
 
     const cfg = this.deps.getConfig().browser
-    const kind: TabKind = input.kind ?? 'guest'
+    /*
+     * 「这个地址该开成哪一路」只有这一处判：本机 PDF 开成自家的阅读页，
+     * 其余一律是普通网页。会话恢复（启动时把上次那些地址逐一 create）、
+     * 选文件框、网页里点一个 file:// 的链接——三条路都从这里过，
+     * 谁也不必各自记着这条规矩（少一处判就少一处漏判）。
+     */
+    let kind: TabKind = input.kind ?? (isLocalPdf(input.url) ? 'pdf' : 'guest')
     const id = nextId()
 
     const view = new WebContentsView({
       webPreferences: {
         // 访客页面不注入任何 preload，是纯网页。
         // 一切注入都走主进程的 insertCSS / executeJavaScript。
-        // 只有自家页面（首页、系统设置）带 preload，且 preload 内部还会再校验来源。
-        preload: isOwnPage(kind) ? this.deps.getPreloadPath() : undefined,
+        // 自家那两屏与本机 PDF 的阅读页带 preload，且 preload 内部还会再校验来源。
+        preload: needsPreload(kind) ? this.deps.getPreloadPath() : undefined,
         session: this.deps.getSession(),
         contextIsolation: true,
         nodeIntegration: false,
@@ -284,19 +327,39 @@ export class TabManager {
     // 必须设成全透明，否则会在透明窗口里画出一块白底（spike Q1/Q2）
     view.setBackgroundColor('#00000000')
 
-    const own = isOwnPage(kind) ? OWN_PAGE[kind] : null
+    const own = isScreen(kind) ? OWN_PAGE[kind] : null
     /*
      * 访客标签没给地址就是「新建标签页」：打开配置里的那一格（默认 google.com）。
      * 原先这一种退到 about:blank——透明窗口里那是一块透出桌面的空档，没有意义。
      * 地址仍走 goto 那条路解析，因此 `douyin.com` 这种不带协议的写法照旧认。
      */
     const url = own ? own.url : (input.url ?? this.newTabUrl())
+
+    /*
+     * 本机 PDF：视图里加载的是自家阅读页，而**对外的地址仍是那个本机文件**
+     * （见 TabEntry.viewUrl 那段注释）。唯一的例外是这条 file: 地址解析不出路径
+     * ——Windows 上的网络路径就是这样——那时退回「当普通网页打开」，也就是这一版
+     * 之前的行为：Chromium 内置阅读器照样读得起来，只是白底去不掉。
+     */
+    let viewUrl: string | undefined
+    if (kind === 'pdf') {
+      try {
+        viewUrl = pdfReaderUrl(url)
+      } catch (err) {
+        log.warn(`打不开这本 PDF 的阅读页，退回内置阅读器：${url}`, err)
+        kind = 'guest'
+      }
+    }
+
     const entry: TabEntry = {
       id,
       kind,
       view,
       url,
-      title: own ? own.title : '',
+      viewUrl,
+      // 本机文件在界面上只显示文件名（见 @shared/url.ts 的 fileNameOf）：
+      // 标签条上那一格写的、地址栏上那一行写的，都是它
+      title: own ? own.title : (fileNameOf(url) ?? ''),
       isLoading: false,
       uaMode: cfg.defaultUaMode,
       zoom: cfg.defaultZoom,
@@ -304,10 +367,11 @@ export class TabManager {
     }
     this.tabs.set(id, entry)
     /*
-     * 只有网页标签进标签条。自家那两屏在外面的身份是「屏」：各有各的入口、
-     * 没有关闭键，因此不进 order；它们的 id 记在 ownIds 里，各自只建一个。
+     * 进标签条的是网页与本机文件；自家那两屏在外面的身份是「屏」：
+     * 各有各的入口、没有关闭键，因此不进 order；它们的 id 记在 ownIds 里，
+     * 各自只建一个。
      */
-    if (isOwnPage(kind)) this.ownIds.set(kind, id)
+    if (isScreen(kind)) this.ownIds.set(kind, id)
     else this.order.push(id)
 
     win.contentView.addChildView(view)
@@ -319,6 +383,10 @@ export class TabManager {
     if (own) {
       view.webContents.loadURL(rendererUrl(own.page)).catch((err) => {
         log.error(`加载${own.title}失败`, err)
+      })
+    } else if (viewUrl) {
+      view.webContents.loadURL(viewUrl).catch((err) => {
+        log.error(`加载计算机上的阅读页失败：${url}`, err)
       })
     } else if (url && url !== 'about:blank') {
       // about:blank 是视图的初始状态，再 loadURL 一次会被 Chromium 判为
@@ -363,8 +431,8 @@ export class TabManager {
    */
   leaveScreen(): void {
     if (!this.getScreen()) return
-    const back = this.lastGuestId ? this.tabs.get(this.lastGuestId) : null
-    if (back && back.kind === 'guest') this.activate(back.id)
+    const back = this.lastTabId ? this.tabs.get(this.lastTabId) : null
+    if (back && isTab(back.kind)) this.activate(back.id)
     else this.openHome()
   }
 
@@ -388,7 +456,7 @@ export class TabManager {
   }
 
   /**
-   * 关掉一张网页标签。
+   * 关掉一张标签页（网页或本机文件）。
    *
    * 自家那两屏关不掉：界面上没有它们的关闭键，也就无从发出它们的 id；
    * 退出时由 destroyAll 直接拆。这条守卫是防着哪天多出一条路来。
@@ -396,10 +464,10 @@ export class TabManager {
   close(tabId: string): void {
     const entry = this.tabs.get(tabId)
     if (!entry) return
-    if (isOwnPage(entry.kind)) return
+    if (isScreen(entry.kind)) return
 
     this.dispose(entry)
-    if (this.lastGuestId === tabId) this.lastGuestId = null
+    if (this.lastTabId === tabId) this.lastTabId = null
 
     if (this.activeId === tabId) {
       this.activeId = null
@@ -435,7 +503,7 @@ export class TabManager {
     }
 
     this.tabs.delete(entry.id)
-    if (isOwnPage(entry.kind)) this.ownIds.delete(entry.kind)
+    if (isScreen(entry.kind)) this.ownIds.delete(entry.kind)
     else this.order = this.order.filter((id) => id !== entry.id)
 
     /*
@@ -450,8 +518,8 @@ export class TabManager {
     const entry = this.tabs.get(tabId)
     if (!entry) return
     this.activeId = tabId
-    // 记下「刚才看着的是哪张网页」，起始页 / 设置上的「原路返回」回的就是它
-    if (entry.kind === 'guest') this.lastGuestId = tabId
+    // 记下「刚才看着的是哪张标签页」，起始页 / 设置上的「原路返回」回的就是它
+    if (isTab(entry.kind)) this.lastTabId = tabId
 
     for (const [id, t] of this.tabs) {
       const visible = id === tabId && this.bodyVisible
@@ -529,15 +597,15 @@ export class TabManager {
   // ------------------------------------------------------------ 广播
 
   /**
-   * 把广播发给自家页面（首页、系统设置）。
+   * 把广播发给自家页面（首页、系统设置，以及本机 PDF 的阅读页）。
    *
-   * 只按 kind 挑选，而不是撒给全部 webContents：访客页面没有 preload，
-   * 收不到也没人听，而自家页面需要跟着配置变化重绘——起始页换主题
-   * 正是一条配置变更。
+   * 只按 kind 挑选（needsPreload），而不是撒给全部 webContents：访客页面没有
+   * preload，收不到也没人听，而自家页面需要跟着配置变化重绘——起始页换主题
+   * 正是一条配置变更，阅读页的墨色也跟着主题走，同一条广播。
    */
   broadcastToOwnPages(channel: string, payload: unknown): void {
     for (const entry of this.tabs.values()) {
-      if (!isOwnPage(entry.kind)) continue
+      if (!needsPreload(entry.kind)) continue
       try {
         if (!entry.view.webContents.isDestroyed()) entry.view.webContents.send(channel, payload)
       } catch {
@@ -555,8 +623,9 @@ export class TabManager {
    * 系统设置上时就是这样。两条路都另开一张网页标签并切过去：
    *
    * - 没有当前视图；
-   * - 当前视图是自家那两屏。它们不承载访客内容——带着 preload，
-   *   网页进去就等于把主进程能力交给任意网页。原屏始终留在原处。
+   * - 当前视图是自家那两屏、或者一本本机 PDF 的阅读页。它们不承载访客内容
+   *   ——前两者带着 preload，后者画的是自家的页，网页进去就等于把主进程能力
+   *   交给任意网页（阅读页连地址都不该变）。原来那一屏始终留在原处。
    *
    * 于是停在起始页上时，地址栏回车、点书签、点历史都是「新开一张网页」。
    * 解析仍走 resolveInput，`douyin.com` 那种写法照旧认。
@@ -761,10 +830,18 @@ export class TabManager {
     })
 
     wc.on('did-navigate', (_e, url) => {
-      // 自家页面对外始终以自己的伪地址示人。
-      // 若不这样处理，did-navigate 会把真实文件路径写进 entry.url，
-      // 地址栏就会显示出本机的目录结构。
-      entry.url = entry.kind === 'guest' ? url : OWN_PAGE[entry.kind].url
+      /*
+       * 对外的地址（entry.url）按 kind 分开处理：
+       *
+       * - 网页：就是它自己；
+       * - 自家那两屏：始终以自己的伪地址示人。不这样处理，did-navigate 会把真实
+       *   文件路径写进 entry.url，地址栏就会显示出本机的目录结构；
+       * - 本机 PDF：**一个字都不动**。它写的是那个本机文件，而视图里这次导航去的是
+       *   自家阅读页（`…/pdf.html?doc=<token>`）——那串 token 是这次进程里现发的，
+       *   写进历史、写进会话恢复、写进地址栏都毫无意义，还会把内部结构摊到界面上。
+       */
+      if (entry.kind === 'guest') entry.url = url
+      else if (isScreen(entry.kind)) entry.url = OWN_PAGE[entry.kind].url
       // 页面文档已重建，样式必须重新注入
       this.applyPageStyles(entry)
       // UA 会随导航重置，需按本标签页的模式重新应用。
@@ -778,22 +855,38 @@ export class TabManager {
           // 忽略
         }
       }
-      // 首页不进历史，否则「继续上次阅读」会指回首页自身
-      if (entry.kind === 'guest') {
-        this.deps.onNavigated({ url, title: entry.title, faviconUrl: entry.faviconUrl })
+      /*
+       * 自家那两屏不进历史，否则「继续上次阅读」会指回起始页自身。
+       * 本机文件（网页方式打开的 TXT、自家阅读页里的 PDF）要进：起始页那一栏
+       * 「离线阅读」里排的就是浏览历史里的本机文件（按倒序），
+       * 而记进去的是**对外的那个 file: 地址**，不是阅读页的地址。
+       */
+      if (isTab(entry.kind)) {
+        this.deps.onNavigated({
+          url: entry.url,
+          title: entry.title,
+          faviconUrl: entry.faviconUrl
+        })
       }
       refresh()
     })
     wc.on('did-navigate-in-page', (_e, url, isMainFrame) => {
       if (!isMainFrame) return
+      // 页内跳转只有网页有（#锚点、pushState 那一类）；自家页面与本机 PDF 的
+      // 阅读页不会走到这儿，真走到了也不该拿它去改那个对外的地址
+      if (entry.kind !== 'guest') return
       entry.url = url
-      // 首页不进历史，否则「继续上次阅读」会指回首页自身
-      if (entry.kind === 'guest') {
-        this.deps.onNavigated({ url, title: entry.title, faviconUrl: entry.faviconUrl })
-      }
+      this.deps.onNavigated({ url, title: entry.title, faviconUrl: entry.faviconUrl })
       refresh()
     })
     wc.on('page-title-updated', (_e, title) => {
+      /*
+       * 只有网页的标题由页面自己给。自家那两屏的标题是常量、本机 PDF 的标题
+       * 是那个文件名（创建时就写好了，见 create），让页面盖掉它就等于允许
+       * 「标签条上那一格写着什么」由页面决定——阅读页的文档标题是它自己的事，
+       * 不该跑到标签条上去。
+       */
+      if (entry.kind !== 'guest') return
       entry.title = title
       refresh()
     })
@@ -837,6 +930,6 @@ export class TabManager {
     this.ownIds.clear()
     this.order = []
     this.activeId = null
-    this.lastGuestId = null
+    this.lastTabId = null
   }
 }

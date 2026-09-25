@@ -12,7 +12,7 @@ export function useTabs() {
   /** 正文区此刻停在自家哪一屏上；看着网页时为 null */
   const screen = ref<OwnScreen | null>(null)
   /** 上一次看着的那张网页的 id；顶栏那个地址栏开关靠它（见 TopBar 的 siteLabel） */
-  const lastGuestId = ref<string | null>(null)
+  const lastTabId = ref<string | null>(null)
   let unsubscribe: (() => void) | null = null
 
   onMounted(async () => {
@@ -20,20 +20,20 @@ export function useTabs() {
     tabs.value = initial.tabs
     activeTabId.value = initial.activeTabId
     screen.value = initial.screen
-    lastGuestId.value = initial.lastGuestId
+    lastTabId.value = initial.lastTabId
 
     unsubscribe = window.moyu.tabs.onState((payload) => {
       tabs.value = payload.tabs
       activeTabId.value = payload.activeTabId
       screen.value = payload.screen
-      lastGuestId.value = payload.lastGuestId
+      lastTabId.value = payload.lastTabId
     })
   })
 
   onUnmounted(() => unsubscribe?.())
 
   const activeTab = computed(() => tabs.value.find((t) => t.id === activeTabId.value) ?? null)
-  const lastGuest = computed(() => tabs.value.find((t) => t.id === lastGuestId.value) ?? null)
+  const lastTab = computed(() => tabs.value.find((t) => t.id === lastTabId.value) ?? null)
 
-  return { tabs, activeTabId, activeTab, screen, lastGuestId, lastGuest }
+  return { tabs, activeTabId, activeTab, screen, lastTabId, lastTab }
 }

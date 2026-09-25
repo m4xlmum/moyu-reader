@@ -193,7 +193,7 @@ export interface TabsStatePayload {
    *
    * 界面拿到它，就不必自己攒一份「上一次是什么」的副本——那类副本迟早与真身对不上。
    */
-  lastGuestId: string | null
+  lastTabId: string | null
 }
 
 export interface OpenPopoverRequest {

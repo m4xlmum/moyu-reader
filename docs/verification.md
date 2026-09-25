@@ -419,6 +419,51 @@ npx electron spike/readme-assets.js
 > 不为此引入 sharp；编码完还会从**写盘后的 WebP** 回读一张缩小图 `verify-*.png`，
 > 用来核对压缩之后是否还看得清（Read 工具看不了 WebP）。
 
+```bash
+npx electron spike/pdf-render.js fixtures
+npx electron spike/pdf-render.js render <plain|panel|photo|cjk|dark|slab> <auto|light|dark|key|clear>
+```
+
+量的是「自己画的 PDF 那一页，那张白纸到底有没有变成透明、字还在不在」。分两步：
+`fixtures` 用 Chromium 自己的 `printToPDF` 把六段 HTML 印成六份素材（不手写 PDF 字节，
+零依赖，而「自带白底矩形」这种最难的素材反倒只有它造得出来）；`render` 把一份素材放进
+**离屏窗口**渲染一遍，逐级量像素——白纸默认值 / 透明背景 / 再键控 / 键控 + 上色 /
+自动判深浅。
+
+六份素材各有各要问的事：`plain` 纯文字（纸是「没有画」那一类）、`panel` 显式白底块
+（透明背景对它一点用没有，只能靠键控）、`photo` 彩色插图（量键控把颜色压成灰阶 alpha
+这个代价有多大）、`cjk` 中文（字体子集、CID 编码、要不要 cMap）、`dark` 整页深底浅字
+（键控的最大反例）、`slab` 带页边距的深底（**「画满没画满」那条界线就是为它量的**，
+前后两个读数见 spike-findings 的 Q52）。
+
+这一支里的键控是**产品那份的一个副本**，刻意停在更早的形态：它给的是「某一档参数下
+这一页长什么样」，用来给 `keying.ts` 里的常数**量出前后两个数**（Q52 那条界线、Q53
+那个墨的零点都是这么定的）。产品改了键控，这里不跟；「产品页面跑起来是什么样」
+由下面这一支量。
+
+```bash
+npx electron spike/pdf-scheme.js [plain|panel|dark|photo|cjk|slab|all] [--shots]
+```
+
+量的是**真页面在真通道上跑起来是什么样**：用的是真的 `pdfReader.ts` / `sessionSetup.ts`
+与真的构建产物（`out/renderer/pdf.html`），只有配置那一条 IPC 给了一份最小的替身。
+14 问分八组：Q1 通道本身（整份取字节、三种 Range 写法、四样资源、两条「不许」）、
+Q2 页面真的把书取到手并画出来了（HUD、画布尺寸、fit-width）、Q3 白纸变成透明、
+Q4 字随主题、Q5 深浅自动判对（它没有单独一问，靠换素材再跑一遍 Q3/Q4 量的）、
+Q6 缩放是重排不是拉伸、Q7 CSP 一条都没报、Q8 preload 到手且控制台干净。
+
+两处刻意的地方。**Q3 分画布与窗口两问**：画布上数的是键控算对了没有，窗口上数的是
+这个程序对外的主张——桌面透不过来，前面那一条就没有意义。**一问一个进程**：本仓库在
+同一个进程里开第二扇窗加载 `file://` 会 ERR_FAILED（Q24 那条环境的脾气），而这一支每个
+素材都要重新 `loadURL` 一次，于是 `all` 自己把它们串成一串子进程。
+
+跑之前探针会**把自己重开一次**，让 `app.getAppPath()` 指向一个像模像样的应用目录
+（有 `package.json`、有一条指回仓库的 `node_modules` junction）——pdf.js 那四样资源是
+主进程按这个值找的，直接跑会让它去 `spike/node_modules` 里翻，四样全 404（Q57 记了
+这一跤，以及那条 junction 与 `rm -rf` 的另一跤）。`--shots` 另存每个素材的两张窗口
+截图（`-paper.png` / `-night.png`），用来肉眼核对字形与中文；全部读数落在
+`spike/out/pdf-scheme-<素材>.json`。
+
 另有一个一次性的探针 `spike/which-rules.js <主题> <选择器…>`：把命中了某个元素的
 CSS 规则逐条列出来。作用域样式会让**子组件的根元素带上父组件的作用域属性**，
 于是父组件里一条 `.某类名[data-v-父]` 的规则可能落到子组件头上——查这类串味，

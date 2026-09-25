@@ -23,6 +23,7 @@ import { ConfigStore } from './services/configStore'
 import { HistoryStore } from './services/historyStore'
 import { initLogger, log } from './services/logger'
 import { PopoverWindowService } from './services/popoverWindow'
+import { registerPdfProtocol, registerPdfScheme } from './services/pdfReader'
 import { rendererUrl } from './services/rendererUrl'
 import { hardenWebContents, setupSession } from './services/sessionSetup'
 import { SiteStore } from './services/siteStore'
@@ -74,6 +75,9 @@ function bootstrap(): void {
   // 因此这里只留一个占位，真正的创建放在 whenReady 内。
   let ses: Session | null = null
   hardenWebContents()
+  // 特权协议名只能在 app ready 之前声明；处理程序挂到分区会话上，
+  // 见 whenReady（那条协议是本机 PDF 的阅读页取字节与取资源的路）
+  registerPdfScheme()
 
   function broadcast(channel: string, payload: unknown): void {
     for (const win of BrowserWindow.getAllWindows()) {
@@ -202,7 +206,7 @@ function bootstrap(): void {
   /**
    * 从起始页 / 设置原路返回到刚才那张网页。
    *
-   * 回哪一张由 TabManager 记（lastGuestId），这里只负责把窗口叫到眼前：
+   * 回哪一张由 TabManager 记（lastTabId），这里只负责把窗口叫到眼前：
    * 收起成球或藏在托盘里时，「返回」这个词里就包含着「让我看见」。
    */
   function backToPage(): void {
@@ -293,6 +297,8 @@ function bootstrap(): void {
   app.whenReady().then(() => {
     // 持久化会话必须在这里创建：app ready 之前 session 模块不可用
     ses = setupSession()
+    // 本机 PDF 的资源通道挂在这个分区会话上（页面全都在它里面）
+    registerPdfProtocol(ses)
 
     electronApp.setAppUserModelId('com.m4xlmum.moyu-reader')
     app.on('browser-window-created', (_e, win) => optimizer.watchWindowShortcuts(win))

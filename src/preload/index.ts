@@ -13,8 +13,12 @@ import { api } from './api'
  * 第三方站点，preload 会在新文档上重新执行——若不加判断，那个站点
  * 就能直接调用 window.moyu 读写站点、历史与书签。
  * 因此这里按协议与来源做白名单判断，只认本地文件与本机 devServer。
+ *
+ * 本机 PDF 的阅读页（pdf.html）也在这一份名单里：它也是自家的页，也要读配置
+ * （主题决定墨色、背景透明度决定它那一条浮层）。它画的是 canvas，不把 PDF 的
+ * 内容塞进 DOM——那本书里的任何东西都到不了这一层。
  */
-const OWN_PAGES = ['/index.html', '/home.html', '/popover.html', '/settings.html']
+const OWN_PAGES = ['/index.html', '/home.html', '/popover.html', '/settings.html', '/pdf.html']
 
 function isOwnPage(): boolean {
   const { protocol, hostname, pathname } = window.location

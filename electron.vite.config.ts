@@ -47,7 +47,9 @@ export default defineConfig({
           index: resolve('src/renderer/index.html'),
           home: resolve('src/renderer/home.html'),
           popover: resolve('src/renderer/popover.html'),
-          settings: resolve('src/renderer/settings.html')
+          settings: resolve('src/renderer/settings.html'),
+          // 本机 PDF 的阅读页（pdf.js 画进 canvas的那一张，见 src/main/services/pdfReader.ts）
+          pdf: resolve('src/renderer/pdf.html')
         }
       }
     }

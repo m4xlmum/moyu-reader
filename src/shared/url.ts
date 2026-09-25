@@ -122,3 +122,19 @@ export function fileNameOf(url: string): string | null {
     return raw
   }
 }
+
+/**
+ * 本机 PDF：`file:` 协议、且文件名以 `.pdf` 结尾。
+ *
+ * 判据只有一条，判的地方也只有一处（TabManager.create）——本机 PDF 不进
+ * Chromium 内置的那个阅读器，而是开成自家的阅读页（见 services/pdfReader.ts）。
+ * 内置阅读器把纸直接画在插件表面上，注入的样式与滤镜一个像素都动不了，
+ * 白底因此永远去不掉；自家阅读页用 pdf.js 画进 canvas，纸才是可透明的。
+ *
+ * 其余本机文件（TXT）照旧交给 Chromium 自己渲染——它本来就把纸留白、
+ * 只画字，不必再动。
+ */
+export function isLocalPdf(url: string | null | undefined): boolean {
+  if (typeof url !== 'string') return false
+  return fileNameOf(url)?.toLowerCase().endsWith('.pdf') ?? false
+}

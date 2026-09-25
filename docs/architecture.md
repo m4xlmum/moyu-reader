@@ -1,6 +1,6 @@
 # 架构要点
 
-有十六处实现与直觉相反，都是被真机验证倒逼出来的，改动前请先读
+有十九处实现与直觉相反，都是被真机验证倒逼出来的，改动前请先读
 [spike-findings.md](spike-findings.md)：
 
 1. **每个 `WebContentsView` 都必须调用 `setBackgroundColor('#00000000')`。**
@@ -25,6 +25,8 @@
    原本就写在 `html, body` 上，于是被抹掉，打开它时窗口整个透出桌面。
    两条防线：`TabManager.applyPageStyles()` 只对访客页注入，自家页面的底板
    另外画一层（起始页 `.page`、系统设置 `.layout`，`spike/ownpage-bg.js`）。
+   第三张自家页面（本机 PDF 的阅读页）**反过来不能有底板**——它要的就是桌面
+   透过来，于是它靠的只能是「不注入」这一条，不能靠「另画一层」（见第 17 条）。
 
 6. **子组件的根元素会带上父组件的作用域属性。** 于是父组件里任何一条
    `.类名[data-v-父]` 的规则都可能落到子组件头上：主题菜单的根元素曾经带着
@@ -119,6 +121,31 @@
     直接返回（那一块只有 40×40，塞不下），提示条跟着不见，展开时重排一次自己就
     回来了——为它另存一份「收起前有没有提示」是多余的（`UpdateNotice.vue`）。
 
+17. **PDF 不能交给 Chromium 内置的阅读器——那一张白纸改不动。** 直觉是「网页能靠注入的
+    样式变透明，PDF 照做就是」，而 PDFium 是把纸直接画在插件表面上的：user origin 的
+    `!important`、`filter: invert(1)`、能算出 alpha 的 SVG 滤镜，三样一个像素都落不到它
+    头上（实测 120000 个像素里 0 个透明；对照组的 TXT 同一把量具量出来是「本来就只剩字」，
+    见 [spike-findings.md](spike-findings.md) 的 Q51）。于是本机 PDF 走**自家第三张页面**
+    （`renderer/pdf.html` + pdf.js，Apache-2.0），也是**唯一一张画在标签条上的自家页面**：
+    `kind = 'pdf'`、有标题、有 ✕、能被切走，而对外的地址仍是那个 `file:///…/book.pdf`
+    ——历史、会话恢复、地址栏、离线阅读那一行读的都是它。**字节不走 `file://`**：
+    `moyu-pdf://doc/<token>`，token ↔ 路径的对应表只在主进程里，路径从不进渲染进程；
+    资源走 `moyu-pdf://asset/<目录>/<文件>`，白名单之外的目录一律 404（Q54）。
+    `registerPdfScheme()` 必须在 app ready **之前**调用，晚了协议就是白注册。
+
+18. **`webContents.zoomLevel` 改的就是 `devicePixelRatio`，而且它不发 `resize`。**
+    右栏那条缩放落到这一页上不是「画面被拉大」，是 dpr 从 1 变成 1.2、CSS 宽度一点没动
+    （实测 0 次 resize 事件）。自己排版的页面因此**不能等 resize**：页只能读 dpr
+    （`matchMedia('(resolution: …dppx)')`，每变一次重挂一次查询），再把画布的**设备像素**
+    宽算成 `CSS 宽 × dpr`——而画布的 CSS 宽铺满正文区这一点在放大前后不变，放大等于重排
+    （`pdf/PdfApp.vue`，Q56）。
+
+19. **同一张画布上 `getContext('2d')` 的选项只认第一次调用。** 后面再传什么都被丢掉，
+    而且**不出声**——只在控制台留一句「getImageData 很慢」，画布还悄悄换成了 GPU 那张。
+    阅读页的每一帧都要读回整张画布做键控，因此上下文在 `onMounted` 里**最先**取好
+    （`willReadFrequently: true`）再交给 pdf.js；pdf.js 自己那份是 `{alpha: false}`，
+    晚一步就轮到它说了算（Q55）。
+
 > 早期版本用 `setShape` 裁剪窗口的命中区域来实现「隐藏区域点击穿透」。
 > 改为收起成球之后这套机制已整体移除：窗口真的缩小了，就不需要再靠裁剪
 > 去欺骗命中测试，`setShape` 也不再有存在的理由。
@@ -129,7 +156,7 @@
 src/shared/    三个进程共享的类型、IPC 契约、常量
 src/main/      主进程：窗口编排、状态机、浏览器、数据存储
 src/preload/   唯一的 contextBridge 桥
-src/renderer/  chrome 界面 / 弹出面板 / 系统设置
+src/renderer/  chrome 界面 / 弹出面板 / 系统设置 / PDF 阅读页
 ```
 
 关键文件：
@@ -141,7 +168,10 @@ src/renderer/  chrome 界面 / 弹出面板 / 系统设置
 | `src/main/services/windowLeaveWatcher.ts` | 光标轮询、迟滞、挂起门控 |
 | `src/main/services/geometry.ts` | 版面矩形计算，坐标判断的唯一来源 |
 | `src/main/services/updateService.ts` | 更新那一路：查 `latest.yml` → 比版本 → 下载并校验 sha512 → 起安装程序。**不用 electron-updater** 的三条理由写在文件头 |
+| `src/main/services/pdfReader.ts` | 本机 PDF 那条路：`moyu-pdf://` 的两张面（字节与资源）、token ↔ 路径的对应表、阅读页的地址 |
 | `src/renderer/src/home/useRows.ts` | 起始页的行模型与交互：三套主题共用，世界组件只负责画 |
+| `src/renderer/src/pdf/PdfApp.vue` | 阅读页：pdf.js 把一页画进画布，再把纸收掉、把字上成当前主题的墨色（排版在 `styles/pdf.css`） |
+| `src/renderer/src/pdf/keying.ts` | 键控本身：这一页的纸是哪一张（有没有、浅还是深）、墨的零点在哪儿、要不要翻面 |
 | `src/renderer/src/composables/useWindowDrag.ts` | 「按控件是操作、按别处是拖窗口」的唯一判据，界面各处共用 |
 | `src/renderer/src/composables/useBackgroundAlpha.ts` | 底板透明度写进文档根（必须与令牌同层，见架构要点第 9 条） |
 | `src/renderer/src/composables/useTheme.ts` | 主题与形态写进文档根，四份文档各调一次（它们之间没有继承路径） |

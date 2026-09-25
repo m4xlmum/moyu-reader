@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      标签条上的名字由主进程写在标签上（本机文件只显示文件名），这一页的标题
+      从来不会露出来——它连 <h1> 都没有。写一个最朴素的，只为浏览器有得可读。
+    -->
+    <title>PDF</title>
+    <!--
+      本机 PDF 阅读页的 CSP。
+
+      这一页比另外三页多三样东西，逐条都有原因：
+
+      · `wasm-unsafe-eval`（script-src）——pdf.js 的 JBIG2 与 JPEG2000 解码器
+        是 wasm，没有它就只剩那条慢得多的 JS 退路。
+      · `blob:`（script-src / worker-src）——worker 是 Vite inline 出来的 blob
+        （`file:` 页面 new Worker 一个 `file:` 脚本会被当成跨来源挡掉，见 PdfApp）。
+      · `moyu-pdf:`（script-src / connect-src）——主进程挂的那条资源通道：
+        cmap、标准字体、wasm 都是运行时 fetch 回来的。它还出现在 script-src 里，
+        是因为 pdf.js 里有两处 `await import(...)`（pdf.mjs 的 CDN wrapper 与
+        fake worker、worker 里那两个 wasm 的 JS 退路），目标 URL 是运行时算出来的，
+        CSP 只能按协议放行。这一条并不因此放宽什么：那条协议只服务
+        node_modules/pdfjs-dist 里的四个目录（白名单在 services/pdfReader.ts），
+        而这一页从不把 PDF 的内容写进 DOM——它只有一张 canvas。
+
+      `style-src` 留着 unsafe-inline：开发期 Vite 用 <style> 注入样式。
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob: moyu-pdf:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' moyu-pdf: blob:"
+    />
+    <!-- 主题与令牌：墨色（--moyu-ink）与那条浮层的面都从这两份里来 -->
+    <link rel="stylesheet" href="./src/styles/themes.css" />
+    <link rel="stylesheet" href="./src/styles/tokens.css" />
+    <link rel="stylesheet" href="./src/styles/pdf.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="./src/main-pdf.ts"></script>
+  </body>
+</html>
