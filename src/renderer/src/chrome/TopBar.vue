@@ -234,9 +234,10 @@ function toggleSettings(): void {
     </TabStrip>
 
     <!--
-      窗口操作。顺序：手机 · 置顶 · 最大化/还原 · 最小化 · 关闭 · 悬浮球 · 收起右侧栏。
+      窗口操作。顺序：手机 · 置顶 · 最小化 · 最大化 · 关闭 · 悬浮球 · 收起右侧栏。
       手机与置顶原本是右栏里两个写着汉字的格子，改作图标搬到这里——
       顶栏里放得下图标，而它们改的是「这一页怎么显示」，不是阅读本身。
+      末三枚按 Windows 一贯的左→右：最小化、最大化、关闭（用户点名要的次序）。
     -->
     <div class="group">
       <button
@@ -256,6 +257,9 @@ function toggleSettings(): void {
       >
         <Icon name="pin" />
       </button>
+      <button class="icon" title="最小化（老板键 1）" @click="winMinimize">
+        <Icon name="minimize" />
+      </button>
       <!--
         最大化：铺满当前显示器的工作区（不保 16:9）。
         最大化之后这条顶栏整个让位给网页，这一枚也跟着消失——
@@ -263,9 +267,6 @@ function toggleSettings(): void {
       -->
       <button class="icon" title="最大化（铺满工作区）" aria-label="最大化" @click="winMaximize">
         <Icon name="maximize" />
-      </button>
-      <button class="icon" title="最小化（老板键 1）" @click="winMinimize">
-        <Icon name="minimize" />
       </button>
       <button class="icon danger" title="关闭（藏进托盘，不退出）" @click="winClose">
         <Icon name="close" />
