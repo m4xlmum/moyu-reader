@@ -22,9 +22,12 @@
  * 产物：
  *   assets/banner.webp    名片：项目名 + 定位 + 一张真实的界面图
  *   assets/features.webp  三件能力：悬浮球 / 底板透明 / 三套主题
- *   assets/shots.webp     四张真实界面：界面骨架 / 起始页 / 系统设置 / 弹出面板
+ *   assets/shots.webp     四张真实界面：起始页 / 终端世界 / 系统设置 / 弹出面板
  *   外加三张 spike/out/readme/verify-*.png：从**编码后的 WebP** 回读出来的缩小图，
  *   用来核对压缩之后还看不看得清（Read 工具看不了 WebP，只能这么看）。
+ *
+ * 原图不在这里抓：那是 `spike/capture-readme.sh` 的事，它按 CAPTURES 那张表逐张跑
+ * spike/preview.js。两者的分工见下。
  *
  * 关于图片格式：README 里的展示图优先用 WebP。本仓库不为此引入 sharp 之类的依赖——
  * Chromium 自己就会编码 WebP（canvas.toDataURL('image/webp')），而这里本来就跑在 Electron 里。
@@ -69,26 +72,58 @@ const DESK = 'radial-gradient(130% 100% at 18% 0%, #fbfcfd 0%, #eef1f5 45%, #dde
  */
 const DESK_MID = 'radial-gradient(120% 100% at 20% 0%, #d5dae0 0%, #c2c8cf 50%, #a9b0b8 100%)'
 
-/** 用到的原图，一次列全。缺哪张就在启动时说清缺哪张，而不是猜 */
-const NEEDED = [
-  /*
-   * 三套主题各有自己的一份界面底板，**都带透明通道**：内容区是空的，等着垫网页。
-   *
-   * 为什么不共用一张：主题现在管的是整个界面，顶栏与右栏也跟着换。把磷绿的起始页
-   * 衬在纸白的顶栏上，拼出来的那一帧是**切不出来**的一态——README 里的图只能是
-   * 用户真能看到的样子。因此每一张都由「同一套主题的底 + 同一套主题的页」拼成。
-   */
-  'chrome.png', //             界面底板 · 纸白
-  'chrome-night.png', //       界面底板 · 暗夜
-  'chrome-crt-green.png', //   界面底板 · 磷绿
-  'chrome-crt-green-bg0.png', // 同上，背景透明度拉到 0
-  'home-paper.png', //         起始页 · 纸白（1280×720）
-  'home-night.png', //         起始页 · 暗夜（1280×720）
-  'home-crt-green.png', //     起始页 · 磷绿（1280×720）
-  'settings.png', //           系统设置
-  'popover.png', //            弹出面板（带透明通道，面板窗口本身是透明的）
-  'ball.png' //                收起态那颗球（带透明通道）
+/**
+ * 每一张原图**是怎么来的**：成品名 ← 探针写出的原始文件名 ← 跑出它的那条命令。
+ *
+ * 这张表是把那句话兑现的东西——README 说「图都是真实渲染的截图，没有手绘也没有摆拍」，
+ * 而一张图自己证不了它是哪条命令跑出来的。`spike/capture-readme.sh` 照着这张表跑一遍，
+ * 再把原始名复制成成品名；命令一字不差地写在这里，谁都能重跑出同一批图。
+ *
+ * 三套主题各有自己的一份界面底板，**都带透明通道**：内容区是空的，等着垫网页。
+ * 为什么不共用一张：主题管的是整个界面，顶栏与右栏也跟着换。把磷绿的起始页衬在纸白的
+ * 顶栏上，拼出来的那一帧是**切不出来**的一态——README 里的图只能是用户真能看到的样子。
+ * 因此每一张都由「同一套主题的底 + 同一套主题的页」拼成（见 CHROME_OF）。
+ *
+ * 两条容易搞混、也正是这张表要钉住的尺寸规矩：
+ *   * 界面底板抓的是**整扇窗** 1280×720，并且**必须带 --alpha**；
+ *   * 页面（home-*、settings）抓的是**正文区** 1232×676（`--body`），不是整扇窗。
+ *     抓整扇窗再塞进正文区那个矩形，图会被压扁 2.5%——而 2.5% 在成品图上只是
+ *     「看着有点扁」，认不出是哪个数字错了。checkAspect() 让这种错当场停下来。
+ */
+const CAPTURES = [
+  ['chrome.png', 'preview-default-1280x720.png', '--alpha --width 1280 --height 720'],
+  ['chrome-night.png', 'preview-default-night-1280x720.png', '--alpha --theme night --width 1280 --height 720'],
+  [
+    'chrome-crt-green.png',
+    'preview-default-crt-green-1280x720.png',
+    '--alpha --theme crt-green --width 1280 --height 720'
+  ],
+  [
+    'chrome-crt-green-bg0.png',
+    'preview-default-crt-green-bg0-1280x720.png',
+    '--alpha --theme crt-green --bg 0 --width 1280 --height 720'
+  ],
+  ['home-paper.png', 'home-paper-1232x676.png', '--home --body --theme paper --width 1280 --height 720'],
+  ['home-night.png', 'home-night-1232x676.png', '--home --body --theme night --width 1280 --height 720'],
+  [
+    'home-crt-green.png',
+    'home-crt-green-1232x676.png',
+    '--home --body --theme crt-green --width 1280 --height 720'
+  ],
+  ['settings.png', 'settings-1232x676.png', '--settings --body --width 1280 --height 720'],
+  ['popover.png', 'popover-sites-320x420.png', '--popover --width 320 --height 420'],
+  [
+    'ball.png',
+    'preview-collapsed-200x200-zoom5.png',
+    '--collapsed --alpha --width 200 --height 200 --ball-zoom 5'
+  ]
 ]
+
+/** 用到的原图，一次列全（就是上面那张表的成品名）。缺哪张就在启动时说清缺哪张，而不是猜 */
+const NEEDED = CAPTURES.map(([name]) => name)
+
+/** 原图实测尺寸。sizeOf 跑完填进来，checkAspect 靠它当场认出「这张图的宽高比不对」 */
+const SIZES = {}
 
 /**
  * 一张原图的实测尺寸。
@@ -113,11 +148,33 @@ function sizeOf(file) {
 }
 
 /**
+ * 页面原图的宽高比，必须与它要贴进去的那个正文区矩形一致。
+ *
+ * 这一条是**量出来的教训**：上一版抓的是整扇窗（1280×720）却贴进正文区（1232×676），
+ * 差 2.5%。成品图上看着只是「有点扁」，谁都认不出是哪个数字错了，于是错着进了仓库。
+ * 容差给 0.004：取整到像素会带一点零头，而 1.7778 与 1.8225 差得远不止这些。
+ */
+function checkAspect(pageFile, boxW, boxH) {
+  const s = SIZES[pageFile]
+  if (!s) throw new Error(`没量过尺寸就要摆它：${pageFile}`)
+  const want = boxW / boxH
+  if (Math.abs(s.ratio - want) <= 0.004) return
+  const cmd = (CAPTURES.find(([name]) => name === pageFile) ?? [])[2] ?? '(见 spike/capture-readme.sh)'
+  throw new Error(
+    `原图与它要贴的那个矩形不是同一个宽高比：${pageFile} 是 ${s.w}×${s.h}` +
+      `（${s.ratio.toFixed(4)}），正文区是 ${boxW.toFixed(1)}×${boxH.toFixed(1)}（${want.toFixed(4)}）。\n` +
+      `  多半是抓错了尺寸——它应当按**正文区**抓（--body）：\n` +
+      `  npx electron spike/preview.js ${cmd}`
+  )
+}
+
+/**
  * 应用窗口那一块：**底板层**（带透明通道的 chrome）叠在**页面层**之上。
  *
  * 这不是拼贴，是还原真实窗口的层次：窗口是逐像素透明的，界面自己只画顶栏与右栏，
  * 网页由另一个 WebContentsView 画在「顶栏之下、右栏之左」那个矩形里。
  * 因此抓了两张图（界面一张带透明通道的、页面一张完整的），在同一个内容区矩形里对齐。
+ * 页面那张本来就是**按正文区**抓的，所以这里量出来的宽高比必须对得上（checkAspect）。
  *
  * `scale` 是相对 1280×720 的缩放。`chromeFile` 是与这一页**同一套主题**的那块界面
  * 底板（见 CHROME_OF）；传 `chrome-crt-green-bg0.png` 就得到「底板淡到 0」的一态——
@@ -128,8 +185,11 @@ function appWindow(pageFile, scale, chromeFile = 'chrome.png') {
   const h = Math.round(WIN_H * scale)
   const top = +(TOPBAR * scale).toFixed(1)
   const rail = +(RAIL * scale).toFixed(1)
+  const boxW = w - rail
+  const boxH = h - top
+  checkAspect(pageFile, boxW, boxH)
   return `<div class="win" style="width:${w}px;height:${h}px">
-      <img class="win-page" src="${pageFile}" style="left:0;top:${top}px;width:${w - rail}px;height:${h - top}px">
+      <img class="win-page" src="${pageFile}" style="left:0;top:${top}px;width:${boxW}px;height:${boxH}px">
       <img class="win-chrome" src="${chromeFile}" style="left:0;top:0;width:${w}px;height:${h}px">
     </div>`
 }
@@ -299,7 +359,16 @@ function htmlFeatures() {
     </div>
     <div class="cards">
       ${card(
-        `<img src="ball.png" style="width:230px">`,
+        /*
+         * 球那一张是**放大 5 倍**的：真机上它只有 40×40，放在这张 1920 宽的版式里
+         * 就是一颗看不见的芝麻。放大的是整颗球（球 40→200，球面上那枚 18px 的图形
+         * 跟着 18→90，90/200 与 18/40 都是 0.45），所以它是等比放大，不是一颗畸形的球。
+         * 图旁边把倍数写出来——不然读者会以为这球真有 230px。
+         */
+        `<div class="stack" style="align-items:center;gap:16px">
+           <img src="ball.png" style="width:200px">
+           <div class="tag-mini">放大 5× · 真机 40×40</div>
+         </div>`,
         '',
         '收起成一颗球',
         '鼠标一离开就缩成 40×40。<br>屏幕上不留隐形的点击区。'
@@ -333,8 +402,12 @@ function htmlFeatures() {
 /**
  * 第三张：四张真实界面。
  *
- * 「界面骨架」那一格是合成的（透明的界面叠在页面上），其余三格是各自文档的原图。
- * 这一张的存在理由很直接：这是个界面软件，README 应当让人看见界面。
+ * 四格里有三格是**整扇窗的合成**（透明的界面层叠在页面层之上，见 appWindow），
+ * 第四格是弹出面板自己——它是一扇独立的小窗，没有「界面层 + 页面层」这回事。
+ *
+ * 之所以不再单留一格叫「界面骨架」：骨架现在每一格都看得见，再拿一格去专门展示它，
+ * 就和「起始页」那一格成了同一张图的两个说法。四格因此按**四个不同的东西**排：
+ * 起始页（纸白）/ 同一页的终端世界（磷绿）/ 系统设置 / 弹出面板。
  *
  * 尺寸是被版面倒逼的：四格 16:9 的窗口图排两行，一行的高度由宽度定死，
  * 于是「一行能多高」决定「一格能多宽」。剩下的横向空隙交给 space-between——
@@ -349,6 +422,13 @@ function htmlShots() {
 
   const FRAME_W = 580
   const FRAME_H = 326 // 580 × 720/1280
+  /*
+   * 面板那一格：面板是竖的（320×420），这一格的框是横的（580×326），
+   * 于是按**高度**等比放进去（320 × 286/420 ≈ 218 宽）。等比是要紧的——
+   * 把 320×420 拉成 580×326 会得到一块既不像面板也不像窗口的东西。
+   * 放不到 1:1 是因为 420 > 326：这一行的高度由同行的窗口图定死，撑不开。
+   * 底下垫一层浅桌面、图上加一道投影，面板才从底上浮起来（它本来就是浮在桌面上的）。
+   */
   const pad = (inner) =>
     `<div class="pad" style="width:${FRAME_W}px;height:${FRAME_H}px;background:${DESK}">${inner}</div>`
 
@@ -374,10 +454,16 @@ function htmlShots() {
       <p>顶栏一条、右侧栏一条，其余让给网页</p>
     </div>
     <div class="grid">
-      ${cell('界面骨架', '顶栏 · 右侧栏 · 网页', `${appWindow('home-crt-green.png', FRAME_W / WIN_W, CHROME_OF['crt-green'])}`)}
-      ${cell('起始页', '纸白 / 暗夜 / 磷绿', `<img src="home-paper.png">`)}
-      ${cell('系统设置', '窗口内的一页', `<img src="settings.png">`)}
-      ${cell('弹出面板', '站点 / 历史 / 书签 / 显示', pad(`<img src="popover.png" style="width:340px">`))}
+      ${cell('起始页', '纸白 · 栏目线 · 内容条目', appWindow('home-paper.png', FRAME_W / WIN_W, CHROME_OF.paper))}
+      ${cell('终端世界', '同一页，另一套骨架', appWindow('home-crt-green.png', FRAME_W / WIN_W, CHROME_OF['crt-green']))}
+      ${cell('系统设置', '窗口内的一页', appWindow('settings.png', FRAME_W / WIN_W, CHROME_OF.paper))}
+      ${cell(
+        '弹出面板',
+        '站点 / 历史 / 书签 / 显示',
+        pad(
+          `<img src="popover.png" style="height:${FRAME_H - 40}px;filter:drop-shadow(0 12px 30px rgba(0,0,0,0.45))">`
+        )
+      )}
     </div>
     ${footer('截图取自真实渲染的无头窗口')}
   </body></html>`
@@ -414,6 +500,7 @@ app.whenReady().then(async () => {
 
   const sizes = NEEDED.map(sizeOf)
   for (const s of sizes) {
+    SIZES[s.file] = s
     const mark = s.alpha === 255 ? '不透明' : `alpha=${s.alpha}`
     console.log(`原图 ${s.file}  ${s.w}×${s.h}  ${mark}`)
   }

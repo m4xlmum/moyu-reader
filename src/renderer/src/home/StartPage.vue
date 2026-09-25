@@ -13,12 +13,12 @@
  * 用 `terminal` 判的分支：字体与圆角（themes.css）、动词列印什么、
  * 提示符与块状光标、读数用哪种写法。用户换主题时换掉的是皮，不是这一页怎么用。
  *
- * 行数按实测高度算出来再渲染，放不下的不渲染：正文区最窄只有 432×232，
+ * 行数按实测高度算出来再渲染，放不下的不渲染：正文区最窄只有 432×226，
  * 裁出来的半行比没有这一行更难看。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { computed, ref, useTemplateRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import ThemeMenu from './ThemeMenu.vue'
 import Icon from '../chrome/Icon.vue'
 import { useBox } from './useBox'
@@ -97,6 +97,23 @@ const closed = computed(() => visible.value.length > 0 && visible.value.length <
  * 拿它当模板里的 key，换栏时那一棵子树被整块换掉，动画也就跟着走一遍。
  */
 const columnKey = computed(() => `${props.plate}${searching.value ? ':q' : ''}`)
+
+/*
+ * 换栏那一下要不要播。
+ *
+ * 第一帧**不播**：页面刚出现时那一列已经在它该在的位置上，让它从 0.55 落定下来
+ * 说的是一件没发生过的事——「换了一栏」是句假话。因此那条动画挂在 `.settle`
+ * 上，而这个类只有真的换过一栏之后才有。
+ *
+ * 判据就是 `columnKey`：它一共只在换栏与进出搜索时变，打字本身不变，
+ * 于是这个开关与「底下那一列换了一棵树」是同一件事，两者不会说岔。
+ * 上一轮的取证正是在这里说岔了：探针那一跑从没换过栏，量到的那两条
+ * 其实是挂载那一次的，而它据以声称的却是「换栏会动」。
+ */
+const settling = ref(false)
+watch(columnKey, () => {
+  settling.value = true
+})
 
 
 // 换一栏，光标回到第一行：新一栏的行与上一栏没有任何关系
@@ -191,11 +208,38 @@ function initialOf(name: string): string {
 const promptEl = useTemplateRef<HTMLInputElement>('promptEl')
 const focused = ref(false)
 
+/*
+ * 一进这一页就把光标放进输入行。
+ *
+ * 这一页的键盘**整副都挂在输入行上**（`onInputKeydown` 是唯一的 keydown，
+ * ← → 换板块、↑ ↓ 选行、↵ 开当前行都在它里面），因此光标不在这儿的时候，
+ * 状态行第一帧就写着的那句「← → 换板块」是句空话。上一轮评审是照像素抓到的：
+ * 输入行底下那道线取的是 --divider-strong 而不是强调色，终端世界的方块光标
+ * 也没点亮——两处都在说「这里没被选上」。
+ *
+ * 窗口重新获得焦点时再给一次。这一半管的是「从网页切回这一页」：正文区里
+ * 这一页与网页各是一份文档，只有当前那份的 window 会收到 focus，因此
+ * 切回来时点着的网页不会来抢、切走时这一页也不会去抢它。用户自己点到栏目键
+ * 或某一行上时这份文档并没有失焦，也就不会被打断。
+ */
+function focusPrompt(): void {
+  promptEl.value?.focus()
+}
+
+onMounted(() => {
+  focusPrompt()
+  window.addEventListener('focus', focusPrompt)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', focusPrompt)
+})
+
 /** 点空白处就把光标交回输入行：这一页整块都可以开始打字 */
 function onRootClick(event: MouseEvent): void {
   const target = event.target as HTMLElement | null
   if (target?.closest('button, input, a, .theme-menu')) return
-  promptEl.value?.focus()
+  focusPrompt()
 }
 </script>
 
@@ -262,7 +306,7 @@ function onRootClick(event: MouseEvent): void {
         v-for="s in sections"
         :key="s.id"
         class="plate"
-        :class="{ on: s.id === plate && !searching }"
+        :class="{ on: s.id === plate && !searching, settle: settling }"
         :data-plate="s.id"
         :aria-pressed="s.id === plate && !searching"
         :title="s.label"
@@ -280,7 +324,7 @@ function onRootClick(event: MouseEvent): void {
         那是同一个动作的延续，不是新的一栏；key 只看栏目与「在不在搜索」，
         不看输入框里那几个字。
       -->
-      <div class="rows" :key="columnKey">
+      <div class="rows" :class="{ settle: settling }" :key="columnKey">
         <button
           v-for="(row, i) in visible"
           :key="row.key"
@@ -563,7 +607,8 @@ function onRootClick(event: MouseEvent): void {
 
 /* 当前那一栏的强调色短线，正好压在下划线上。
    它从左边画出来（而不是直接出现）：换栏这一下与底下那一列的落定是同一个
-   动作的两半，因此同一个时长、同一条缓动。 */
+   动作的两半，因此同一个时长、同一条缓动。
+   和那一列一样，只在真的换过一栏之后才画一遍（见 .rows.settle）。 */
 .plate.on::after {
   content: '';
   position: absolute;
@@ -573,6 +618,9 @@ function onRootClick(event: MouseEvent): void {
   height: 2px;
   background: var(--accent);
   transform-origin: left center;
+}
+
+.plate.on.settle::after {
   animation: rule-in 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -625,11 +673,17 @@ function onRootClick(event: MouseEvent): void {
  * 一列行。换栏时整块重排（见模板里那个 key），因此它是这一页唯一一个
  * 被安排过的动作：新的一列从**已经看得见**的那一档（0.55）落定下来，
  * 不是从无到有。指数缓出，180ms，一次就完。
+ *
+ * 挂在 `.settle` 上而不是 `.rows` 上：那个类只有真的换过一栏之后才有，
+ * 于是首帧不会走一遍（见脚本里 settling 那一段）。
  */
 .rows {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
+}
+
+.rows.settle {
   animation: settle 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -841,8 +895,8 @@ function onRootClick(event: MouseEvent): void {
  */
 @media (prefers-reduced-motion: reduce) {
   .cursor.lit,
-  .rows,
-  .plate.on::after {
+  .rows.settle,
+  .plate.on.settle::after {
     animation: none;
   }
 }

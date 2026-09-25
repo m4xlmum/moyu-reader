@@ -1,215 +1,753 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-22T19:30:00+08:00",
+  "generatedAt": "2026-09-25T14:10:00+08:00",
   "title": "Design System: 摸鱼阅读 (moyu-reader)",
   "extensions": {
     "colorMeta": {
       "ground": {
         "role": "neutral",
-        "displayName": "Ground White",
-        "canonical": "#ffffff",
-        "tonalRamp": ["oklch(15.0% 0.000 89.9)", "oklch(26.4% 0.000 89.9)", "oklch(37.9% 0.000 89.9)", "oklch(49.3% 0.000 89.9)", "oklch(60.7% 0.000 89.9)", "oklch(72.1% 0.000 89.9)", "oklch(83.6% 0.000 89.9)", "oklch(95.0% 0.000 89.9)"]
+        "displayName": "纸白页底",
+        "canonical": "#f9fafb",
+        "tonalRamp": [
+          "oklch(15.0% 0.002 247.8)",
+          "oklch(26.4% 0.002 247.8)",
+          "oklch(37.9% 0.002 247.8)",
+          "oklch(49.3% 0.002 247.8)",
+          "oklch(60.7% 0.002 247.8)",
+          "oklch(72.1% 0.002 247.8)",
+          "oklch(83.6% 0.002 247.8)",
+          "oklch(95.0% 0.002 247.8)"
+        ]
       },
       "ground-hover": {
         "role": "neutral",
-        "displayName": "Hover Gray",
-        "canonical": "#f3f4f6",
-        "tonalRamp": ["oklch(15.0% 0.003 264.5)", "oklch(26.4% 0.003 264.5)", "oklch(37.9% 0.003 264.5)", "oklch(49.3% 0.003 264.5)", "oklch(60.7% 0.003 264.5)", "oklch(72.1% 0.003 264.5)", "oklch(83.6% 0.003 264.5)", "oklch(95.0% 0.003 264.5)"]
+        "displayName": "页底悬停",
+        "canonical": "#f0f2f5",
+        "tonalRamp": [
+          "oklch(15.0% 0.005 258.3)",
+          "oklch(26.4% 0.005 258.3)",
+          "oklch(37.9% 0.005 258.3)",
+          "oklch(49.3% 0.005 258.3)",
+          "oklch(60.7% 0.005 258.3)",
+          "oklch(72.1% 0.005 258.3)",
+          "oklch(83.6% 0.005 258.3)",
+          "oklch(95.0% 0.005 258.3)"
+        ]
       },
       "ground-active": {
         "role": "neutral",
-        "displayName": "Active Gray",
+        "displayName": "页底按下",
+        "canonical": "#e6e9ee",
+        "tonalRamp": [
+          "oklch(15.0% 0.007 260.7)",
+          "oklch(26.4% 0.007 260.7)",
+          "oklch(37.9% 0.007 260.7)",
+          "oklch(49.3% 0.007 260.7)",
+          "oklch(60.7% 0.007 260.7)",
+          "oklch(72.1% 0.007 260.7)",
+          "oklch(83.6% 0.007 260.7)",
+          "oklch(95.0% 0.007 260.7)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "工具条面",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15.0% 0.000 89.9)",
+          "oklch(26.4% 0.000 89.9)",
+          "oklch(37.9% 0.000 89.9)",
+          "oklch(49.3% 0.000 89.9)",
+          "oklch(60.7% 0.000 89.9)",
+          "oklch(72.1% 0.000 89.9)",
+          "oklch(83.6% 0.000 89.9)",
+          "oklch(95.0% 0.000 89.9)"
+        ]
+      },
+      "surface-hover": {
+        "role": "neutral",
+        "displayName": "工具条悬停",
+        "canonical": "#f3f4f6",
+        "tonalRamp": [
+          "oklch(15.0% 0.003 264.5)",
+          "oklch(26.4% 0.003 264.5)",
+          "oklch(37.9% 0.003 264.5)",
+          "oklch(49.3% 0.003 264.5)",
+          "oklch(60.7% 0.003 264.5)",
+          "oklch(72.1% 0.003 264.5)",
+          "oklch(83.6% 0.003 264.5)",
+          "oklch(95.0% 0.003 264.5)"
+        ]
+      },
+      "surface-active": {
+        "role": "neutral",
+        "displayName": "工具条按下",
         "canonical": "#e8eaee",
-        "tonalRamp": ["oklch(15.0% 0.006 264.5)", "oklch(26.4% 0.006 264.5)", "oklch(37.9% 0.006 264.5)", "oklch(49.3% 0.006 264.5)", "oklch(60.7% 0.006 264.5)", "oklch(72.1% 0.006 264.5)", "oklch(83.6% 0.006 264.5)", "oklch(95.0% 0.006 264.5)"]
+        "tonalRamp": [
+          "oklch(15.0% 0.006 264.5)",
+          "oklch(26.4% 0.006 264.5)",
+          "oklch(37.9% 0.006 264.5)",
+          "oklch(49.3% 0.006 264.5)",
+          "oklch(60.7% 0.006 264.5)",
+          "oklch(72.1% 0.006 264.5)",
+          "oklch(83.6% 0.006 264.5)",
+          "oklch(95.0% 0.006 264.5)"
+        ]
+      },
+      "chrome-ground": {
+        "role": "neutral",
+        "displayName": "设置页底板",
+        "canonical": "#f6f7f9",
+        "tonalRamp": [
+          "oklch(15.0% 0.003 264.5)",
+          "oklch(26.4% 0.003 264.5)",
+          "oklch(37.9% 0.003 264.5)",
+          "oklch(49.3% 0.003 264.5)",
+          "oklch(60.7% 0.003 264.5)",
+          "oklch(72.1% 0.003 264.5)",
+          "oklch(83.6% 0.003 264.5)",
+          "oklch(95.0% 0.003 264.5)"
+        ]
       },
       "tile": {
         "role": "neutral",
-        "displayName": "Tile Gray",
+        "displayName": "图标垫",
         "canonical": "#f1f3f5",
-        "tonalRamp": ["oklch(15.0% 0.003 247.9)", "oklch(26.4% 0.003 247.9)", "oklch(37.9% 0.003 247.9)", "oklch(49.3% 0.003 247.9)", "oklch(60.7% 0.003 247.9)", "oklch(72.1% 0.003 247.9)", "oklch(83.6% 0.003 247.9)", "oklch(95.0% 0.003 247.9)"]
+        "tonalRamp": [
+          "oklch(15.0% 0.003 247.9)",
+          "oklch(26.4% 0.003 247.9)",
+          "oklch(37.9% 0.003 247.9)",
+          "oklch(49.3% 0.003 247.9)",
+          "oklch(60.7% 0.003 247.9)",
+          "oklch(72.1% 0.003 247.9)",
+          "oklch(83.6% 0.003 247.9)",
+          "oklch(95.0% 0.003 247.9)"
+        ]
       },
-      "ink": {
+      "text": {
         "role": "neutral",
-        "displayName": "Ink",
-        "canonical": "#111827",
-        "tonalRamp": ["oklch(15.0% 0.032 264.7)", "oklch(26.4% 0.032 264.7)", "oklch(37.9% 0.032 264.7)", "oklch(49.3% 0.032 264.7)", "oklch(60.7% 0.032 264.7)", "oklch(72.1% 0.032 264.7)", "oklch(83.6% 0.032 264.7)", "oklch(95.0% 0.032 264.7)"]
+        "displayName": "墨",
+        "canonical": "#15181d",
+        "tonalRamp": [
+          "oklch(15.0% 0.011 260.7)",
+          "oklch(26.4% 0.011 260.7)",
+          "oklch(37.9% 0.011 260.7)",
+          "oklch(49.3% 0.011 260.7)",
+          "oklch(60.7% 0.011 260.7)",
+          "oklch(72.1% 0.011 260.7)",
+          "oklch(83.6% 0.011 260.7)",
+          "oklch(95.0% 0.011 260.7)"
+        ]
       },
-      "ink-secondary": {
+      "text-secondary": {
         "role": "neutral",
-        "displayName": "Ink Secondary",
-        "canonical": "#5b6472",
-        "tonalRamp": ["oklch(15.0% 0.025 259.2)", "oklch(26.4% 0.025 259.2)", "oklch(37.9% 0.025 259.2)", "oklch(49.3% 0.025 259.2)", "oklch(60.7% 0.025 259.2)", "oklch(72.1% 0.025 259.2)", "oklch(83.6% 0.025 259.2)", "oklch(95.0% 0.025 259.2)"]
+        "displayName": "次级墨",
+        "canonical": "#5a6270",
+        "tonalRamp": [
+          "oklch(15.0% 0.025 261.7)",
+          "oklch(26.4% 0.025 261.7)",
+          "oklch(37.9% 0.025 261.7)",
+          "oklch(49.3% 0.025 261.7)",
+          "oklch(60.7% 0.025 261.7)",
+          "oklch(72.1% 0.025 261.7)",
+          "oklch(83.6% 0.025 261.7)",
+          "oklch(95.0% 0.025 261.7)"
+        ]
       },
-      "ink-tertiary": {
+      "text-tertiary": {
         "role": "neutral",
-        "displayName": "Ink Tertiary",
-        "canonical": "#6f7683",
-        "tonalRamp": ["oklch(15.0% 0.022 262.9)", "oklch(26.4% 0.022 262.9)", "oklch(37.9% 0.022 262.9)", "oklch(49.3% 0.022 262.9)", "oklch(60.7% 0.022 262.9)", "oklch(72.1% 0.022 262.9)", "oklch(83.6% 0.022 262.9)", "oklch(95.0% 0.022 262.9)"]
+        "displayName": "三级墨",
+        "canonical": "#666d79",
+        "tonalRamp": [
+          "oklch(15.0% 0.021 261.3)",
+          "oklch(26.4% 0.021 261.3)",
+          "oklch(37.9% 0.021 261.3)",
+          "oklch(49.3% 0.021 261.3)",
+          "oklch(60.7% 0.021 261.3)",
+          "oklch(72.1% 0.021 261.3)",
+          "oklch(83.6% 0.021 261.3)",
+          "oklch(95.0% 0.021 261.3)"
+        ]
       },
       "divider": {
         "role": "neutral",
-        "displayName": "Hairline",
-        "canonical": "#e5e7eb",
-        "tonalRamp": ["oklch(15.0% 0.006 264.5)", "oklch(26.4% 0.006 264.5)", "oklch(37.9% 0.006 264.5)", "oklch(49.3% 0.006 264.5)", "oklch(60.7% 0.006 264.5)", "oklch(72.1% 0.006 264.5)", "oklch(83.6% 0.006 264.5)", "oklch(95.0% 0.006 264.5)"]
+        "displayName": "细线",
+        "canonical": "#e6e8ec",
+        "tonalRamp": [
+          "oklch(15.0% 0.006 264.5)",
+          "oklch(26.4% 0.006 264.5)",
+          "oklch(37.9% 0.006 264.5)",
+          "oklch(49.3% 0.006 264.5)",
+          "oklch(60.7% 0.006 264.5)",
+          "oklch(72.1% 0.006 264.5)",
+          "oklch(83.6% 0.006 264.5)",
+          "oklch(95.0% 0.006 264.5)"
+        ]
       },
       "divider-strong": {
         "role": "neutral",
-        "displayName": "Hairline Strong",
-        "canonical": "#d1d5db",
-        "tonalRamp": ["oklch(15.0% 0.009 258.3)", "oklch(26.4% 0.009 258.3)", "oklch(37.9% 0.009 258.3)", "oklch(49.3% 0.009 258.3)", "oklch(60.7% 0.009 258.3)", "oklch(72.1% 0.009 258.3)", "oklch(83.6% 0.009 258.3)", "oklch(95.0% 0.009 258.3)"]
+        "displayName": "深细线",
+        "canonical": "#d2d6dd",
+        "tonalRamp": [
+          "oklch(15.0% 0.011 261.8)",
+          "oklch(26.4% 0.011 261.8)",
+          "oklch(37.9% 0.011 261.8)",
+          "oklch(49.3% 0.011 261.8)",
+          "oklch(60.7% 0.011 261.8)",
+          "oklch(72.1% 0.011 261.8)",
+          "oklch(83.6% 0.011 261.8)",
+          "oklch(95.0% 0.011 261.8)"
+        ]
       },
       "accent": {
         "role": "primary",
-        "displayName": "Focus Blue",
-        "canonical": "#2563eb",
-        "tonalRamp": ["oklch(15.0% 0.215 262.9)", "oklch(26.4% 0.215 262.9)", "oklch(37.9% 0.215 262.9)", "oklch(49.3% 0.215 262.9)", "oklch(60.7% 0.215 262.9)", "oklch(72.1% 0.215 262.9)", "oklch(83.6% 0.215 262.9)", "oklch(95.0% 0.215 262.9)"]
+        "displayName": "靛强调",
+        "canonical": "#2f4a9e",
+        "tonalRamp": [
+          "oklch(15.0% 0.140 267.0)",
+          "oklch(26.4% 0.140 267.0)",
+          "oklch(37.9% 0.140 267.0)",
+          "oklch(49.3% 0.140 267.0)",
+          "oklch(60.7% 0.140 267.0)",
+          "oklch(72.1% 0.140 267.0)",
+          "oklch(83.6% 0.140 267.0)",
+          "oklch(95.0% 0.140 267.0)"
+        ]
       },
       "accent-hover": {
         "role": "primary",
-        "displayName": "Focus Blue Deep",
-        "canonical": "#1d4ed8",
-        "tonalRamp": ["oklch(15.0% 0.217 264.4)", "oklch(26.4% 0.217 264.4)", "oklch(37.9% 0.217 264.4)", "oklch(49.3% 0.217 264.4)", "oklch(60.7% 0.217 264.4)", "oklch(72.1% 0.217 264.4)", "oklch(83.6% 0.217 264.4)", "oklch(95.0% 0.217 264.4)"]
+        "displayName": "靛强调·悬停",
+        "canonical": "#273f86",
+        "tonalRamp": [
+          "oklch(15.0% 0.123 266.6)",
+          "oklch(26.4% 0.123 266.6)",
+          "oklch(37.9% 0.123 266.6)",
+          "oklch(49.3% 0.123 266.6)",
+          "oklch(60.7% 0.123 266.6)",
+          "oklch(72.1% 0.123 266.6)",
+          "oklch(83.6% 0.123 266.6)",
+          "oklch(95.0% 0.123 266.6)"
+        ]
       },
       "accent-soft": {
         "role": "primary",
-        "displayName": "Focus Blue Wash",
-        "canonical": "rgba(37, 99, 235, 0.1)",
-        "tonalRamp": ["oklch(15.0% 0.215 262.9)", "oklch(26.4% 0.215 262.9)", "oklch(37.9% 0.215 262.9)", "oklch(49.3% 0.215 262.9)", "oklch(60.7% 0.215 262.9)", "oklch(72.1% 0.215 262.9)", "oklch(83.6% 0.215 262.9)", "oklch(95.0% 0.215 262.9)"]
+        "displayName": "靛淡底",
+        "canonical": "rgba(47, 74, 158, 0.1)",
+        "tonalRamp": [
+          "oklch(15.0% 0.140 267.0)",
+          "oklch(26.4% 0.140 267.0)",
+          "oklch(37.9% 0.140 267.0)",
+          "oklch(49.3% 0.140 267.0)",
+          "oklch(60.7% 0.140 267.0)",
+          "oklch(72.1% 0.140 267.0)",
+          "oklch(83.6% 0.140 267.0)",
+          "oklch(95.0% 0.140 267.0)"
+        ]
       },
       "danger": {
         "role": "danger",
-        "displayName": "Danger Red",
-        "canonical": "#b91c1c",
-        "tonalRamp": ["oklch(15.0% 0.190 27.5)", "oklch(26.4% 0.190 27.5)", "oklch(37.9% 0.190 27.5)", "oklch(49.3% 0.190 27.5)", "oklch(60.7% 0.190 27.5)", "oklch(72.1% 0.190 27.5)", "oklch(83.6% 0.190 27.5)", "oklch(95.0% 0.190 27.5)"]
+        "displayName": "警示红",
+        "canonical": "#b3261e",
+        "tonalRamp": [
+          "oklch(15.0% 0.178 28.7)",
+          "oklch(26.4% 0.178 28.7)",
+          "oklch(37.9% 0.178 28.7)",
+          "oklch(49.3% 0.178 28.7)",
+          "oklch(60.7% 0.178 28.7)",
+          "oklch(72.1% 0.178 28.7)",
+          "oklch(83.6% 0.178 28.7)",
+          "oklch(95.0% 0.178 28.7)"
+        ]
+      },
+      "sunken": {
+        "role": "neutral",
+        "displayName": "凹槽底",
+        "canonical": "#eef0f3",
+        "tonalRamp": [
+          "oklch(15.0% 0.005 258.3)",
+          "oklch(26.4% 0.005 258.3)",
+          "oklch(37.9% 0.005 258.3)",
+          "oklch(49.3% 0.005 258.3)",
+          "oklch(60.7% 0.005 258.3)",
+          "oklch(72.1% 0.005 258.3)",
+          "oklch(83.6% 0.005 258.3)",
+          "oklch(95.0% 0.005 258.3)"
+        ]
+      },
+      "selected": {
+        "role": "neutral",
+        "displayName": "选中底",
+        "canonical": "#eef1fa",
+        "tonalRamp": [
+          "oklch(15.0% 0.012 271.3)",
+          "oklch(26.4% 0.012 271.3)",
+          "oklch(37.9% 0.012 271.3)",
+          "oklch(49.3% 0.012 271.3)",
+          "oklch(60.7% 0.012 271.3)",
+          "oklch(72.1% 0.012 271.3)",
+          "oklch(83.6% 0.012 271.3)",
+          "oklch(95.0% 0.012 271.3)"
+        ]
+      },
+      "on-fill": {
+        "role": "neutral",
+        "displayName": "填充上的字",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15.0% 0.000 89.9)",
+          "oklch(26.4% 0.000 89.9)",
+          "oklch(37.9% 0.000 89.9)",
+          "oklch(49.3% 0.000 89.9)",
+          "oklch(60.7% 0.000 89.9)",
+          "oklch(72.1% 0.000 89.9)",
+          "oklch(83.6% 0.000 89.9)",
+          "oklch(95.0% 0.000 89.9)"
+        ]
       }
     },
     "typographyMeta": {
-      "display": { "displayName": "Display", "purpose": "The wordmark 摸鱼阅读 only — the page's single brand moment." },
-      "title": { "displayName": "Title", "purpose": "Search-field input text; the largest reading size in the page body." },
-      "body": { "displayName": "Body", "purpose": "The page's base size (home.css sets 13px on html/body)." },
-      "label": { "displayName": "Label", "purpose": "The chrome's base size (base.css sets 12px) plus tile labels and the footnote." }
+      "display": {
+        "displayName": "报头",
+        "purpose": "起始页报头「摸鱼阅读」（终端世界 MOYU-READER）唯一一处；自带中文衬线，700。"
+      },
+      "headline": {
+        "displayName": "当前栏",
+        "purpose": "栏目线上当前那一栏，26px；它决定整条栏目线的高度。"
+      },
+      "headline-compact": {
+        "displayName": "当前栏·迷你档",
+        "purpose": "正文区高度 < 360px 时当前栏降到 18px。"
+      },
+      "body": {
+        "displayName": "正文",
+        "purpose": "这一页的基础字号（13px）：行的名称、输入行里的字；系统设置页同号。"
+      },
+      "label": {
+        "displayName": "标签",
+        "purpose": "其余五栏的栏目名、行的动词列与右端域名，以及界面的基础字号（12px）。"
+      },
+      "caption": {
+        "displayName": "注脚",
+        "purpose": "标签数、格式说明、状态行读数与按键提示、首字母格、界面滑块小字（11px，是地板）。"
+      },
+      "mono": {
+        "displayName": "等宽",
+        "purpose": "终端世界（磷绿）把页面与整个界面换成的堆栈；--font-display 也指回它，命令行里没有第二个字面。"
+      }
     },
     "shadows": [
-      { "name": "search-hover", "value": "0 1px 4px rgba(17, 24, 39, 0.1)", "purpose": "Start-page search field on hover." },
-      { "name": "search-focus", "value": "0 1px 6px rgba(17, 24, 39, 0.16)", "purpose": "Focused search field, paired with a transparent border and the 2px accent outline." },
-      { "name": "current-tile-ring", "value": "inset 0 0 0 1.5px #2563eb", "purpose": "Inset accent ring on the favicon well of the currently-open site." },
-      { "name": "address-focus-ring", "value": "0 0 0 2px rgba(37, 99, 235, 0.1)", "purpose": "Soft halo on the chrome address field on focus." },
-      { "name": "focus-outline", "value": "outline: 2px solid #2563eb; outline-offset: 2px (page) / 1px (chrome)", "purpose": "The keyboard focus indicator everywhere." }
+      {
+        "name": "theme-menu-panel",
+        "value": "0 6px 24px rgba(0, 0, 0, 0.22)",
+        "purpose": "主题菜单浮层——页面上唯一的阴影，用中性的黑，因为它在三套配色里都得立得住。"
+      },
+      {
+        "name": "ball-rest",
+        "value": "0 2px 8px rgba(17, 24, 39, 0.28)",
+        "purpose": "悬浮球静置；收起态（窗口就是球）不画任何超出球面的东西。"
+      },
+      {
+        "name": "ball-hover",
+        "value": "0 3px 12px rgba(17, 24, 39, 0.34)",
+        "purpose": "悬浮球悬停。"
+      },
+      {
+        "name": "ball-active",
+        "value": "0 1px 4px rgba(17, 24, 39, 0.3), inset 0 0 0 2px color-mix(in srgb, var(--moyu-on-fill) 45%, transparent)",
+        "purpose": "悬浮球按下：往里收，不往外扩。"
+      },
+      {
+        "name": "cropper-modal",
+        "value": "0 18px 48px rgba(9, 11, 14, 0.35)",
+        "purpose": "设置页里的裁剪弹窗。"
+      },
+      {
+        "name": "focus-outline",
+        "value": "outline: 2px solid <accent>; outline-offset: 2px (页) / 1px (界面) / 3px (滑块) / -4px (收起态的球)",
+        "purpose": "键盘焦点，永远不只在状态填充里。"
+      }
     ],
     "motion": [
-      { "name": "state-transition", "value": "120ms ease-out", "purpose": "Default background/color transition for every control state change." },
-      { "name": "field-transition", "value": "140ms ease-out", "purpose": "Search field border-color and box-shadow." },
-      { "name": "window-fade", "value": "200ms", "purpose": "Window opacity fade (FADE_MS), driven by the main process, stepped every 16ms." },
-      { "name": "hide-delay", "value": "400ms", "purpose": "Grace period before the body auto-hides (HIDE_DELAY_MS); hide is slow, reveal is fast." }
+      {
+        "name": "state-transition",
+        "value": "120ms ease-out",
+        "purpose": "控件状态变化（底色、颜色）的默认过渡：栏目键、主题键、工具栏、标签页、面板项。"
+      },
+      {
+        "name": "row-transition",
+        "value": "100ms ease-out",
+        "purpose": "内容行的悬停底色；行是这一页上最频繁的悬停，比别的控件快一档。"
+      },
+      {
+        "name": "plate-column",
+        "value": "180ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "换栏那一下的 settle（列从 0.55 落定 + 4px 上浮）与 rule-in（2px 短线从左边画出来）——同一个动作的两半，同时长同曲线，只在真的换栏时播。"
+      },
+      {
+        "name": "crt-breathe",
+        "value": "4.6s ease-in-out infinite",
+        "purpose": "荧光屏余辉的呼吸（opacity 1 → 0.93）；幅度小到说不上来哪里在动。"
+      },
+      {
+        "name": "cursor-blink",
+        "value": "1.1s step-end infinite",
+        "purpose": "终端世界的块状光标，只在有焦点且空行时闪。"
+      },
+      {
+        "name": "window-fade",
+        "value": "200ms",
+        "purpose": "窗口透明度淡入淡出（FADE_MS），由主进程按 16ms 步进。"
+      },
+      {
+        "name": "hide-delay",
+        "value": "700ms",
+        "purpose": "光标离开后收起成球前的宽限（HIDE_DELAY_MS）：收起慢、展开靠点击，避免误触。"
+      },
+      {
+        "name": "notice-progress",
+        "value": "160ms linear",
+        "purpose": "更新提示条里那条下载进度。"
+      }
     ],
     "breakpoints": [
-      { "name": "compact-height", "value": "400px", "purpose": "@media (max-height: 400px): mini-mode compaction — smaller wordmark, shorter search field, tighter grid, no footnote." },
-      { "name": "mini", "value": "480x270" },
-      { "name": "small", "value": "800x450" },
-      { "name": "medium", "value": "960x540" },
-      { "name": "large", "value": "1280x720" }
-    ]
+      {
+        "name": "page-compact",
+        "value": "360px",
+        "purpose": "按实测正文高度分档（不是媒体查询）：低于它整页降一档——内边距、报头、栏目线、行高、状态行；迷你档正文区只有 232 高，必须收。"
+      },
+      {
+        "name": "section-line-narrow",
+        "value": "560px",
+        "purpose": "按实测宽度分档：栏目线退成两字缩写（离线阅读 → 离线）。正文区最窄 432；420 以下没有测试。"
+      },
+      {
+        "name": "chrome-address-collapse",
+        "value": "620px",
+        "purpose": "顶栏在窄窗口里把地址栏开关收成一枚图标，给标签条让出放得下一个标签的地方。"
+      },
+      {
+        "name": "mini",
+        "value": "480x270"
+      },
+      {
+        "name": "small",
+        "value": "800x450"
+      },
+      {
+        "name": "medium",
+        "value": "960x540"
+      },
+      {
+        "name": "large",
+        "value": "1280x720"
+      },
+      {
+        "name": "body-viewport",
+        "value": "912x496（窗口 960x540、地址栏折叠）；地址栏展开 912x462；迷你档 432x226",
+        "purpose": "正文区由 computeLayout() 算出（窗口宽 − 右栏宽 48 × 窗口高 − 顶栏 44 − 地址栏 34 − 提示条 30），不是窗口尺寸。"
+      }
+    ],
+    "themes": [
+      {
+        "id": "paper",
+        "label": "纸白",
+        "world": "modern",
+        "hint": "浅色行式列表，日光灯下最不显眼",
+        "isDefault": true,
+        "page": {
+          "ground": "#f9fafb",
+          "ground-hover": "#f0f2f5",
+          "ground-active": "#e6e9ee",
+          "tile": "#f1f3f5",
+          "divider": "#e6e8ec",
+          "divider-strong": "#d2d6dd",
+          "text": "#15181d",
+          "text-secondary": "#5a6270",
+          "text-tertiary": "#666d79",
+          "accent": "#2f4a9e",
+          "accent-hover": "#273f86",
+          "accent-soft": "rgba(47, 74, 158, 0.1)"
+        },
+        "chrome": {
+          "surface": "#ffffff",
+          "surface-hover": "#f3f4f6",
+          "surface-active": "#e8eaee",
+          "border": "#d2d6dd",
+          "hairline": "#e6e8ec",
+          "ink": "#15181d",
+          "text": "#15181d",
+          "text-dim": "#5a6270",
+          "text-faint": "#666d79",
+          "accent": "#2f4a9e",
+          "accent-hover": "#273f86",
+          "accent-soft": "rgba(47, 74, 158, 0.1)",
+          "danger": "#b3261e",
+          "danger-soft": "#fdf3f2",
+          "sunken": "#eef0f3",
+          "sunken-hover": "#e2e5ea",
+          "selected": "#eef1fa",
+          "on-fill": "#ffffff",
+          "ground": "#f6f7f9"
+        }
+      },
+      {
+        "id": "night",
+        "label": "暗夜",
+        "world": "modern",
+        "hint": "深色行式列表，不发光，晚上眼睛舒服",
+        "isDefault": false,
+        "page": {
+          "ground": "#12151c",
+          "ground-hover": "#1b1f28",
+          "ground-active": "#232833",
+          "tile": "#1e232c",
+          "divider": "#242a36",
+          "divider-strong": "#333b4a",
+          "text": "#e7e9ee",
+          "text-secondary": "#a3aab8",
+          "text-tertiary": "#7e8697",
+          "accent": "#8ea9ea",
+          "accent-hover": "#a8c0f2",
+          "accent-soft": "rgba(142, 169, 234, 0.14)"
+        },
+        "chrome": {
+          "surface": "#12151c",
+          "surface-hover": "#1b1f28",
+          "surface-active": "#232833",
+          "border": "#333b4a",
+          "hairline": "#242a36",
+          "ink": "#e7e9ee",
+          "text": "#e7e9ee",
+          "text-dim": "#a3aab8",
+          "text-faint": "#7e8697",
+          "accent": "#8ea9ea",
+          "accent-hover": "#a8c0f2",
+          "accent-soft": "rgba(142, 169, 234, 0.14)",
+          "danger": "#ff9a9a",
+          "danger-soft": "rgba(255, 154, 154, 0.14)",
+          "sunken": "#0b0d10",
+          "sunken-hover": "#1a1d23",
+          "selected": "rgba(142, 169, 234, 0.12)",
+          "on-fill": "#12151c",
+          "ground": "#101216"
+        }
+      },
+      {
+        "id": "crt-green",
+        "label": "磷绿",
+        "world": "terminal",
+        "hint": "P1 单色终端：命令行、扫描线、余辉",
+        "isDefault": false,
+        "page": {
+          "ground": "#050b07",
+          "ground-hover": "rgba(87, 240, 140, 0.08)",
+          "ground-active": "rgba(87, 240, 140, 0.15)",
+          "tile": "rgba(87, 240, 140, 0.1)",
+          "divider": "#12401f",
+          "divider-strong": "#1e6b35",
+          "text": "#57f08c",
+          "text-secondary": "#3cc46f",
+          "text-tertiary": "#2b9455",
+          "accent": "#6bffa4",
+          "accent-hover": "#9bffc2",
+          "accent-soft": "rgba(107, 255, 164, 0.14)"
+        },
+        "chrome": {
+          "surface": "#050b07",
+          "surface-hover": "#0c1d12",
+          "surface-active": "#112d1b",
+          "border": "#1e6b35",
+          "hairline": "#12401f",
+          "ink": "#57f08c",
+          "text": "#57f08c",
+          "text-dim": "#3cc46f",
+          "text-faint": "#2b9455",
+          "accent": "#6bffa4",
+          "accent-hover": "#9bffc2",
+          "accent-soft": "rgba(107, 255, 164, 0.14)",
+          "danger": "#ff9a7a",
+          "danger-soft": "rgba(255, 154, 122, 0.16)",
+          "sunken": "#010402",
+          "sunken-hover": "#0c1d12",
+          "selected": "rgba(107, 255, 164, 0.14)",
+          "on-fill": "#050b07",
+          "ground": "#030704"
+        }
+      }
+    ],
+    "themeNotes": {
+      "source": "颜色与形状的值只有一份，在 src/renderer/src/styles/themes.css：一个主题 = 一段变量组，不写任何选择器。",
+      "chromeFaceForm": "界面的「面」在主题层里存的是三通道（--moyu-*-rgb，不带 alpha），由 tokens.css 拼上 --moyu-alpha。上面的 chrome 值是等价实色（alpha = 1）；磷绿的 0c1d12 / 112d1b 是 0.08 与 0.15 的荧光绿叠在 #050b07 上之后的结果，与页上那两个悬停严格同色。",
+      "worldOverride": "html[data-world='terminal'] 与主题正交，只覆盖形状与字体：--radius-sm/--radius/--radius-pill 与 --moyu-radius* 全部归零、--font/--moyu-font 换成等宽堆栈、--font-display 指回 --font，并给 body/input/button 加 text-shadow: 0 0 3px color-mix(in srgb, currentColor 38%, transparent)。",
+      "scanline": "扫描线那一层（body::after：1px 暗 / 2px 透亮的 repeating-linear-gradient 叠球面管余辉，crt-breathe 4.6s）只在起始页，不进界面层——它是铺满视口的覆盖层，进了 chrome 就把桌面盖住。",
+      "radiusPillUnused": "页用不上 --radius-pill（999px）：上一版那个 46px 胶囊搜索框是它唯一的用户，已经没了。"
+    },
+    "meshes": []
   },
   "components": [
     {
-      "name": "Search Field",
-      "kind": "input",
-      "refersTo": "search-field",
-      "description": "The start page's signature control: a 46px pill search box, white on a hairline-strong border.",
-      "html": "<form class=\"ds-search\" role=\"search\"><svg class=\"ds-search-icon\" viewBox=\"0 0 24 24\" width=\"17\" height=\"17\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"6.5\"></circle><path d=\"M16 16l4 4\"></path></svg><input class=\"ds-search-input\" type=\"text\" placeholder=\"输入网址，或输入关键词搜索\" spellcheck=\"false\"></form>",
-      "css": ".ds-search { display:flex; align-items:center; gap:12px; width:100%; height:46px; padding:0 20px; border:1px solid var(--divider-strong,#d1d5db); border-radius:var(--radius-pill,999px); background:var(--ground,#fff); color:var(--text-secondary,#5b6472); transition:box-shadow 140ms ease-out,border-color 140ms ease-out; } .ds-search:hover { box-shadow:0 1px 4px rgba(17,24,39,.1); } .ds-search:focus-within { border-color:transparent; box-shadow:0 1px 6px rgba(17,24,39,.16); outline:2px solid var(--accent,#2563eb); outline-offset:2px; } .ds-search-icon { flex:0 0 auto; } .ds-search-input { flex:1 1 auto; min-width:0; height:100%; border:none; outline:none; background:transparent; font-size:14px; color:var(--text,#111827); } .ds-search-input::placeholder { color:var(--text-tertiary,#6f7683); }"
-    },
-    {
-      "name": "Site Tile",
+      "name": "栏目线·当前栏",
       "kind": "custom",
-      "refersTo": "site-tile",
-      "description": "An 84px grid cell: a circular favicon well over a 12px label. Hover fills it; the current tile gets an accent ring.",
-      "html": "<button class=\"ds-tile\"><span class=\"ds-tile-favicon\"><span class=\"ds-tile-initial\">微</span></span><span class=\"ds-tile-label\">微信读书</span></button>",
-      "css": ".ds-tile { display:flex; flex-direction:column; align-items:center; gap:8px; width:84px; padding:10px 4px; border:none; background:transparent; border-radius:var(--radius,8px); transition:background 120ms ease-out; } .ds-tile:hover { background:var(--ground-hover,#f3f4f6); } .ds-tile:active { background:var(--ground-active,#e8eaee); } .ds-tile-favicon { width:40px; height:40px; display:grid; place-items:center; border-radius:var(--radius-pill,999px); background:var(--tile,#f1f3f5); overflow:hidden; } .ds-tile-initial { font-size:16px; color:var(--text-secondary,#5b6472); } .ds-tile-label { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; color:var(--text-secondary,#5b6472); } .ds-tile:hover .ds-tile-label, .ds-tile.is-current .ds-tile-label { color:var(--text,#111827); } .ds-tile.is-current .ds-tile-favicon { background:var(--accent-soft,rgba(37,99,235,.1)); box-shadow:inset 0 0 0 1.5px var(--accent,#2563eb); } .ds-tile.is-current .ds-tile-initial { color:var(--accent,#2563eb); }"
+      "refersTo": "plate-current",
+      "description": "分类页的招牌：当前那一栏 26px 在 --text 上，底下压一根 2px 强调色短线（正好盖住栏目线那根 1px 细线）。",
+      "html": "<nav class='ds-plates' aria-label='板块'><button class='ds-plate is-on' aria-pressed='true'>全部</button><button class='ds-plate'>视频</button><button class='ds-plate'>阅读</button><button class='ds-plate'>资讯</button><button class='ds-plate'>刷题</button><button class='ds-plate'>离线阅读</button></nav>",
+      "css": ".ds-plates { position:relative; display:flex; align-items:baseline; gap:18px; font-family:var(--font-display,'Moyu Display Serif','Noto Serif SC',serif); } .ds-plates::before { content:''; position:absolute; left:0; right:0; bottom:0; height:1px; background:var(--divider,#e6e8ec); } .ds-plate { position:relative; padding:0 0 6px; border:none; background:none; font:inherit; font-size:12px; line-height:1.15; color:var(--text-tertiary,#666d79); white-space:nowrap; cursor:pointer; transition:color 120ms ease-out; } .ds-plate:hover { color:var(--text-secondary,#5a6270); } .ds-plate:focus-visible { outline:2px solid var(--accent,#2f4a9e); outline-offset:2px; } .ds-plate.is-on { font-size:26px; color:var(--text,#15181d); } .ds-plate.is-on::after { content:''; position:absolute; left:0; right:0; bottom:0; height:2px; background:var(--accent,#2f4a9e); transform-origin:left center; animation:ds-rule-in 180ms cubic-bezier(0.16,1,0.3,1) both; } @keyframes ds-rule-in { from { transform:scaleX(0); } to { transform:scaleX(1); } } @media (prefers-reduced-motion: reduce) { .ds-plate.is-on::after { animation:none; } }"
     },
     {
-      "name": "Toolbar Icon Button",
+      "name": "输入行（下划线）",
+      "kind": "input",
+      "refersTo": "prompt-row",
+      "description": "这一页唯一的键盘入口：一整条下划线（不是胶囊），获得焦点时线与字一起转强调色。",
+      "html": "<form class='ds-prompt'><span class='ds-prompt-lead' aria-hidden='true'><svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='7'></circle><path d='M20 20l-4.35-4.35'></path></svg></span><input class='ds-prompt-input' type='text' placeholder='输入网址，或输入关键词搜索' spellcheck='false'></form>",
+      "css": ".ds-prompt { display:flex; align-items:center; gap:8px; padding-bottom:6px; border-bottom:1px solid var(--divider-strong,#d2d6dd); color:var(--text-tertiary,#666d79); transition:border-color 120ms ease-out, color 120ms ease-out; } .ds-prompt:focus-within { border-color:var(--accent,#2f4a9e); color:var(--accent,#2f4a9e); } .ds-prompt-lead { flex:0 0 auto; display:inline-flex; } .ds-prompt-input { flex:1 1 auto; min-width:0; height:20px; border:none; outline:none; background:transparent; font:inherit; font-size:13px; color:var(--text,#15181d); } .ds-prompt-input::placeholder { color:var(--text-tertiary,#666d79); } .ds-prompt-input:focus-visible { outline:none; }"
+    },
+    {
+      "name": "内容行",
+      "kind": "custom",
+      "refersTo": "home-row",
+      "description": "横向一行：动词列（固定宽）· 18px 图标格 · 名称 · 右端域名。行高只有一个数（28px，终端世界 22px），悬停换底色，不上浮。",
+      "html": "<div class='ds-rows'><button class='ds-row is-resume'><span class='ds-row-verb'>继续</span><span class='ds-row-icon'><span class='ds-row-initial'>番</span></span><span class='ds-row-label'>番茄小说</span><span class='ds-row-host'>fanqienovel.com</span></button><button class='ds-row is-sel'><span class='ds-row-verb'></span><span class='ds-row-icon'><span class='ds-row-initial'>B</span></span><span class='ds-row-label'>哔哩哔哩</span><span class='ds-row-host'>bilibili.com</span></button></div>",
+      "css": ".ds-rows { display:flex; flex-direction:column; } .ds-row { display:flex; align-items:center; gap:10px; width:100%; height:28px; padding:0 8px; border:none; background:transparent; border-radius:4px; font:inherit; font-size:13px; color:var(--text,#15181d); text-align:left; white-space:nowrap; overflow:hidden; cursor:pointer; transition:background 100ms ease-out; } .ds-row:hover, .ds-row.is-sel { background:var(--ground-hover,#f0f2f5); } .ds-row:focus-visible { outline:2px solid var(--accent,#2f4a9e); outline-offset:2px; } .ds-row-verb { flex:0 0 auto; width:2.4em; font-size:12px; color:var(--text-tertiary,#666d79); } .ds-row.is-resume .ds-row-verb { color:var(--accent,#2f4a9e); } .ds-row-icon { flex:0 0 auto; width:18px; height:18px; display:grid; place-items:center; overflow:hidden; } .ds-row-initial { width:18px; height:18px; display:grid; place-items:center; border-radius:4px; background:var(--tile,#f1f3f5); font-size:11px; color:var(--text-secondary,#5a6270); } .ds-row-label { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; } .ds-row-host { flex:0 0 auto; max-width:34%; overflow:hidden; text-overflow:ellipsis; font-size:12px; color:var(--text-tertiary,#666d79); }"
+    },
+    {
+      "name": "收尾线",
+      "kind": "custom",
+      "refersTo": "end-rule",
+      "description": "整栏真的渲染完、列底还剩留白时才画的一条 56×1px 短线：它说的是「就这些」，不是「还有」。",
+      "html": "<div class='ds-lines'><div class='ds-rows'><span class='ds-row-line'>粉笔</span><span class='ds-row-line'>牛客网</span><span class='ds-row-line'>力扣</span></div><span class='ds-end' aria-hidden='true'></span></div>",
+      "css": ".ds-lines { display:flex; flex-direction:column; min-height:0; } .ds-rows { display:flex; flex-direction:column; } .ds-row-line { display:flex; align-items:center; height:28px; padding:0 8px; font-size:13px; color:var(--text,#15181d); } .ds-end { flex:0 0 auto; margin:auto auto 0; width:56px; height:1px; background:var(--divider-strong,#d2d6dd); }"
+    },
+    {
+      "name": "主题键",
+      "kind": "button",
+      "refersTo": "theme-trigger",
+      "description": "状态行右端那一个键（22px）：这一页唯一「改自己样子」的入口，因此待在视线之外但一伸手就能够到。",
+      "html": "<button class='ds-theme-trigger' aria-haspopup='listbox' aria-expanded='false'><span>主题 · 纸白</span><svg viewBox='0 0 24 24' width='11' height='11' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'></path></svg></button>",
+      "css": ".ds-theme-trigger { display:inline-flex; align-items:center; gap:4px; height:22px; padding:0 6px; border:none; background:transparent; border-radius:4px; font:inherit; font-size:12px; color:var(--text-tertiary,#666d79); white-space:nowrap; cursor:pointer; transition:background 120ms ease-out, color 120ms ease-out; } .ds-theme-trigger:hover, .ds-theme-trigger[aria-expanded='true'] { background:var(--ground-hover,#f0f2f5); color:var(--text,#15181d); } .ds-theme-trigger:focus-visible { outline:2px solid var(--accent,#2f4a9e); outline-offset:2px; }"
+    },
+    {
+      "name": "主题菜单浮层",
+      "kind": "card",
+      "refersTo": "theme-trigger-open",
+      "description": "向上开的浮层（268px，8px 圆角，页面里唯一一处阴影）。每一项左侧那三格色卡自己带上目标主题的 data-theme，于是配色不需要第二份副本。",
+      "html": "<div class='ds-panel' role='listbox' aria-label='主题'><button class='ds-panel-item is-on' role='option' aria-selected='true'><span class='ds-chips' data-theme='paper' aria-hidden='true'><i class='ds-chip-text'></i><i class='ds-chip-accent'></i><i class='ds-chip-tile'></i></span><span class='ds-panel-text'><span class='ds-panel-name'>纸白</span><span class='ds-panel-hint'>浅色行式列表，日光灯下最不显眼</span></span></button><button class='ds-panel-item' role='option' aria-selected='false'><span class='ds-chips' data-theme='night' aria-hidden='true'><i class='ds-chip-text'></i><i class='ds-chip-accent'></i><i class='ds-chip-tile'></i></span><span class='ds-panel-text'><span class='ds-panel-name'>暗夜</span><span class='ds-panel-hint'>深色行式列表，不发光，晚上眼睛舒服</span></span></button></div>",
+      "css": ".ds-panel { width:268px; padding:4px; background:var(--ground,#f9fafb); border:1px solid var(--divider-strong,#d2d6dd); border-radius:8px; box-shadow:0 6px 24px rgba(0,0,0,0.22); } .ds-panel-item { display:flex; align-items:center; gap:10px; width:100%; padding:5px 8px; border:none; background:transparent; border-radius:4px; text-align:left; cursor:pointer; transition:background 120ms ease-out; } .ds-panel-item:hover { background:var(--ground-hover,#f0f2f5); } .ds-panel-item.is-on { background:var(--accent-soft,rgba(47,74,158,0.1)); } .ds-panel-item:focus-visible { outline:2px solid var(--accent,#2f4a9e); outline-offset:2px; } .ds-chips { flex:0 0 auto; display:flex; gap:2px; padding:2px; background:var(--ground,#f9fafb); border:1px solid var(--divider-strong,#d2d6dd); border-radius:3px; } .ds-chips i { display:block; width:8px; height:15px; } .ds-chip-text { background:var(--text,#15181d); } .ds-chip-accent { background:var(--accent,#2f4a9e); } .ds-chip-tile { background:var(--tile,#f1f3f5); } .ds-chips[data-theme='night'] { --ground:#12151c; --text:#e7e9ee; --accent:#8ea9ea; --tile:#1e232c; --divider-strong:#333b4a; } .ds-panel-text { display:flex; flex-direction:column; gap:2px; min-width:0; } .ds-panel-name { font-size:12px; color:var(--text,#15181d); } .ds-panel-hint { font-size:11px; line-height:1.35; color:var(--text-tertiary,#666d79); }"
+    },
+    {
+      "name": "工具栏图标键（界面）",
       "kind": "button",
       "refersTo": "icon-button",
-      "description": "A 26px chrome control: quiet ink-secondary at rest, hover-gray fill on hover, accent wash when toggled on.",
-      "html": "<button class=\"ds-iconbtn\" title=\"回到起始页\" aria-label=\"回到起始页\"><svg viewBox=\"0 0 24 24\" width=\"15\" height=\"15\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 11.5 12 4.5l8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z\"></path></svg></button>",
-      "css": ".ds-iconbtn { height:26px; min-width:26px; padding:0 6px; display:inline-flex; align-items:center; justify-content:center; border:none; background:transparent; border-radius:var(--moyu-radius-sm,4px); color:var(--moyu-text-dim,#5b6472); white-space:nowrap; transition:background 120ms ease-out,color 120ms ease-out; } .ds-iconbtn:hover:not(:disabled) { background:var(--moyu-surface-hover,#f3f4f6); color:var(--moyu-ink,#111827); } .ds-iconbtn:focus-visible { outline:2px solid var(--moyu-accent,#2563eb); outline-offset:1px; } .ds-iconbtn:disabled { color:var(--moyu-text-faint,#6f7683); opacity:.4; } .ds-iconbtn.is-on { color:var(--moyu-accent,#2563eb); background:var(--moyu-accent-soft,rgba(37,99,235,.1)); }"
+      "description": "26px 见方的界面控件：静止时次级墨，悬停换底色，开着的时候用强调色淡底；关闭键是唯一的警示红例外。",
+      "html": "<button class='ds-iconbtn' aria-label='起始页' title='回到起始页'><svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 11.5 12 4.5l8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1z'></path></svg></button><button class='ds-iconbtn is-danger' aria-label='关闭'><svg viewBox='0 0 24 24' width='15' height='15' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 6l12 12M18 6L6 18'></path></svg></button>",
+      "css": ".ds-iconbtn { height:26px; min-width:26px; padding:0 6px; display:inline-flex; align-items:center; justify-content:center; border:none; background:transparent; border-radius:4px; color:var(--text-secondary,#5a6270); white-space:nowrap; cursor:pointer; transition:background 120ms ease-out, color 120ms ease-out; } .ds-iconbtn:hover:not(:disabled) { background:var(--surface-hover,#f3f4f6); color:var(--text,#15181d); } .ds-iconbtn:focus-visible { outline:2px solid var(--accent,#2f4a9e); outline-offset:1px; } .ds-iconbtn.is-on { background:var(--accent-soft,rgba(47,74,158,0.1)); color:var(--accent,#2f4a9e); } .ds-iconbtn.is-danger:hover { background:var(--danger,#b3261e); color:var(--on-fill,#ffffff); }"
     },
     {
-      "name": "Toolbar Text Button",
+      "name": "地址栏开关（界面）",
       "kind": "button",
-      "refersTo": "text-button",
-      "description": "The chrome's labelled tools (站点 / 历史 / 书签 / 收藏 / 设置), same box as the icon button with 8px padding.",
-      "html": "<button class=\"ds-textbtn\">站点</button>",
-      "css": ".ds-textbtn { height:26px; padding:0 8px; display:inline-flex; align-items:center; justify-content:center; border:none; background:transparent; border-radius:var(--moyu-radius-sm,4px); color:var(--moyu-text-dim,#5b6472); white-space:nowrap; transition:background 120ms ease-out,color 120ms ease-out; } .ds-textbtn:hover { background:var(--moyu-surface-hover,#f3f4f6); color:var(--moyu-ink,#111827); } .ds-textbtn:focus-visible { outline:2px solid var(--moyu-accent,#2563eb); outline-offset:1px; }"
+      "refersTo": "address-toggle",
+      "description": "顶栏上一枚 26px 的胶囊：一个放大镜加当前域名；展开时变强调色淡底。窗口窄到 620px 以下收成一枚图标。",
+      "html": "<button class='ds-address-toggle' aria-expanded='false' title='展开地址栏'><svg viewBox='0 0 24 24' width='14' height='14' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='11' cy='11' r='7'></circle><path d='M20 20l-4.35-4.35'></path></svg><span class='ds-ellipsis'>github.com</span></button>",
+      "css": ".ds-address-toggle { display:inline-flex; align-items:center; gap:6px; height:26px; min-width:120px; max-width:260px; padding:0 12px; border:none; border-radius:13px; background:var(--surface-hover,#f3f4f6); color:var(--text-secondary,#5a6270); font:inherit; font-size:12px; cursor:pointer; transition:background 120ms ease-out, color 120ms ease-out; } .ds-address-toggle:hover { background:var(--surface-active,#e8eaee); color:var(--text,#15181d); } .ds-address-toggle[aria-expanded='true'] { background:var(--accent-soft,rgba(47,74,158,0.1)); color:var(--accent,#2f4a9e); } .ds-address-toggle:focus-visible { outline:2px solid var(--accent,#2f4a9e); outline-offset:1px; } .ds-ellipsis { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }"
     },
     {
-      "name": "Address Input",
-      "kind": "input",
-      "refersTo": "address-input",
-      "description": "The chrome address bar: a 26px rounded field that turns white with an accent border and soft ring on focus.",
-      "html": "<input class=\"ds-address\" type=\"text\" placeholder=\"输入网址或搜索\" spellcheck=\"false\">",
-      "css": ".ds-address { height:26px; padding:0 12px; border:1px solid transparent; border-radius:var(--moyu-radius,6px); background:var(--moyu-surface-hover,#f3f4f6); color:var(--moyu-ink,#111827); outline:none; transition:background 120ms ease-out,border-color 120ms ease-out; } .ds-address::placeholder { color:var(--moyu-text-faint,#6f7683); } .ds-address:hover { background:var(--moyu-surface-active,#e8eaee); } .ds-address:focus { background:var(--moyu-surface,#fff); border-color:var(--moyu-accent,#2563eb); box-shadow:0 0 0 2px var(--moyu-accent-soft,rgba(37,99,235,.1)); } .ds-address:focus-visible { outline:2px solid var(--moyu-accent,#2563eb); outline-offset:1px; }"
-    },
-    {
-      "name": "Tab Chip",
+      "name": "标签页（界面）",
       "kind": "chip",
       "refersTo": "tab-chip",
-      "description": "A 26px tab with a close glyph revealed on hover/active; the close hover goes danger-red.",
-      "html": "<button class=\"ds-tab is-active\"><span class=\"ds-tab-title\">起始页</span><span class=\"ds-tab-close\"><svg viewBox=\"0 0 24 24\" width=\"11\" height=\"11\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M6 6l12 12M18 6L6 18\"></path></svg></span></button>",
-      "css": ".ds-tab { display:inline-flex; align-items:center; gap:4px; height:26px; max-width:130px; padding:0 4px 0 9px; border:none; background:transparent; border-radius:var(--moyu-radius-sm,4px); color:var(--moyu-text-dim,#5b6472); transition:background 120ms ease-out,color 120ms ease-out; } .ds-tab:hover { background:var(--moyu-surface-hover,#f3f4f6); color:var(--moyu-ink,#111827); } .ds-tab.is-active { background:var(--moyu-surface-active,#e8eaee); color:var(--moyu-ink,#111827); } .ds-tab-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ds-tab-close { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:var(--moyu-radius-sm,4px); opacity:0; color:var(--moyu-text-dim,#5b6472); } .ds-tab:hover .ds-tab-close, .ds-tab.is-active .ds-tab-close { opacity:.75; } .ds-tab-close:hover { opacity:1; background:var(--moyu-surface-active,#e8eaee); color:var(--moyu-danger,#b91c1c); }"
+      "description": "26px 的标签，关闭图形平时不可见（opacity 0），悬停或当前时到 0.75，自己再被悬停时转警示红。",
+      "html": "<button class='ds-tab is-active'><span class='ds-tab-title'>起始页</span><span class='ds-tab-close'><svg viewBox='0 0 24 24' width='11' height='11' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 6l12 12M18 6L6 18'></path></svg></span></button>",
+      "css": ".ds-tab { display:inline-flex; align-items:center; gap:4px; height:26px; max-width:180px; padding:0 3px 0 8px; border:none; background:transparent; border-radius:6px; color:var(--text-secondary,#5a6270); font:inherit; font-size:12px; cursor:pointer; transition:background 120ms ease-out, color 120ms ease-out; } .ds-tab:hover { background:var(--surface-hover,#f3f4f6); color:var(--text,#15181d); } .ds-tab.is-active { background:var(--surface-active,#e8eaee); color:var(--text,#15181d); } .ds-tab:focus-visible { outline:2px solid var(--accent,#2f4a9e); outline-offset:1px; } .ds-tab-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ds-tab-close { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:4px; opacity:0; color:var(--text-secondary,#5a6270); } .ds-tab:hover .ds-tab-close, .ds-tab.is-active .ds-tab-close { opacity:0.75; } .ds-tab-close:hover { opacity:1; background:var(--surface-active,#e8eaee); color:var(--danger,#b3261e); }"
     },
     {
-      "name": "Segmented Item",
-      "kind": "chip",
-      "refersTo": "segmented-item",
-      "description": "Small chips for opacity presets (清晰/淡化/轻隐/几近无形) and zone toggles (顶部/主体/底部); the selected one takes active-gray with accent text.",
-      "html": "<div class=\"ds-seg\"><button class=\"ds-seg-item is-active\">清晰</button><button class=\"ds-seg-item\">淡化</button><button class=\"ds-seg-item\">轻隐</button></div>",
-      "css": ".ds-seg { display:inline-flex; gap:2px; } .ds-seg-item { padding:2px 6px; border:none; background:transparent; border-radius:var(--moyu-radius-sm,4px); color:var(--moyu-text-faint,#6f7683); white-space:nowrap; transition:background 120ms ease-out,color 120ms ease-out; } .ds-seg-item:hover { background:var(--moyu-surface-hover,#f3f4f6); color:var(--moyu-text,#111827); } .ds-seg-item.is-active { background:var(--moyu-surface-active,#e8eaee); color:var(--moyu-accent,#2563eb); } .ds-seg-item.is-off { color:var(--moyu-text-faint,#6f7683); text-decoration:line-through; }"
-    },
-    {
-      "name": "Opacity Slider",
+      "name": "透明度滑块（界面）",
       "kind": "input",
       "refersTo": "opacity-slider",
-      "description": "A 96x3px slider; the track is deliberately gray (not white) so it reads on the white bar, and the thumb is a 12px Focus Blue dot.",
-      "html": "<input class=\"ds-slider\" type=\"range\" min=\"5\" max=\"100\" value=\"100\" aria-label=\"透明度\">",
-      "css": ".ds-slider { width:96px; height:3px; -webkit-appearance:none; appearance:none; background:var(--moyu-border,#d1d5db); border-radius:2px; outline:none; cursor:pointer; } .ds-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:12px; height:12px; border-radius:50%; background:var(--moyu-accent,#2563eb); cursor:pointer; } .ds-slider:focus-visible { outline:2px solid var(--moyu-accent,#2563eb); outline-offset:3px; }"
+      "description": "右栏最下的两条滑块（整体透明度 / 背景透明度）：56×14 的横条转 −90° 放置，轨道由背景渐变画出 3px 的细线，圆点是 14px 的强调色。",
+      "html": "<div class='ds-opacity'><span class='ds-opacity-label'>整体</span><span class='ds-opacity-value'>100%</span><div class='ds-track-wrap'><input class='ds-slider' type='range' min='5' max='100' value='100' aria-label='整体透明度 100%'></div></div>",
+      "css": ".ds-opacity { display:flex; flex-direction:column; align-items:center; gap:1px; padding:2px 0 4px; } .ds-opacity-label, .ds-opacity-value { font-size:11px; line-height:12px; font-variant-numeric:tabular-nums; color:var(--text-secondary,#5a6270); } .ds-track-wrap { --track-len:56px; --track-thick:14px; position:relative; width:16px; height:var(--track-len); } .ds-slider { position:absolute; left:50%; top:50%; width:var(--track-len); height:var(--track-thick); margin-left:calc(var(--track-len) / -2); margin-top:calc(var(--track-thick) / -2); transform:rotate(-90deg); -webkit-appearance:none; appearance:none; background:transparent; cursor:pointer; } .ds-slider::-webkit-slider-runnable-track { height:14px; border-radius:7px; background-image:linear-gradient(var(--divider-strong,#d2d6dd), var(--divider-strong,#d2d6dd)); background-size:100% 3px; background-position:center; background-repeat:no-repeat; } .ds-slider::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%; background:var(--accent,#2f4a9e); } .ds-slider:focus-visible { outline:2px solid var(--accent,#2f4a9e); outline-offset:3px; }"
     }
   ],
   "narrative": {
-    "northStar": "The Native New Tab",
-    "overview": "This is a surface that should look like it came with the browser — not like a product someone designed. The commitment, chosen by the user, is canon: the category standard, executed impeccably, without irony or smuggled quirk. The named craft reference is the Chrome / Edge 新标签页 (browser new-tab page): a neutral ground, restrained dividers, a single accent, generous whitespace, an interface that steps back behind the content. Convention is the point, not a compromise — the page is meant to be unremarkable so that it survives being glanced at. At 25–45% opacity beside a Word window, nothing here should identify it as a reading tool (PRODUCT: concealment over beauty; familiarity over novelty).\n\nDensity is airy and single-column. A wordmark, one search field, one \"continue last\" line, a wrapped grid of site tiles, a footnote. The window is a 16:9 frame with two thin toolbars (38px top, 44px bottom) and a fully transparent middle; the chrome was re-skinned to the same palette as the page and recedes to content. The one doctrine: the canon is the commitment — execute the category standard at full fidelity, with no ironic twists and no ornamental deviation.\n\nProvenance note. This world replaced an earlier draft in a different metaphor (a Chinese OMR answer-sheet: cool card stock, registration red, numbered ovals, a 黑体/宋体 split). That draft was abandoned when the user chose canon and is not part of this system. The ordinary look is deliberate, not defaulted-into.",
+    "northStar": "报纸的栏目页",
+    "overview": "起始页是一张报纸的栏目页，不是一面图标墙。页面拥有的那件事是分类：今天摸哪条鱼——看视频、读小说、刷资讯、刷题，还是读本机的那本书。分类这件事本身是页面的主角，站点只是每个栏目底下的条目。它拒绝的类别默认是「等距圆角磁贴 + 一句欢迎语」：那个版式把二十个入口平铺在一起，等于要求用户每次自己重新分一遍类，而这个产品最贵的东西正是用户那几秒钟。\n\n自上而下五段，两套世界逐段对齐：页眉（报头 + 标签数）→ 下划线的输入行 → 栏目线 → 内容行 → 状态行（左端读数、右端主题键）。栏目线是这一页的招牌：当前那一栏的字比其余大一个数量级（26px 对 12px），底下压一根 2px 强调色短线，其余各栏吊在同一条基线上。零卡片、零阴影——层级全部由字号、字重与那根短线承担。把所有文字拿掉之后，剩下的应该是栏目线、一根细线与一列对齐的条目。\n\n三套配色（纸白 / 暗夜 / 磷绿）的名字沿用上一版，值全部重做；重做的场景是一句话：白天的办公室，屏幕旁边就是 Word 与 Excel。亮的那套因此是纸而不是纯白（旁边那些软件的白更刺眼，这一块要沉一档），暗的两套分别是「深蓝近黑」与「单色荧光屏」。主题决定的不只是颜色，还决定这一页长成哪套世界：纸白与暗夜是行式列表，磷绿是命令行（直角、等宽、扫描线）。颜色与形状的值只有一份，在 src/renderer/src/styles/themes.css；一个主题就是一段变量组，不写任何选择器。\n\nProvenance note. 这一版取代了两个已废弃的世界：一是「浏览器新标签页」那套（白色底、蓝色强调、46px 胶囊搜索框、站点磁贴墙），二是更早的「机读答题卡」（卡纸、套红、编号椭圆）。两者都不属于这套系统，界面上已经没有任何一处它们的东西。",
     "keyCharacteristics": [
-      "White ground, cool near-black ink ramp, two hairline grays, exactly one blue accent.",
-      "No gradients, no glass/blur, no decorative motion, no second accent, no third hue.",
-      "System CJK type stack (Microsoft YaHei / PingFang SC / Segoe UI / system-ui); no display face, no webfont.",
-      "Flat by default; depth appears only as a response to state (hover, focus, current).",
-      "Two surfaces — page (home.css) and chrome (tokens.css) — share one palette and font by construction; they differ only in density (13px page vs 12px chrome base)."
+      "一条栏目线（六栏：全部 / 视频 / 阅读 / 资讯 / 刷题 / 离线阅读），当前栏 26px、其余 12px，一根 2px 强调色短线压在细线上。",
+      "一列行式条目：动词 · 18px 图标格 · 名称 · 右端域名。没有卡片，没有磁贴，没有阴影。",
+      "报头与栏目线整条用的是自带的一份中文衬线（Moyu Display Serif，27,548 B 的 woff2 子集）；界面其余部分用平台字体栈。",
+      "主题管的是整个界面（顶栏、地址栏、标签条、右栏、悬浮球、面板、系统设置页、起始页），网页永远不受影响。",
+      "行高只有一个数（28px，终端世界 22px），一屏放得下几行由实测高度除出来。"
     ],
     "rules": [
-      { "name": "The One Accent Rule", "body": "Exactly one chromatic accent exists. #2563eb is used on ≤10% of any given screen and only for focus, current state, and primary action. A second accent or a third hue is the fastest way to stop looking like the browser.", "section": "colors" },
-      { "name": "The Neutral Ground Rule", "body": "The page is white and stays white. No tinted canvas, no gradient, no tonal shift to signal depth — the accent is the only color event.", "section": "colors" },
-      { "name": "The OS-Stack Rule", "body": "Type is the operating system's. Never ship a display face or a webfont; the page must look like it was rendered by the browser's own engine, because it was.", "section": "typography" },
-      { "name": "The One-Column Rule", "body": "One centered column, one grid, no long vertical scroll. Height is the scarce axis in a 16:9 stealth window; content grows sideways, never downward.", "section": "layout" },
-      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. A shadow is always a response to state (hover, focus), never a standing decoration.", "section": "elevation" },
-      { "name": "The No-Glass Rule", "body": "No backdrop-filter, no blur, no translucency on any painted layer. The window is transparent by construction; an opaque or frosted layer would break the product.", "section": "elevation" },
-      { "name": "The Hairline Rule", "body": "All separation is a 1px line or a tonal fill. The only strokes thicker than a hairline are focus rings, and those exist for accessibility under low opacity, not for looks.", "section": "shapes" }
+      {
+        "name": "The One Accent Rule",
+        "body": "每套主题只有一个有彩色，它出现在不超过一屏 10% 的面积上，且只用于当前与动作：当前栏的短线、当前行、焦点、主要动作。第二个强调色或第三个色相是这套东西最快失效的方式。",
+        "section": "colors"
+      },
+      {
+        "name": "The Paper Ground Rule",
+        "body": "页的地是 #f9fafb，#ffffff 留给界面的面。地比面沉一档是这个系统里唯一的「深度」表达，改用纯白铺地，顶栏那一条白就会和它连成一整片，工具条的边也就没了。暗夜与磷绿下地与面是同一个值——深色下没有再沉一档的余量，那里靠线分界。",
+        "section": "colors"
+      },
+      {
+        "name": "The Two-Faces Rule",
+        "body": "展示字只给报头与栏目线整条：栏目线是一行排出来的字，不是一排控件，因此它从头到尾是同一个字面，字大小的差别承担层级。除此之外任何地方——行、状态行、顶栏、设置页——都用平台字体栈，不引入第三种字。终端世界连报头与栏目线也用那一套等宽字。",
+        "section": "typography"
+      },
+      {
+        "name": "The 11px Floor Rule",
+        "body": "界面里没有字号小于 11px 的文字，正文与关键标签不小于 12px。低透明度（25%–45%）下对比度整体下降，字号是那几秒里唯一还站在用户这边的东西。",
+        "section": "typography"
+      },
+      {
+        "name": "The One-Column Rule",
+        "body": "一列，不长滚动。高度是 16:9 隐蔽窗口里稀缺的那一轴，内容横向组织、按高度截断，绝不往下堆。",
+        "section": "layout"
+      },
+      {
+        "name": "The Measured-Limit Rule",
+        "body": "一屏放得下几行的唯一算法是 floor(实测高度 ÷ 行高)，放20不下的不渲染——裁出来的半行比没有这一行更难看。行高是皮的属性（两套世界各一档），高度是量出来的，因此页面里没有一处写死的行数。一句可执行的验法：改窗口高度，行数跟着变；改行高，行数与截断位置一起变。",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "平铺的面上不画阴影。阴影只属于真的浮在页面或桌面之上的一层——主题菜单的浮层、悬浮球、裁剪弹窗。行与栏目键的悬停是换底色，不是抬起来。",
+        "section": "elevation"
+      },
+      {
+        "name": "The No-Glass Rule",
+        "body": "不用 backdrop-filter、不用模糊、不给画出来的层加半透明。窗口是透明的，毛玻璃在窗口背后模糊不了桌面，只能模糊窗口自身的内容——这是机制上就错的，不是审美取舍。",
+        "section": "elevation"
+      },
+      {
+        "name": "The Hairline Rule",
+        "body": "分界是一条 1px 线或一块底色。比发丝线粗的只有那根 2px 强调色短线与焦点轮廓，后者是为了低透明度下的可辨识，不是为了好看。",
+        "section": "shapes"
+      },
+      {
+        "name": "The Square-Corners Rule",
+        "body": "终端世界把圆角整组归零，且必须整组——页上写死的字面量（滚动条的角、标签数的小牌）也要走令牌，否则磷绿下会剩下一半是圆角的。要归零的是方块的角。",
+        "section": "shapes"
+      }
     ],
     "dos": [
-      "Do keep the ground white and the accent singular: #2563eb for focus/current/primary only, on ≤10% of the screen (The One Accent Rule).",
-      "Do use the OS CJK stack and only the sizes in the ramp: 12 / 13 / 14 / 30px (The OS-Stack Rule).",
-      "Do express every state as a background or outline change at 120ms (fields 140ms) ease-out, in response to hover or focus (The Flat-By-Default Rule).",
-      "Do keep the page and the chrome on one palette — they alias identical values by construction. When you touch one, touch the other.",
-      "Do keep the chrome's middle fully transparent with pointer-events: none so the mouse reaches the page or the desktop.",
-      "Do keep text at 12px or larger and give key controls a shape or position cue, not a color cue, so they stay distinguishable at 25–45% window opacity."
+      "要 用栏目线做分类：当前那一栏 26px + 2px 强调色短线，其余 12px 同一条基线（Mini 档 18px / 11px，退两字缩写）。",
+      "要 把行高当成唯一的一个数：28px（终端世界 22px）、迷你档 24 / 20px；行数由 floor(实测高度 ÷ 行高) 得出，放不下的不渲染（The Measured-Limit Rule）。",
+      "要 让换栏那一下只播一次、且在同一个时长同一条缓动上：settle 与 rule-in，各 180ms cubic-bezier(0.16, 1, 0.3, 1)，只在真的换栏时播——首帧不播，打字过滤不重放，减少动态下整组撤掉。",
+      "要 把层级交给字号、字重与那根 2px 短线，分界交给 1px 细线（#e6e8ec / #d2d6dd）（The Hairline Rule）。",
+      "要 让页的地（#f9fafb）比界面的面（#ffffff）沉一档，两者差 6/255（The Paper Ground Rule）。",
+      "要 在 25%–45% 的窗口透明度下仍能靠形状与位置分辨每一个关键控件——不能只靠颜色；文字不小于 11px，正文与关键标签不小于 12px（The 11px Floor Rule）。",
+      "要 让本机文件的行既不在文字里带路径，也不在任何属性上带路径（title 也不挂）：C:\\Users\\… 把用户名和目录习惯一起摊在屏幕上，而这一页从不显示路径。",
+      "要 让主题只改配色与形状：一个主题 = 一段变量组，不写选择器；颜色只改 themes.css 一个文件——页与界面共用它，两边的同名令牌由它一次给全。"
     ],
     "donts": [
-      "Don't add a second accent or a third hue; the one blue is the whole system (The One Accent Rule).",
-      "Don't use gradients, glass, backdrop-filter, or blur — the last is mechanically wrong on a transparent window (The No-Glass Rule).",
-      "Don't add decorative motion; state changes are the only transitions, and they do not move anything.",
-      "Don't use a display face, a webfont, or glyph/Unicode characters as icons; use the authored 24px / 1.6-stroke SVG set.",
-      "Don't smuggle in quirk or irony — toolbars made to look like something else, ornamental asymmetry, or a \"designed\" flourish. The canon is the commitment.",
-      "Don't reintroduce the abandoned OMR answer-sheet world (card stock, registration red, question numbers and ovals, a 黑体/宋体 split); it was replaced by canon and is out of this system."
+      "不要 做磁贴墙、卡片、欢迎语或装饰性插图：入口平铺成等距磁贴，等于要求用户每次自己重新分一遍类。",
+      "不要 加第二个强调色或第三个色相；每套主题只有一个有彩色，且只用它 10% 以内的面积（The One Accent Rule）。",
+      "不要 用 backdrop-filter、毛玻璃或任何铺在窗口中部的不透明层——中部必须逐像素透明，露出的应该是网页或桌面（The No-Glass Rule）。",
+      "不要 把扫描线那一层搬进界面层：它是铺满视口的覆盖层，进了 chrome 就把桌面盖住。",
+      "不要 给平铺的面上加阴影，也不要给行加悬停上浮——行与栏目键的悬停是换底色（The Flat-By-Default Rule）。",
+      "不要 用 Unicode 字符冒充图标，也不要用一个字体去决定控件里图形的字重与基线。",
+      "不要 把展示字用到报头与栏目线之外，也不要给终端世界加第二副字（--font-display 就是那套等宽字）（The Two-Faces Rule）。",
+      "不要 把主题键从状态行右端搬走：那是这一页上唯一「改自己样子」的入口，它属于状态，不属于内容。",
+      "不要 在终端世界里把正圆削成方块：border-radius: 50% 的悬浮球、滑块圆点、标签小点跟着归零的是方块的角（The Square-Corners Rule）。"
     ]
   }
 }

@@ -1,294 +1,420 @@
 ---
 name: 摸鱼阅读 (moyu-reader)
-description: The browser new-tab page you cannot tell we built — white ground, one blue accent, system type.
+description: 报纸的栏目页：一条栏目线做分类，一列横向条目做入口，三套配色，零卡片。
 colors:
-  ground: "#ffffff"
-  ground-hover: "#f3f4f6"
-  ground-active: "#e8eaee"
+  ground: "#f9fafb"
+  ground-hover: "#f0f2f5"
+  ground-active: "#e6e9ee"
   tile: "#f1f3f5"
-  ink: "#111827"
-  ink-secondary: "#5b6472"
-  ink-tertiary: "#6f7683"
-  divider: "#e5e7eb"
-  divider-strong: "#d1d5db"
-  accent: "#2563eb"
-  accent-hover: "#1d4ed8"
-  accent-soft: "rgba(37, 99, 235, 0.1)"
-  danger: "#b91c1c"
+  text: "#15181d"
+  text-secondary: "#5a6270"
+  text-tertiary: "#666d79"
+  divider: "#e6e8ec"
+  divider-strong: "#d2d6dd"
+  surface: "#ffffff"
+  surface-hover: "#f3f4f6"
+  surface-active: "#e8eaee"
+  chrome-ground: "#f6f7f9"
+  accent: "#2f4a9e"
+  accent-hover: "#273f86"
+  accent-soft: "rgba(47, 74, 158, 0.1)"
+  danger: "#b3261e"
+  sunken: "#eef0f3"
+  selected: "#eef1fa"
+  on-fill: "#ffffff"
 typography:
   display:
-    fontFamily: "Microsoft YaHei, PingFang SC, Segoe UI, system-ui, sans-serif"
-    fontSize: "30px"
-    fontWeight: 500
-    letterSpacing: "0.08em"
-  title:
-    fontFamily: "Microsoft YaHei, PingFang SC, Segoe UI, system-ui, sans-serif"
-    fontSize: "14px"
+    fontFamily: "'Moyu Display Serif', 'Noto Serif SC', 'Source Han Serif SC', SimSun, 'Songti SC', serif"
+    fontSize: "15px"
+    fontWeight: 700
+    letterSpacing: "0.1em"
+  headline:
+    fontFamily: "'Moyu Display Serif', 'Noto Serif SC', 'Source Han Serif SC', SimSun, 'Songti SC', serif"
+    fontSize: "26px"
     fontWeight: 400
+    lineHeight: 1.15
+  headline-compact:
+    fontFamily: "'Moyu Display Serif', 'Noto Serif SC', 'Source Han Serif SC', SimSun, 'Songti SC', serif"
+    fontSize: "18px"
+    fontWeight: 400
+    lineHeight: 1.15
   body:
-    fontFamily: "Microsoft YaHei, PingFang SC, Segoe UI, system-ui, sans-serif"
+    fontFamily: "'Microsoft YaHei', 'PingFang SC', 'Segoe UI', system-ui, sans-serif"
     fontSize: "13px"
     fontWeight: 400
   label:
-    fontFamily: "Microsoft YaHei, PingFang SC, Segoe UI, system-ui, sans-serif"
+    fontFamily: "'Microsoft YaHei', 'PingFang SC', 'Segoe UI', system-ui, sans-serif"
     fontSize: "12px"
     fontWeight: 400
+  caption:
+    fontFamily: "'Microsoft YaHei', 'PingFang SC', 'Segoe UI', system-ui, sans-serif"
+    fontSize: "11px"
+    fontWeight: 400
+  mono:
+    fontFamily: "'Cascadia Mono', Consolas, 'Sarasa Mono SC', 'Microsoft YaHei', monospace"
 rounded:
   sm: "4px"
-  md-chrome: "6px"
-  md-page: "8px"
-  pill: "999px"
+  md: "8px"
+  chrome-sm: "4px"
+  chrome: "6px"
+  chrome-md: "12px"
+  chrome-pill: "13px"
+  chrome-tag: "8px"
+  chrome-track: "7px"
 spacing:
-  "1": "1px"
   "2": "2px"
   "4": "4px"
   "6": "6px"
   "8": "8px"
   "10": "10px"
   "12": "12px"
+  "16": "16px"
+  "18": "18px"
+  "22": "22px"
 components:
-  search-field:
+  plate-current:
+    textColor: "{colors.text}"
+    typography: "{typography.headline}"
+    padding: "0 0 6px"
+  plate-rest:
+    textColor: "{colors.text-tertiary}"
+    typography: "{typography.label}"
+    padding: "0 0 6px"
+  plate-rest-hover:
+    textColor: "{colors.text-secondary}"
+  prompt-row:
     backgroundColor: "{colors.ground}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.pill}"
-    padding: "0 20px"
-    height: "46px"
-  search-field-focus:
-    backgroundColor: "{colors.ground}"
-    rounded: "{rounded.pill}"
-  site-tile:
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    padding: "0 0 6px"
+    height: "32px"
+  home-row:
     backgroundColor: "transparent"
-    textColor: "{colors.ink-secondary}"
-    rounded: "{rounded.md-page}"
-    padding: "10px 4px"
-  site-tile-hover:
+    textColor: "{colors.text}"
+    typography: "{typography.body}"
+    rounded: "{rounded.sm}"
+    padding: "0 8px"
+    height: "28px"
+  home-row-hover:
     backgroundColor: "{colors.ground-hover}"
-  site-tile-current:
-    textColor: "{colors.accent}"
+  row-initial:
+    backgroundColor: "{colors.tile}"
+    textColor: "{colors.text-secondary}"
+    rounded: "{rounded.sm}"
+    size: "18px"
+  theme-trigger:
+    backgroundColor: "transparent"
+    textColor: "{colors.text-tertiary}"
+    rounded: "{rounded.sm}"
+    padding: "0 6px"
+    height: "22px"
+  theme-trigger-open:
+    backgroundColor: "{colors.ground-hover}"
+    textColor: "{colors.text}"
+  end-rule:
+    backgroundColor: "{colors.divider-strong}"
+    width: "56px"
+    height: "1px"
   icon-button:
     backgroundColor: "transparent"
-    textColor: "{colors.ink-secondary}"
-    rounded: "{rounded.sm}"
+    textColor: "{colors.text-secondary}"
+    rounded: "{rounded.chrome-sm}"
     padding: "0 6px"
     height: "26px"
   icon-button-hover:
-    backgroundColor: "{colors.ground-hover}"
-    textColor: "{colors.ink}"
-  icon-button-on:
-    backgroundColor: "{colors.accent-soft}"
-    textColor: "{colors.accent}"
+    backgroundColor: "{colors.surface-hover}"
+    textColor: "{colors.text}"
   text-button:
     backgroundColor: "transparent"
-    textColor: "{colors.ink-secondary}"
-    rounded: "{rounded.sm}"
+    textColor: "{colors.text-secondary}"
+    rounded: "{rounded.chrome-sm}"
     padding: "0 8px"
     height: "26px"
-  text-button-hover:
-    backgroundColor: "{colors.ground-hover}"
-    textColor: "{colors.ink}"
-  address-input:
-    backgroundColor: "{colors.ground-hover}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.md-chrome}"
+  address-toggle:
+    backgroundColor: "{colors.surface-hover}"
+    textColor: "{colors.text-secondary}"
+    rounded: "{rounded.chrome-pill}"
     padding: "0 12px"
     height: "26px"
-  address-input-focus:
-    backgroundColor: "{colors.ground}"
-    rounded: "{rounded.md-chrome}"
   tab-chip:
     backgroundColor: "transparent"
-    textColor: "{colors.ink-secondary}"
-    rounded: "{rounded.sm}"
-    padding: "0 4px 0 9px"
+    textColor: "{colors.text-secondary}"
+    rounded: "{rounded.chrome}"
+    padding: "0 3px 0 8px"
     height: "26px"
+    width: "180px"
   tab-chip-active:
-    backgroundColor: "{colors.ground-active}"
-    textColor: "{colors.ink}"
-  segmented-item:
-    backgroundColor: "transparent"
-    textColor: "{colors.ink-tertiary}"
-    rounded: "{rounded.sm}"
-    padding: "2px 6px"
-  segmented-item-active:
-    backgroundColor: "{colors.ground-active}"
-    textColor: "{colors.accent}"
-  opacity-slider:
-    backgroundColor: "{colors.divider-strong}"
-    width: "96px"
-    height: "3px"
+    backgroundColor: "{colors.surface-active}"
+    textColor: "{colors.text}"
 ---
 
 # Design System: 摸鱼阅读 (moyu-reader)
 
 ## Overview
 
-**Creative North Star: "The Native New Tab."**
+**Creative North Star: "报纸的栏目页"**
 
-This is a surface that should look like it came with the browser — not like a product someone designed. The commitment, chosen by the user, is **canon: the category standard, executed impeccably, without irony or smuggled quirk**. The named craft reference is the **Chrome / Edge 新标签页 (browser new-tab page)**: a neutral ground, restrained dividers, a single accent, generous whitespace, an interface that steps back behind the content. Convention is the point, not a compromise — the page is meant to be unremarkable so that it survives being glanced at. At 25–45% opacity beside a Word window, nothing here should identify it as a reading tool (PRODUCT: concealment over beauty; familiarity over novelty).
+起始页是一张报纸的**栏目页**，不是一面图标墙。页面拥有的那件事是**分类**：今天摸哪条鱼——看视频、读小说、刷资讯、刷题，还是读本机的那本书。分类这件事本身是页面的主角，站点只是每个栏目底下的条目。它拒绝的类别默认是「等距圆角磁贴 + 一句欢迎语」：那个版式把二十个入口平铺在一起，等于要求用户每次自己重新分一遍类，而这个产品最贵的东西正是用户那几秒钟。
 
-Density is airy and single-column. A wordmark, one search field, one "continue last" line, a wrapped grid of site tiles, a footnote. The window is a 16:9 frame with a 38px top bar and a 48px right rail around a fully transparent middle; the chrome was re-skinned to the same palette as the page and recedes to content. The one doctrine: **the canon is the commitment — execute the category standard at full fidelity, with no ironic twists and no ornamental deviation.**
+自上而下五段，两套世界逐段对齐：页眉（报头 + 标签数）→ 下划线的输入行 → **栏目线** → 内容行 → 状态行（左端读数、右端主题键）。栏目线是这一页的招牌：当前那一栏的字比其余大一个数量级（26px 对 12px），底下压一根 2px 强调色短线，其余各栏吊在同一条基线上。**零卡片、零阴影**——层级全部由字号、字重与那根短线承担。把所有文字拿掉之后，剩下的应该是栏目线、一根细线与一列对齐的条目。
 
-**Provenance note.** This world replaced an earlier draft in a different metaphor (a Chinese OMR answer-sheet: cool card stock, registration red, numbered ovals, a 黑体/宋体 split). That draft was abandoned when the user chose canon and is **not** part of this system. The ordinary look is deliberate, not defaulted-into.
+三套配色（纸白 / 暗夜 / 磷绿）的名字沿用上一版，**值全部重做**；重做的场景是一句话：白天的办公室，屏幕旁边就是 Word 与 Excel。亮的那套因此是纸而不是纯白（旁边那些软件的白更刺眼，这一块要沉一档），暗的两套分别是「深蓝近黑」与「单色荧光屏」。主题决定的不只是颜色，还决定这一页长成哪套世界：纸白与暗夜是行式列表，磷绿是命令行（直角、等宽、扫描线）。颜色与形状的**值**只有一份，在 `src/renderer/src/styles/themes.css`；一个主题就是一段变量组，不写任何选择器。
+
+**Provenance note.** 这一版取代了两个已废弃的世界：一是「浏览器新标签页」那套（白色底、蓝色强调、46px 胶囊搜索框、站点磁贴墙），二是更早的「机读答题卡」（卡纸、套红、编号椭圆）。两者都不属于这套系统，界面上已经没有任何一处它们的东西。
 
 **Key Characteristics:**
-- White ground, cool near-black ink ramp, two hairline grays, exactly one blue accent.
-- No gradients, no glass/blur, no decorative motion, no second accent, no third hue.
-- System CJK type stack (Microsoft YaHei / PingFang SC / Segoe UI / system-ui); no display face, no webfont.
-- Flat by default; depth appears only as a response to state (hover, focus, current).
-- Two surfaces — page (`home.css`) and chrome (`tokens.css`) — share one palette and font by construction: both read the same theme layer (`themes.css`). They differ only in density (13px page vs 12px chrome base).
+- 一条栏目线（六栏：全部 / 视频 / 阅读 / 资讯 / 刷题 / 离线阅读），当前栏 26px、其余 12px，一根 2px 强调色短线压在细线上。
+- 一列行式条目：动词 · 18px 图标格 · 名称 · 右端域名。没有卡片，没有磁贴，没有阴影。
+- 报头与栏目线整条用的是**自带的一份中文衬线**（`Moyu Display Serif`，27,548 B 的 woff2 子集）；界面其余部分用平台字体栈。
+- 主题管的是整个界面（顶栏、地址栏、标签条、右栏、悬浮球、面板、系统设置页、起始页），网页永远不受影响。
+- 行高只有一个数（28px，终端世界 22px），一屏放得下几行由**实测高度**除出来。
 
 ## Colors
 
-A neutral white page lit by one cool blue. Everything that is not the accent is either ink (three steps) or a hairline/tile gray. There is no secondary and no tertiary accent.
+纸/靛两级墨加一个强调色：纸白的页底是冷白纸 `#f9fafb`，字从 `#15181d` 到 `#666d79` 分三级，细线两级，强调只有一个靛 `#2f4a9e`；暗夜与磷绿是同一套结构的暗色形态。没有渐变、没有第二个色相、没有色块导航。
 
 ### Primary
-- **Focus Blue** (`#2563eb`, `--accent` / `--moyu-accent`): the only chromatic color. Used for keyboard focus rings, the currently-open site tile, the active toolbar toggle, and the slider thumb — i.e. focus, current, and primary action, never decoration. Hover darkens it to **Focus Blue Deep** (`#1d4ed8`, `--accent-hover` / `--moyu-accent-hover`); its soft wash is **Focus Blue Wash** (`rgba(37, 99, 235, 0.1)`, `--accent-soft` / `--moyu-accent-soft`) used for text selection, the "continue last" lit state, and active toggles.
-- **Danger Red** (`#b91c1c`, `--moyu-danger`): chrome-only. Appears solely as the hover fill of the window close button and the hover color of a tab's close glyph. It is a destructive-affordance signal, not a palette color.
+- **靛强调 Indigo** (`#2f4a9e`, `--accent` / `--moyu-accent`)：整套系统唯一的有彩色。它长在按钮与栏目线上——当前栏底下那根 2px 短线、状态行左端的读数、「继续」与「打开文件…」的动词列、输入行获得焦点时的下划线、键鼠焦点轮廓、白字可读的那枚悬浮球。悬停深一档为 `#273f86`（`--accent-hover`）；淡底是 `rgba(47, 74, 158, 0.1)`（`--accent-soft`），用于文本选中、当前主题项、开关的「开着」态。
+  **不是浏览器蓝。** `#2563eb` 那一档蓝是「链接的颜色」，而这个程序的每一处强调色都不在链接上。靛够深（压白 8:1），因此有富余把选中面 `#eef1fa` 染得看得见——那张面上压强调色是 7.2:1，比 4.5:1 的要求宽出一倍多。
+- **警示红 Danger** (`#b3261e`, `--moyu-danger`)：只在界面层出现，只做一件事——窗口关闭键悬停时的填充、标签关闭图形悬停时的颜色。它是破坏性动作的信号，不是调色板里的一种颜色。
 
 ### Neutral
-- **Ground White** (`#ffffff`, `--ground` / `--moyu-surface`): the page and toolbar surface, and the `paper` theme's ground.
-- **Hover Gray** (`#f3f4f6`, `--ground-hover` / `--moyu-surface-hover`): every interactive hover fill, and the address field's resting fill.
-- **Active Gray** (`#e8eaee`, `--ground-active` / `--moyu-surface-active`): pressed tiles, the active tab, the selected preset/zone, and the address field on hover.
-- **Tile Gray** (`#f1f3f5`, `--tile`, page-only): the circular well behind a site's favicon.
-- **Ink** (`#111827`, `--text` / `--moyu-ink` / `--moyu-text`): primary text and the darkest wordmark.
-- **Ink Secondary** (`#5b6472`, `--text-secondary` / `--moyu-text-dim`): labels, tool glyphs, tile labels at rest. Declared to meet 4.5:1, so it stays legible when window opacity drops.
-- **Ink Tertiary** (`#6f7683`, `--text-tertiary` / `--moyu-text-faint`): the least-prominent text — input placeholders, the footnote, inactive toggles, disabled glyphs.
-- **Hairline** (`#e5e7eb`, `--divider` / `--moyu-hairline`): the 1px rule under the top bar and to the left of the right rail, and the search field's resting border.
-- **Hairline Strong** (`#d1d5db`, `--divider-strong` / `--moyu-border`): the search field border and the opacity slider track.
+- **纸白页底 Paper Ground** (`#f9fafb`, `--ground`)：起始页与系统设置页的**地**。
+- **纸白悬停 / 按下** (`#f0f2f5` / `#e6e9ee`, `--ground-hover` / `--ground-active`)：行的悬停与按下填充。
+- **工具条面 Toolbar Surface** (`#ffffff`, `--moyu-surface`)：顶栏、地址栏、右栏、弹出面板的**面**。纯白只留给这里——它们要像浏览器自己的工具条。地与面差 6/255，单看看不出来，并排看就是「工具条浮在纸上」。悬停 `#f3f4f6`，按下 `#e8eaee`。
+- **设置页底板 Settings Ground** (`#f6f7f9`, `--moyu-ground`)：系统设置那一页整页都是卡片，页底要再暗一档卡片才浮得起来。这个差别一直存在，不是这一版改出来的。
+- **图标垫 Tile Gray** (`#f1f3f5`, `--tile`)：没有站点图标时那一格首字母的底。
+- **墨 Ink** (`#15181d`, `--text` / `--moyu-ink` / `--moyu-text`)：正文与报头。
+- **次级墨** (`#5a6270`, `--text-secondary` / `--moyu-text-dim`)：悬停中的栏目名、首字母、界面的标签与文字键。
+- **三级墨** (`#666d79`, `--text-tertiary` / `--moyu-text-faint`)：其余五栏的栏目名、动词列、右端域名、状态行、注脚。这一档量的是**页底**而不是界面的面：压页底 4.64:1，压白色的面 4.85:1（探针 `spike/theme-chrome.js` 逐条量过，`#767e8c` 那一档正是压页底不合格被否掉的）。
+- **细线 Hairline** (`#e6e8ec`, `--divider` / `--moyu-hairline`)：栏目线底下那根线、注脚与状态行的上边、顶栏与右栏的分隔。
+- **深细线 Hairline Strong** (`#d2d6dd`, `--divider-strong` / `--moyu-border`)：输入行的下划线、收尾线、行内公式式的底，以及滚动条。终端世界把这两根线换成暗绿 `#12401f` / `#1e6b35`。
+- **凹槽底 Sunken** (`#eef0f3`, `--moyu-sunken`，悬停 `#e2e5ea`)：设置页左栏与行内代码的底。它与「面」是两种面——面是浮在页底上的卡片（比页底亮），这个是页上的一道凹槽（比页底暗）；深色主题下方向正好相反，因此不能拿同一个名字凑合。
+- **选中底 Selected** (`#eef1fa`, `--moyu-selected`)：设置页上被选中的按钮，字是强调色。
+- **填充上的字 On Fill** (`#ffffff`, `--moyu-on-fill`)：画在实色填充（强调色、警示红）之上的字。它跟着主题翻面而不是钉死成白：靛上压白是 8:1，而深色主题的强调色是亮的（`#8ea9ea` / `#6bffa4`），白字压上去只剩 2.4:1 与 1.3:1。
 
 ### Named Rules
-**The One Accent Rule.** Exactly one chromatic accent exists. `#2563eb` is used on ≤10% of any given screen and only for focus, current state, and primary action. A second accent or a third hue is the fastest way to stop looking like the browser.
+**The One Accent Rule.** 每套主题只有一个有彩色，它出现在不超过一屏 10% 的面积上，且只用于**当前**与**动作**：当前栏的短线、当前行、焦点、主要动作。第二个强调色或第三个色相是这套东西最快失效的方式。
 
-**The Neutral Ground Rule.** The page is white and stays white. No tinted canvas, no gradient, no tonal shift to signal depth — the accent is the only color event.
+**The Paper Ground Rule.** 页的**地**是 `#f9fafb`，`#ffffff` 留给界面的**面**。地比面沉一档是这个系统里唯一的「深度」表达，改用纯白铺地，顶栏那一条白就会和它连成一整片，工具条的边也就没了。暗夜与磷绿下地与面是同一个值——深色下没有再沉一档的余量，那里靠线分界。
 
 ### Themes
 
-**Themes.** Three palettes ship — `paper`, `night`, `crt-green` — and they are selected with `html[data-theme]` plus `html[data-world]` (`themes.css`). Everything named above is the `paper` default, and every theme keeps the same variable names and the same shape of the system.
+三套主题的名字沿用上一版，值全部重做。一个主题 = 一段变量组（`themes.css`），不写任何选择器；主题名与世界名由四份文档各自写在 `html[data-theme]` / `html[data-world]` 上，颜色与形状的对照表在 `@shared/constants` 的 `HOME_THEMES` 里。下表逐值给出三套主题；**纸白那一列与 frontmatter 是同一份值**（它是默认主题，也是兜底：`:root` 一并列出它，配置还没读回来时不会出现「变量没有值」）。
 
-- **Night** keeps the structure above — three ink steps, one blue accent, hairlines — and reads it against a near-black ground instead of a white one.
-- **Phosphor green** (`crt-green`, the only terminal-world theme so far) replaces the neutral ground with a single luminous ink on a near-black ground. It adds what a terminal has and a browser does not: zero radii, a monospace stack (with a CJK face in it, so a line of mixed text is still one typeface), and `text-shadow: 0 0 5px currentColor` so the whole surface glows rather than a few labels. The block cursor after the wordmark and the `>` prompt in the search row are the theme's only other marks. Four further phosphor palettes (`crt-amber`, `crt-ice`, `crt-white`, `dos`) were cut in an earlier release; old configs migrate to `crt-green` (`LEGACY_HOME_THEMES`).
+**页（起始页与设置页）**
 
-**Theme and world are orthogonal.** The palette and the shape are two separate variable groups on the same root: the theme block supplies colors, `html[data-world='terminal']` supplies radii and the font stack, and the mapping from theme to world lives in one table (`HOME_THEMES` in `@shared/constants`). Adding a terminal-world palette is adding a palette, not a code path.
+| 变量 | 纸白 paper | 暗夜 night | 磷绿 crt-green |
+|---|---|---|---|
+| `--ground` | `#f9fafb` | `#12151c` | `#050b07` |
+| `--ground-hover` | `#f0f2f5` | `#1b1f28` | `rgba(87, 240, 140, 0.08)` |
+| `--ground-active` | `#e6e9ee` | `#232833` | `rgba(87, 240, 140, 0.15)` |
+| `--tile` | `#f1f3f5` | `#1e232c` | `rgba(87, 240, 140, 0.1)` |
+| `--divider` | `#e6e8ec` | `#242a36` | `#12401f` |
+| `--divider-strong` | `#d2d6dd` | `#333b4a` | `#1e6b35` |
+| `--text` | `#15181d` | `#e7e9ee` | `#57f08c` |
+| `--text-secondary` | `#5a6270` | `#a3aab8` | `#3cc46f` |
+| `--text-tertiary` | `#666d79` | `#7e8697` | `#2b9455` |
+| `--accent` | `#2f4a9e` | `#8ea9ea` | `#6bffa4` |
+| `--accent-hover` | `#273f86` | `#a8c0f2` | `#9bffc2` |
+| `--accent-soft` | `rgba(47, 74, 158, 0.1)` | `rgba(142, 169, 234, 0.14)` | `rgba(107, 255, 164, 0.14)` |
 
-**The theme belongs to the whole interface, not to the page.** All four renderer documents — chrome, popover, settings, start page — load the same theme layer and write the same attributes on their own root; there is no inheritance path between them, which is why the layer is a shared stylesheet rather than a set of selectors. A theme is a variable block and nothing more: no theme-specific selectors outside the shape rules, and the picker's swatches lean on the same property — a nested element carrying `data-theme` resolves that theme's variables inside itself, so the list shows real palettes with no second copy of the hex values anywhere.
+三级墨压各自的底实测：纸白 4.64 / 暗夜 5.0 / 磷绿 5.2（终端的整套是 13.5 / 8.8 / 5.2，页底近黑所以对比更高）。字压底一律 ≥4.5:1。
 
-**One thing deliberately stays behind.** The scanline-and-vignette overlay (`body::after`) is a full-viewport layer, so it lives in `home.css` and applies to the start page only. On the chrome it would cover the transparent middle — the region that has to stay pixel-transparent so the desktop shows through. That is a mechanism constraint, not a taste call.
+**界面（顶栏、地址栏、标签条、右栏、悬浮球、面板）**
+
+界面的「面」在主题层里存的是三通道（`255 255 255` 这种写法，不带 alpha），由 `tokens.css` 拼上「界面底板透明度」`--moyu-alpha`——只有这样那条滑块才能把底板整体乘淡，字与图标始终不透明。下表给的是等价实色（alpha = 1）。
+
+| 变量 | 纸白 | 暗夜 | 磷绿 |
+|---|---|---|---|
+| `--moyu-surface` | `#ffffff` | `#12151c` | `#050b07` |
+| `--moyu-surface-hover` | `#f3f4f6` | `#1b1f28` | `#0c1d12` |
+| `--moyu-surface-active` | `#e8eaee` | `#232833` | `#112d1b` |
+| `--moyu-hairline` | `#e6e8ec` | `#242a36` | `#12401f` |
+| `--moyu-border` | `#d2d6dd` | `#333b4a` | `#1e6b35` |
+| `--moyu-ink` / `--moyu-text` | `#15181d` | `#e7e9ee` | `#57f08c` |
+| `--moyu-text-dim` | `#5a6270` | `#a3aab8` | `#3cc46f` |
+| `--moyu-text-faint` | `#666d79` | `#7e8697` | `#2b9455` |
+| `--moyu-accent` / `-hover` | `#2f4a9e` / `#273f86` | `#8ea9ea` / `#a8c0f2` | `#6bffa4` / `#9bffc2` |
+| `--moyu-accent-soft` | `rgba(47, 74, 158, 0.1)` | `rgba(142, 169, 234, 0.14)` | `rgba(107, 255, 164, 0.14)` |
+| `--moyu-danger` | `#b3261e` | `#ff9a9a` | `#ff9a7a` |
+| `--moyu-danger-soft` | `#fdf3f2` | `rgba(255, 154, 154, 0.14)` | `rgba(255, 154, 122, 0.16)` |
+| `--moyu-sunken` / `-hover` | `#eef0f3` / `#e2e5ea` | `#0b0d10` / `#1a1d23` | `#010402` / `#0c1d12` |
+| `--moyu-selected` | `#eef1fa` | `rgba(142, 169, 234, 0.12)` | `rgba(107, 255, 164, 0.14)` |
+| `--moyu-on-fill` | `#ffffff` | `#12151c` | `#050b07` |
+| `--moyu-ground` | `#f6f7f9` | `#101216` | `#030704` |
+
+磷绿那三个三通道面不能直接搬页上那两个 `rgba`：它们是 0.08 与 0.15 的荧光绿叠在 `#050b07` 上之后的结果（`#0c1d12` / `#112d1b`），与起始页那两个悬停**严格同色**。界面与页共用一份主题层的理由是硬的：四份文档各自加载自己的样式表，**没有继承路径**，起始页的变量传不到顶栏与右栏去；想让主题管到整个界面，只能让四份文档加载同一份主题层，再各自在根上写同一个属性（`--moyu-alpha` 早就是这么做的）。
+
+**网页永远不受影响。** 访客页面是另一个 `WebContentsView`，拿不到这份样式表，也拿不到这两个属性。读懂这一条就明白「主题管整个界面」的边界在哪。
 
 ## Typography
 
-**Display Font:** system CJK stack — Microsoft YaHei, PingFang SC, Segoe UI, system-ui (`--font` / `--moyu-font`)
-**Body Font:** the same stack (there is only one family)
-**Label/Mono Font:** none in the modern world; the terminal world swaps the whole interface — page and chrome alike — onto a monospace stack (`Cascadia Mono, Consolas, Sarasa Mono SC, Microsoft YaHei, monospace`).
+**Display Font:** `Moyu Display Serif`（自带，可变字重 400–700），后备 `Noto Serif SC` / `Source Han Serif SC` / `SimSun` / `Songti SC`
+**Body Font:** 平台堆栈 —— Microsoft YaHei / PingFang SC / Segoe UI / system-ui（`--font` / `--moyu-font`）
+**Label/Mono Font:** 终端世界把整页与整个界面换成等宽堆栈 —— Cascadia Mono / Consolas / Sarasa Mono SC / Microsoft YaHei / monospace
 
-**Character:** deliberately invisible. This is the OS's own type, at the OS's usual sizes, so the surface reads as chrome rather than as a designed document. No display face, no webfont, no letterform personality. Letterspacing is used once — a widened 0.08em on the wordmark — and nowhere else.
+**Character:** 报头与栏目线是这一页唯一「被排过」的字——中文衬线，字重粗细都从一个文件里来。其余全部是平台自己的字：界面的话用平台的字体说，正好；这一页的门面用别人机器上的默认脸，这一页就没有门面——它在谁的机器上就长成谁的界面。
+
+展示字是**自带的**，不是系统字体：上游是 Noto Serif SC（OFL 1.1，允许再分发），由 `scripts/make-display-font.mjs` 从这一页真的会说的那批字里子集出来，27,548 B 的 woff2 随源码进仓库（`src/renderer/src/assets/fonts/`，同目录一份 `OFL.txt`）。CSP 里没有 `font-src`，因此它落在 `default-src 'self'` 下——这也是必须自带的第二个理由：远程字体当场被挡掉。只声明字重范围（`font-weight: 400 700`），一份可变字体当两份用：报头是粗的（700），栏目线是细的（400）。`font-display: swap` 而不是 `block`：它是本机文件几乎不会等，万一真没加载上，宁可先看见回落的衬线字，也不要让报头空三秒。
+
+**终端世界没有第二副字。** `html[data-world='terminal']` 把 `--font-display` 指回那套等宽字（`--font-display: var(--font)`）：命令行里没有第二个字面。那一页在终端世界换的是**排版**（块光标、`>` 提示符、动词列印全称、状态行写成 `SITES 20`），不是字体。
 
 ### Hierarchy
-- **Display** (500, 30px, letter-spacing 0.08em): the wordmark 摸鱼阅读, the page's only brand moment. Drops to 19px in the compact (≤400px-tall) layout.
-- **Title** (400, 14px): the search field's input text — the largest reading text inside the page body.
-- **Body** (400, 13px): the page's base size (`home.css` sets 13px on `html, body`); the footnote and tile labels step down from it.
-- **Label** (400, 12px): the chrome's base size (`base.css` sets 12px), and the size of tile labels and the footnote on the page. Address bar, toolbar tools, tab titles, and toggles all inherit this.
+- **Display** (700, 15px, letter-spacing 0.1em)：报头「摸鱼阅读」，终端世界是 `MOYU-READER`（用强调色 + 5px 余辉）。迷你档降到 13px。它折行就不是标识了，因此 `flex: 0 0 auto` 且不折行——挤不下时宁可挤旁边的读数。
+- **Headline** (400, 26px, line-height 1.15)：栏目线上**当前**那一栏。它决定整条栏目线的高度（`align-items: baseline`，其余各栏吊在它的基线上）；下端 `padding-bottom: 6px`，那根 2px 短线正好压在下划线上。迷你档降到 18px。
+- **Body** (400, 13px)：这一页的基础字号（`.modern` / `.term` 上写 13px），行的名称、输入行里的字都用它；系统设置页也是 13px。
+- **Label** (400, 12px)：其余五栏的栏目名、行的动词列与右端域名、主题键，以及界面的基础字号（`base.css` 写在 `html, body` 上）。地址栏、工具栏、标签页、面板都继承它。
+- **Caption** (400, 11px)：页眉右侧的 `标签 N`（这一行另有 `letter-spacing: 0.16em`）、离线阅读的格式说明、状态行的读数与按键提示、首字母那一格，以及界面上滑块的小字。11px 是这一套的地板——**这一页只有两处「现在是什么状态」**（状态行左端的读数与右端的主题键），迷你档不把它们降到 11px 以下。
 
 ### Named Rules
-**The OS-Stack Rule.** Type is the operating system's. Never ship a display face or a webfont; the page must look like it was rendered by the browser's own engine, because it was.
+**The Two-Faces Rule.** 展示字只给报头与**栏目线整条**：栏目线是一行排出来的字，不是一排控件，因此它从头到尾是同一个字面，字大小的差别承担层级。除此之外任何地方——行、状态行、顶栏、设置页——都用平台字体栈，不引入第三种字。终端世界连报头与栏目线也用那一套等宽字。
+
+**The 11px Floor Rule.** 界面里没有字号小于 11px 的文字，正文与关键标签不小于 12px。低透明度（25%–45%）下对比度整体下降，字号是那几秒里唯一还站在用户这边的东西。
 
 ## Layout
 
-The window is a fixed 16:9 frame (default 960×540; presets mini 480×270, small 800×450, medium 960×540, large 1280×720). It is a 44px top bar spanning the full width, and below it a row of two columns: the main column (a 34px address bar, collapsed by default, over the flexible transparent middle that the page view fills or the desktop shows through) and a 48px right rail. The rail carries 收起时暂停 / 站点 / 历史 / 书签 / 缩放 / 透明度 — the tools that used to sit in a bottom bar. 手机 and 置顶 were two labelled cells here and are top-bar icons now: they change how a page is displayed rather than how it is read. The rail is the cheaper of the two edges to spend: 48px of a 960px width is 5%, where a 44px bar cost 8% of a 540px height.
+窗口是固定的 16:9 帧（默认 960×540；预设 mini 480×270、small 800×450、medium 960×540、large 1280×720），版面是一个「顶栏 + 右侧栏」的 L 形：**44px** 顶栏横跨全宽，**48px** 右侧栏从顶栏下沿垂到底，中间那条地址栏展开时占 **34px**（默认折叠，高度归零），更新提示条出现时再占 **30px**。正文区是算出来的，不是窗口尺寸：`computeLayout()` 把它定义为「窗口宽 − 右栏宽 × 窗口高 − 顶栏 − 地址栏 − 提示条」，因此默认档是 **912×496**，地址栏展开时 912×462，迷你档 **432×226**。这四个数只有一份来源（`src/main/services/geometry.ts`），探针量到的与界面用的正是同一个函数。
 
-Two screens live inside this frame without being tabs: the **start page** and **系统设置**. Neither has a chip in the tab strip — the strip lists pages and nothing else — and each is opened by one key that also closes it. Both keys sit together at the top bar's left end, ahead of the navigation group: the start page's house glyph, then settings' gear right beside it. Settings used to be a labelled cell pinned at the rail's foot; it moved to the top bar's left corner and became an icon, so the two tab-less screens read as one group and the key no longer scrolls out of sight in a short window. Pressing that same key again returns to the page you were reading before (or, if that page is gone, to the start page), and so does clicking any tab chip. Because every exit is one keystroke away, neither screen needs a back button of its own — the thing that opens it is the thing that closes it. The consequence is that the transparent middle always has an owner — a page, the start page, or settings — so closing the last page falls back to the start page instead of leaving a hole onto the desktop.
+顶栏高度由悬浮球定：44 = 40px 的球 + 上下各 2px。球排在顶栏右端、收起右栏那枚键之前；顶栏藏起来时它浮在右上角，而它的**收起**形态就是整扇窗——窗口真的缩到 40×40，球就是那扇窗的全部内容，因此任何状态下都不能画出球的盒子（反馈只用透明度与阴影，`transform: none`），并用 `clip-path: circle(closest-side)` 兜住平台的最小窗口尺寸。起始页与系统设置是窗口里的两「屏」，不是标签页：它们不在标签条里，各有各的键，都待在顶栏最左那一组，且**进出口是同一颗**——再点一次原路返回（没有可回的就落回起始页）。正文区因此永远有主人：网页、起始页或设置页，关掉最后一页落回起始页，而不是留一个通向桌面的洞。
 
-When a newer version is known and not yet ignored, one more row joins them: a 30px **update notice**, spanning the main column between the address bar and the middle, gone the rest of the time. It is a layout row rather than a floating overlay for the same reason the address bar is a layout row — the page is a native view, and pointer events reach only the topmost native view, so anything drawn over it would be both unclickable and drawn on the wrong surface. The height lives in the main process (`NOTICE_H`), which hands it to the renderer as `--moyu-notice-h`; what the row *says* travels separately, so the row's presence and its content have two owners and neither guesses at the other's state. It is skinned from the same theme tokens as the rest of the chrome, hairline and all, and it must not tint the transparent middle it sits above.
+**这一页的重心是横向的。** 正文区最窄只有 432×226，高度是最紧的那一轴，因此横向组织优先，**从不长滚动**：一屏放得下的行才渲染，长尾靠输入框过滤。
 
-The top bar's own height is set by the floating ball it carries: 44 = a 40px ball plus 2px above and below. The ball sits at the bar's right end, last but one before the rail toggle; when the bar is hidden the ball floats at the window's top-right inside the rail column, and it is the collapse switch — clicking it shrinks the whole window to the ball itself (40×40, the platform's floor for a frameless transparent window). Because the window *is* the ball in that state, the ball is drawn square and clipped to `circle(closest-side)`: a platform that refuses to shrink that far must not be allowed to stretch it into an ellipse.
+五段的实测值（`StartPage.vue` 与它的 scoped 样式）：
 
-The page itself is one centered column: `max-width: 760px`, 24px side padding, `padding-top: 6%`. Order is wordmark → search → "continue last" line → tile grid → footnote. Width is comfortable and height is scarce, so the layout is horizontal-first and never long-scrolls; the tile grid itself is the only scrolling region.
+- **页内边距** `18px 22px 12px`，基础字号 13px；迷你档 `10px 14px 8px`，基础字号 12px。
+- **页眉**：11px、`letter-spacing: 0.16em`、三级墨；左端报头 15px/700，右端 `标签 N`（迷你档藏掉右侧读数）。
+- **输入行**：`margin-top: 10px`（迷你档 6px），`padding-bottom: 6px`，下划线 1px `--divider-strong`（终端世界 `--divider`），获得焦点时整条线变色（`border-color` 与文字一起转强调色）。放大镜 15px（迷你档 13px）；输入框高 20px。
+- **栏目线**：`margin-top: 12px`（迷你档 8px），六栏同一基线，`gap: 18px`（迷你档 12px），整行 `padding-bottom: 6px`；1px 细线由 `::before` 绝对定位压在整行下沿，当前栏那根 2px 强调色短线是这个键的 `::after`，落在**同一个 y**（它自己的下沿就是整行的下沿）。终端世界不画短线，改用 `▌` 块状光标贴在当前栏名之前——直角那一组里多一条 2px 横杠会读成半截下划线。
+- **内容行**：`margin-top: 8px`，行高 `--row-h`——纸白/暗夜 **28px**、磷绿 **22px**；迷你档 24px / 20px。行内 `gap: 10px`（终端 12px），`padding: 0 8px`，动词列固定 2.4em（终端 6.5em，要印得下 `open-file`），图标格 18×18（里面 14px 的图，或 11px 的首字母垫在 `--tile` 上），右端域名 12px 且 `max-width: 34%`（迷你档整列藏掉）。
+- **注脚行**（只有「离线阅读」有）：`margin-top: 6px`，`padding: 6px 8px 0`，上边 1px 细线，11px/1.4。它排在内容行之外，因此它占掉多少高度，可容纳的行数就少几行——不必两处各算一次。
+- **状态行**：`margin-top: 6px`，`padding-top: 6px`，上边 1px 细线，11px，左端读数用强调色，右端主题键（22px 高）。
+- **收尾线**：整栏真的渲染完、列底还剩留白时，在最下面居中画一条 **56×1px** 的 `--divider-strong` 短线。报纸收尾画的就是这个：它说的是「就这些」，不是「还有，往下滚」。
 
-Spacing is hand-set on an even 2px rhythm with no spacing-token file — the recurring stops are 4/6/8/10/12 px, and the block rhythm uses larger one-off margins: wordmark → search 26px, search → resume 14px, resume → grid 26px, grid → footnote 18px, and a 20px inset inside the search field. The search field is 46px tall; toolbar controls are 26px tall.
+**行数预算是量出来的，不是算出来的**（`spike/preview.js --body`，逐跑记在 `.impeccable/review/MANIFEST.md`）：纸白与暗夜在默认档各 **11 行**、地址栏展开 10 行、迷你档 3 行；磷绿的行距更紧（22px 对 28px），默认档 **14 行**、迷你档 4 行。带了格式说明的「离线阅读」在默认档剩 3 行。
 
-The tile grid is `repeat(auto-fill, 84px)`, center-justified, with `8px 4px` gaps, so tiles stay evenly spaced at any width (18 tiles maximum). Below 400px of height the page compacts: the column's top inset drops to 14px, the wordmark to 19px, the search field to 36px, tiles shrink to a 68px track with 32px favicon wells, and the footnote is dropped.
+两处降档都按**实测尺寸**分档，而不是媒体查询——这一页有多高多宽取决于顶栏与地址栏开着没有、窗口被拖到多窄，只有量出来才知道：
+
+- **高度 < 360px** 走紧凑档（迷你档的正文区只有 226 高，必须收；小号档有 406，还宽裕）：页内边距、报头、栏目线、行高、状态行整组降一档，右侧域名与按键提示藏掉。
+- **宽度 < 560px** 走缩写（正文区最窄 432，六栏连缩写带间距就快顶到边了）：四字栏名退成两字（`离线阅读` → `离线`，缩写表在 `SECTIONS` 里）。
 
 ### Named Rules
-**The One-Column Rule.** One centered column, one grid, no long vertical scroll. Height is the scarce axis in a 16:9 stealth window; content grows sideways, never downward.
+**The One-Column Rule.** 一列，不长滚动。高度是 16:9 隐蔽窗口里稀缺的那一轴，内容横向组织、按高度截断，绝不往下堆。
+
+**The Measured-Limit Rule.** 一屏放得下几行的唯一算法是 `floor(实测高度 ÷ 行高)`，放不下的**不渲染**——裁出来的半行比没有这一行更难看。行高是皮的属性（两套世界各一档），高度是量出来的（`useBox` 量正文格），因此页面里没有一处写死的行数。一句可执行的验法：改窗口高度，行数跟着变；改行高，行数与截断位置一起变。
 
 ## Elevation & Depth
 
-**Flat by default; depth is state.** There are no resting shadows and no tonal layering to imply height. A surface is flat until it is hovered or focused, and then a single soft shadow (or a 1.5–2px focus ring) appears to acknowledge the pointer or the keyboard. There is no blur or glass anywhere: `backdrop-filter` cannot blur the desktop behind a transparent window — it would only smear the window's own contents — so the mechanism is banned, not merely unused.
+**平的。** 这一页没有卡片、没有浮起的行、没有色块分层，层级全部由字号、字重与那根 2px 短线承担。页面里唯一一处阴影是主题菜单的浮层（`0 6px 24px rgba(0, 0, 0, 0.22)`）——它是一个真的浮在页面之上、朝上开的层，阴影说的是「我在上面一层」。它用中性的黑而不是强调色的偏蓝，因为它在三套配色里都得立得住。
+
+界面层（chrome）另有一小套阴影，全部属于**浮在桌面或网页之上的东西**：悬浮球静置 `0 2px 8px rgba(17, 24, 39, 0.28)`、悬停 `0 3px 12px rgba(17, 24, 39, 0.34)`、按下是 `0 1px 4px rgba(17, 24, 39, 0.3)` 加一圈向内的白环（往里收，不往外扩）；裁剪弹窗 `0 18px 48px rgba(9, 11, 14, 0.35)`。悬浮球收起成窗口本身时不画任何超出球面的东西（阴影与向外的焦点环会留在窗口外，四个角上是四块灰影），反馈只靠透明度，焦点环改成 `outline-offset: -4px`。
+
+键盘焦点一律是 `outline: 2px solid var(--accent)`：页上偏移 2px，界面上偏移 1px，滑块 3px，收起态的球 −4px。
 
 ### Shadow Vocabulary
-- **Search Hover** (`box-shadow: 0 1px 4px rgba(17, 24, 39, 0.1)`): the start-page search field on hover.
-- **Search Focus** (`box-shadow: 0 1px 6px rgba(17, 24, 39, 0.16)`): the focused search field; paired with `border-color: transparent` and a 2px accent outline.
-- **Current-Tile Ring** (`box-shadow: inset 0 0 0 1.5px #2563eb`): the inset ring on the favicon well of the currently-open site.
-- **Address Focus Ring** (`box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1)`): the soft halo added to the chrome address field on focus (alongside its accent border and the shared 2px focus outline).
-- **Focus Outline** (`outline: 2px solid #2563eb`, offset 2px on the page / 1px in the chrome): the keyboard focus indicator everywhere, in addition to any state fill.
+- **主题菜单浮层** (`box-shadow: 0 6px 24px rgba(0, 0, 0, 0.22)`)：页面上唯一的阴影，朝上开的唯一浮层。
+- **悬浮球静置 / 悬停 / 按下** (`0 2px 8px rgba(17, 24, 39, 0.28)` / `0 3px 12px rgba(17, 24, 39, 0.34)` / `0 1px 4px rgba(17, 24, 39, 0.3)` + `inset 0 0 0 2px color-mix(in srgb, var(--moyu-on-fill) 45%, transparent)`)：球是收起态下窗口的全部内容，因此它在三套主题、三档透明度下都得有边。
+- **裁剪弹窗** (`0 18px 48px rgba(9, 11, 14, 0.35)`)：设置页里那块浮起来的画布。
+- **焦点轮廓** (`outline: 2px solid <accent>`，页 2px / 界面 1px / 滑块 3px / 收起球 −4px)：键盘的落点，永远不只在状态填充里。
 
 ### Named Rules
-**The Flat-By-Default Rule.** Surfaces are flat at rest. A shadow is always a response to state (hover, focus), never a standing decoration.
+**The Flat-By-Default Rule.** 平铺的面上不画阴影。阴影只属于真的浮在页面或桌面之上的一层——主题菜单的浮层、悬浮球、裁剪弹窗。行与栏目键的悬停是换底色，不是抬起来。
 
-**The No-Glass Rule.** No `backdrop-filter`, no blur, no translucency on any painted layer. The window is transparent by construction; an opaque or frosted layer would break the product.
+**The No-Glass Rule.** 不用 `backdrop-filter`、不用模糊、不给画出来的层加半透明。窗口是透明的，毛玻璃在窗口背后模糊不了桌面，只能模糊窗口自身的内容——这是机制上就错的，不是审美取舍。
 
 ## Shapes
 
-Restrained and slightly soft, never playful. The radius scale is small: **4px** for toolbar controls and tab chips (`--radius-sm` / `--moyu-radius-sm`), **6px** for the chrome address field and popover surfaces (`--moyu-radius`), **8px** for page tiles and the "continue last" row (`--radius`, page), and a **999px pill** reserved for two things only — the search field and the circular favicon well. Note the deliberate-but-real split at the medium step: the page's medium radius is 8px while the chrome's is 6px (see the drift note below).
+克制、几乎全是直角：**4px** 是这一页唯一的小圆角（行的悬停底、首字母那一格、主题键、界面上的小键），**8px** 给主题菜单那块浮层（`--radius`），界面上另有 **6px**（地址栏与标签页）、**13px**（地址栏开关那一枚胶囊）、**12px**（裁剪弹窗）、**8px**（标签数那枚小牌）、**7px**（透明度滑轨）。上一版那个 46px 的胶囊搜索框连同它的 `--radius-pill: 999px` 一起没了——那枚令牌还在主题层里声明着，但这一页已经没有任何一处用它（**不要**为了用掉它而把哪个键做成胶囊）。
 
-Separation is done with 1px hairlines (`#e5e7eb` / `#d1d5db`); nothing is heavier than 1px except the 1.5–2px focus ring. The favicon well is a perfect circle; toolbar buttons are small rounded rectangles (4px). There is no clipping, no clipping-mask, and no ornamental geometry — every shape is the plainest form that carries its function.
+分界靠 **1px** 细线（`#e6e8ec` 与 `#d2d6dd`），比细线粗的只有两样：当前栏底下那根 2px 强调色短线，与焦点轮廓。没有裁切、没有装饰性几何，每个形状都是承担功能的最简形式。
+
+**直角是方块的角，不是球的形。** `html[data-world='terminal']` 把每一处圆角归零（页上三个、界面上六个形状令牌一起），但 `border-radius: 50%` 的正圆一处不动：悬浮球、滑块的圆点、标签上那枚「没有图标」的小点。球是这一版最要紧的一个可识别形状——它已经小到只有 40px、还是收起之后唯一留在桌面上的东西，把它削成方块，换来的不是「终端 feel」而是「认不出这是什么」。
 
 ### Named Rules
-**The Hairline Rule.** All separation is a 1px line or a tonal fill. The only strokes thicker than a hairline are focus rings, and those exist for accessibility under low opacity, not for looks.
+**The Hairline Rule.** 分界是一条 1px 线或一块底色。比发丝线粗的只有那根 2px 强调色短线与焦点轮廓，后者是为了低透明度下的可辨识，不是为了好看。
+
+**The Square-Corners Rule.** 终端世界把圆角整组归零，且必须**整组**——页上写死的字面量（滚动条的角、标签数的小牌）也要走令牌，否则磷绿下会剩下一半是圆角的。要归零的是方块的角。
 
 ## Components
 
-Every control is quiet at rest and answers on hover/focus with a background or outline change. All transitions are `120ms` (fields `140ms`) `ease-out`; nothing moves, scales, or bounces.
+每个控件静止时都很安静，只在悬停/焦点上应声：底色、颜色或那根线变一下，`120ms ease-out`（行是 `100ms`）。除了换栏那一下（见下），什么也不移动、不缩放、不反弹。
 
 ### Buttons
-- **Shape:** small rounded rectangles, 4px radius (`--radius-sm` / `--moyu-radius-sm`); 26px tall.
-- **Icon button (chrome):** 26px square-ish, 0 6px padding, glyph drawn in `currentColor` from the authored icon set. At rest ink-secondary; on hover it takes the hover-gray fill and ink; in the `on` state it takes the Focus Blue Wash fill and Focus Blue text. The close glyph is the lone danger exception (red fill on hover).
-- **Text button (chrome, 站点 / 历史 / 书签):** same box, 0 8px padding, same rest/hover progression. 设置 used to be the fourth of these, at the rail's foot; it is an icon button in the top bar now.
-- **Notice button (chrome, 更新提示条):** 22px tall, 4px radius, 0 8px padding — a size below the 26px toolbar box, because the row it lives in is 30px. Its ✕ is a 22px icon button in ink-secondary (it means "ignore this version," and that is written in its tooltip and label, not in its glyph). The row's one primary action (下载 / 重启并安装 / 打开发布页) sits on the Focus Blue Wash with Focus Blue text, filling solid only on hover: in a 30px row a filled bar reads as a stripe across the window, not as a button. Both buttons carry their own fill rather than an outline, since at 25–45% window opacity an outlined control on a panel has nothing to hold its edge.
-- **Hover / Focus:** background `120ms ease-out`; keyboard focus gets the shared 2px accent outline.
-- **Segmented item (缩放 / 尺寸):** a 4px-radius chip, 2px 6px padding, ink-tertiary at rest; hover fills hover-gray with ink; the active one takes active-gray with Focus Blue text.
+
+- **栏目键（这一页的招牌）：** 六个 `<button>`，`aria-pressed` 表示按下去没有——**不是**一组 tab：tab 那一套要求左右键在键之间移动焦点，而这里左右键换的是底下那一摊内容，焦点始终留在输入行上（用户多半正准备接着打字）。静止：12px、三级墨；悬停：次级墨（只有颜色变，120ms）。当前：26px、`--text`，底下压一根 2px `--accent` 短线。它整条用展示字。
+- **主题键：** 22px 高、`0 6px`、4px 圆角，12px 三级墨。现代世界写「主题 · 纸白」加一枚 11px 的 chevron；终端世界写成一个键值对（`THEME` 暗、值用强调色）。悬停或展开时换 `--ground-hover` 底与 `--text` 字。它待在这一页最底下那条状态行的**右端**：它是这一页唯一「改自己样子」的入口，不属于内容，因此待在视线之外，但一伸手就能够到。
+- **工具栏图标键（界面）：** 26px 见方，`0 6px`，4px 圆角，`currentColor` 描出的 24px/1.6 图标（默认 15px）。静止次级墨，悬停换成 `--moyu-surface-hover` 底与墨色，`on` 状态（起始页、设置、置顶、手机版、右栏开关）用 `--moyu-accent-soft` 底与强调色字。关闭键是唯一的例外：悬停用 `--moyu-danger` 实色填充，字用 `--moyu-on-fill`。
+- **工具栏文字键（界面，站点 / 历史 / 书签）：** 同一个盒子，`0 8px`。
+- **更新提示条上的键：** 行高 30px，因此键只有 22px 高、4px 圆角、`0 8px`。左起的忽略键是 `--moyu-surface-hover` 底 + 次级墨；右端那一个主要动作（下载 / 重启并安装 / 打开发布页）坐在 `--moyu-accent-soft` 上、字用强调色，**只有悬停才填实**：在一条 30px 的行里，一块实色横条读起来是横贯窗口的一道色带，不是一枚按钮。两者都自带填充而不是描边——25%–45% 的窗口透明度下，描边的控件在面板上没有东西撑住它的边。
+- **分段键（界面，缩放 / 尺寸）：** 4px 圆角，`2px 6px`，静止三级墨；悬停换 `--moyu-surface-hover` + 墨色；当前用 `--moyu-surface-active` 底 + 强调色字。
 
 ### Chips
-- **Tab chip (chrome):** 26px tall, `max-width: 130px`, radius 4px; ink-secondary at rest, hover-gray on hover, active-gray + ink when active. Its close glyph is hidden (`opacity: 0`) until hover or active, then dims in at 0.75 and goes danger-red on its own hover.
+- **标签页（界面）：** 26px 高、`max-width: 180px`、6px 圆角，静止次级墨，悬停 `--moyu-surface-hover` + 墨色，当前 `--moyu-surface-active` + 墨色。关掉那一枚图形平时 `opacity: 0`，悬停或当前时到 0.75，自己再被悬停时才转成警示红。
+- **主题菜单里的色卡：** 三格 8×15px 的小方块（`--text` / `--accent` / `--tile`），装在 1px `--divider-strong` 描边、3px 圆角的小框里，底色就是那个主题的页底。**这一小块自己带上目标主题的 `data-theme` 属性**，于是四个变量在它内部解析成那个主题的值——配色只有一份，这里不另抄一遍十六进制。
 
 ### Cards / Containers
-There are no cards. The nearest container is the **site tile**: an 84px grid cell, transparent at rest, 8px radius, `10px 4px` padding, stacking a 40px circular favicon well (Tile Gray fill) over a 12px label. Hover fills it hover-gray and darkens the label to ink; the currently-open tile is marked by the Focus Blue Wash on its well, a 1.5px inset accent ring, and accent-colored initial. Tiles do not lift, shadow, or scale.
+**没有卡片。** 离它最近的两样东西：一是主题菜单的浮层（268px 宽，1px `--divider-strong` 描边，8px 圆角，页面里唯一一处阴影，向上开——触发器已经在页脚了，朝下开就直接落到窗口外面去；宽度 268 是照顾最长的那条说明，最长 17 字，写死的是一个数而不是一条约束）；二是设置页左栏那种凹槽底（`--moyu-sunken`）。上一版的「站点磁贴」（84px 的格子、40px 圆形图标垫、悬停上浮）已被栏目线底下那一列行取代，不再属于这套系统。
 
 ### Inputs / Fields
-- **Search field (page; the signature component):** a 46px pill, white on a hairline-strong border, with a 17px search glyph and a 20px horizontal inset. Hover casts the soft "Search Hover" shadow; focus drops the border to transparent, casts "Search Focus," and adds the 2px accent outline (the wrapper carries the ring; the input draws no second outline).
-- **Address field (chrome):** a 26px rounded rectangle, resting fill hover-gray with ink text and no visible border; on hover it deepens to active-gray; on focus it turns white, gains an accent border and the 2px soft accent ring, plus the shared focus outline. Placeholder text is ink-tertiary.
+- **输入行（这一页的第二处招牌）：** 不是一枚胶囊，是**一整条下划线**：`<form>` 里一枚 15px 放大镜（终端世界是 `>` 提示符）加一个 20px 高的裸 `<input>`，整行 `padding-bottom: 6px`、`border-bottom: 1px solid --divider-strong`。这样它与终端世界的提示行是同一段划分：换个主题不该让这一行的高度与位置跟着变。获得焦点时 `border-color` 与整行文字一起转强调色；输入框自身不画第二道焦点环（环画在整行上）。回车提交：是网址就打开它，不是就按配置的搜索引擎搜（判断在主进程的 `resolveInput` 里统一做，两套世界都不必自己认网址）。
+- **块状光标（终端世界）：** 空行时在行首放一格 8×15px（迷你档 13px）的方块，有焦点才亮、才闪（`blink 1.1s step-end`）；一旦有字就交回系统那根细光标。方块跟不到「文字中间」那个插入点——块要跟到插入点就得实时量出光标前那截文字的宽度，而那点宽度一旦算错，光标就指着一个不是插入点的地方闪，改网址中间一个字时尤其气人。因此空行给方块，有字说真话。
+- **地址栏（界面）：** 24px 高、6px 圆角，静止时是一枚与底色同色的底、字次级墨；悬停加深，获得焦点时换成纯白 + 1px 强调色描边 + 2px 淡环。顶栏上那枚 26px 的**地址栏开关**是同一件事的另一半：一个放大镜加当前域名（停在自家两屏时写那一屏的名字），`0 12px`、13px 圆角、`--moyu-surface-hover` 底；展开时变 `--moyu-accent-soft` 底 + 强调色字。窗口窄到 620px 以下时它收成一枚图标——它占的 120px 是顶栏里最奢侈的一笔，标签条拿这块地方才放得下一个标签。
+- **透明度滑块（界面）：** 两条，待在右栏最下：整体透明度（含网页）与背景透明度（只影响界面底板）。轨道长 **56px**、厚 14px，圆点 14px 用强调色。横条转 −90° 放置（Chromium 的 range 只有横向稳定），旋转不改变布局盒，因此外框按**旋转后**的尺寸留位（16×56），并用明确的半尺寸负外边距居中——「槽比条窄」时 grid 的 `place-items: center` 与 `inset: 0; margin: auto` 都解成「向右溢出」，转 90° 之后整条会落到可视列之外，看上去就是这个控件根本不存在。
 
 ### Navigation
-The chrome's navigation is icon buttons (back / forward / reload) at the left of the top bar, with disabled arrow glyphs dropped to ink-tertiary and non-interactive. Ahead of them, leftmost in the bar, sit the two screens' own keys — the start page's house glyph and, right beside it, settings' gear. The home button is a two-way key rather than a plain destination: it opens the start page, and pressed again from there it returns to the page you came from — its tooltip says which of the two it will do. The settings key is the same kind of switch for its own screen. The `+` after the tab strip opens the address configured in 通用 (google.com by default), which is what a browser's `+` does. The page's navigation is the tile grid itself — sites open into a new tab; the page stays put.
+- **这一页的导航就是栏目线。** 六栏（全部 / 视频 / 阅读 / 资讯 / 刷题 / 离线阅读），点它或按 `←` `→` 换栏；到头就停住，不绕回另一端（栏不是环，绕回去让人以为按错了）。换栏顺手清空输入框：正在搜索时底下列的是全部板块的行，不清掉的话点了「视频」底下一动不动，看着像没点着。上下键在行间移动，回车打开当前行。
+- **整副键盘挂在输入行上**（`onInputKeydown` 是这一页唯一的 keydown），因此页面一挂载就把光标放进输入行，窗口重新获得焦点时再给一次（那一半管的是「从网页切回这一页」）。光标不在那儿的时候，状态行第一帧就写着的那句「← → 换板块」是句空话。点空白处也把光标交回输入行——这一页整块都可以开始打字。
+- **界面层的导航**是顶栏最左那一组两枚键（起始页、设置）加右边的后退 / 前进 / 刷新；再往右是地址栏开关、标签条，最右是窗口操作组与悬浮球，末三枚按 Windows 一贯的左→右：最小化、最大化、关闭。
 
 ### Signature Components
-- **The icon set:** an authored line set, 24px viewBox, 1.6 stroke, round caps and joins, `currentColor` only (15px default, 11–17px by use). Glyph icons (Unicode characters as icons) are banned — a font decides their weight, baseline, and alignment, which varies per machine and cannot be tuned to the text scale.
-- **The opacity slider:** a 72×3px track in hairline-strong with a 14px round Focus Blue thumb, lying vertically at the foot of the right rail — its last item, settings' cell having moved to the top bar. Its track is intentionally gray, not white, so it stays visible on the white rail. The range is built as a 72×14 horizontal bar and rotated −90°; the rail where it sits is 16px wide, so the bar is centred with explicit negative margins — `place-items: center` on a grid and `inset: 0; margin: auto` both resolve to "overflow to the right" for a box wider than its cell, and the rotation then carries the whole control out of the visible column.
+
+- **换栏那一下（`settle` + `rule-in`）：** 栏目线与底下那一列是同一个动作的两半，因此同一个时长、同一条缓动：底下那一列从**已经看得见**的 0.55 落定（透明度 + 4px 上浮），当前栏那根 2px 短线同时从左边画出来（`transform-origin: left`）。两条都是 `180ms cubic-bezier(0.16, 1, 0.3, 1)`，一次就完。两条都挂在 `.settle` 上，而那个类要等真的换过一栏（`columnKey` 变过一次）才有：页面刚出现时那一列已经在它该在的位置上，让它从 0.55 落定下来说的是一件没发生过的事。打字过滤**不重放**它——那是同一个动作的延续，不是新的一栏。`prefers-reduced-motion: reduce` 下撤掉的是动画而不是结果：换栏仍然是换了一栏，只是当场换完（三条一起撤：这两条加方块光标的闪烁）。
+- **收尾线：** 56×1px、居中、`--divider-strong`，只在整栏真的渲染完、列底还剩留白时画。判据是 `0 < visible.length < limit`：被上限截掉时它就是在说谎（这一页从不滚动），正好铺满时不需要它。
+- **终端世界的扫描线：** 一层铺满视口的 `body::after`——1px 暗 / 2px 透亮的扫描线（黑 0.14，再重一点 13px 的字就被割碎了）叠一层球面管的余辉（中心 3.5% 白、四角 42% 黑），`crt-breathe 4.6s ease-in-out` 呼吸，幅度小到说不上来哪里在动。它只有起始页有，**界面没有**，而且不是审美取舍：它是铺满视口的覆盖层，进了 chrome 就把桌面盖住，这个产品赖以存在的机制当场就没了。减少动态时呼吸关掉，静态的扫描线照旧。字发光（`text-shadow: 0 0 3px color-mix(in srgb, currentColor 38%, transparent)`）属于「世界」，因此跟着主题一起管到整个界面；关键是只加一点——不透明地给 `currentColor` 打一圈光是糊的，汉字笔画密，光晕一厚就互相吃掉。
+- **图标集（界面）：** 一套自绘的线性图标，24px 视框、1.6 描边、圆头圆角、只用 `currentColor`（默认 15px，11–17px 按用途）。**不用 Unicode 字符冒充图标**：字符的字重、基线和对齐由字体决定，在不同机器上表现不一致，也无法与文本的字号体系协调。
+- **主题与世界的正交：** 主题给颜色，`html[data-world='terminal']` 给半径与字体，两者在同一层根上，由 `HOME_THEMES` 一张表决定哪个主题披哪套世界（纸白、暗夜 → modern；磷绿 → terminal）。加一个终端配色因此只是加一段配色，不是加一条代码路径。
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** keep the ground white and the accent singular: `#2563eb` for focus/current/primary only, on ≤10% of the screen (The One Accent Rule).
-- **Do** use the OS CJK stack and only the sizes in the ramp: 12 / 13 / 14 / 30px (The OS-Stack Rule).
-- **Do** express every state as a background or outline change at `120ms` (fields `140ms`) `ease-out`, in response to hover or focus (The Flat-By-Default Rule).
-- **Do** keep the page and the chrome on one palette — they alias identical values by construction. When you touch one, touch the other.
-- **Do** keep the chrome's middle fully transparent with `pointer-events: none` so the mouse reaches the page or the desktop.
-- **Do** keep text at 12px or larger and give key controls a shape or position cue, not a color cue, so they stay distinguishable at 25–45% window opacity.
+- **要** 用栏目线做分类：当前那一栏 26px + 2px 强调色短线，其余 12px 同一条基线（Mini 档 18px / 11px，退两字缩写）。
+- **要** 把行高当成唯一的一个数：28px（终端世界 22px）、迷你档 24 / 20px；行数由 `floor(实测高度 ÷ 行高)` 得出，放不下的不渲染（The Measured-Limit Rule）。
+- **要** 让换栏那一下只播一次、且在同一个时长同一条缓动上：`settle` 与 `rule-in`，各 `180ms cubic-bezier(0.16, 1, 0.3, 1)`，只在真的换栏时播——首帧不播，打字过滤不重放，减少动态下整组撤掉。
+- **要** 把层级交给字号、字重与那根 2px 短线，分界交给 1px 细线（`#e6e8ec` / `#d2d6dd`）（The Hairline Rule）。
+- **要** 让页的地（`#f9fafb`）比界面的面（`#ffffff`）沉一档，两者差 6/255（The Paper Ground Rule）。
+- **要** 在 25%–45% 的窗口透明度下仍能靠形状与位置分辨每一个关键控件——不能只靠颜色；文字不小于 11px，正文与关键标签不小于 12px（The 11px Floor Rule）。
+- **要** 让本机文件的行既不在文字里带路径，也不在任何属性上带路径（`title` 也不挂）：`C:\Users\…` 把用户名和目录习惯一起摊在屏幕上，而这一页从不显示路径。
+- **要** 让主题只改配色与形状：一个主题 = 一段变量组，不写选择器；颜色只改 `themes.css` 一个文件——页与界面共用它，两边的同名令牌由它一次给全。
 
 ### Don't:
-- **Don't** add a second accent or a third hue; the one blue is the whole system (The One Accent Rule).
-- **Don't** use gradients, glass, `backdrop-filter`, or blur — the last is mechanically wrong on a transparent window (The No-Glass Rule).
-- **Don't** add decorative motion; state changes are the only transitions, and they do not move anything.
-- **Don't** use a display face, a webfont, or glyph/Unicode characters as icons; use the authored 24px / 1.6-stroke SVG set.
-- **Don't** smuggle in quirk or irony — toolbars made to look like something else, ornamental asymmetry, or a "designed" flourish. The canon is the commitment.
-- **Don't** reintroduce the abandoned OMR answer-sheet world (card stock, registration red, question numbers and ovals, a 黑体/宋体 split); it was replaced by canon and is out of this system.
+- **不要** 做磁贴墙、卡片、欢迎语或装饰性插图：入口平铺成等距磁贴，等于要求用户每次自己重新分一遍类。
+- **不要** 加第二个强调色或第三个色相；每套主题只有一个有彩色，且只用它 10% 以内的面积（The One Accent Rule）。
+- **不要** 用 `backdrop-filter`、毛玻璃或任何铺在窗口中部的不透明层——中部必须逐像素透明，露出的应该是网页或桌面（The No-Glass Rule）。
+- **不要** 把扫描线那一层搬进界面层：它是铺满视口的覆盖层，进了 chrome 就把桌面盖住。
+- **不要** 给平铺的面上加阴影，也不要给行加悬停上浮——行与栏目键的悬停是换底色（The Flat-By-Default Rule）。
+- **不要** 用 Unicode 字符冒充图标，也不要用一个字体去决定控件里图形的字重与基线。
+- **不要** 把展示字用到报头与栏目线之外，也不要给终端世界加第二副字（`--font-display` 就是那套等宽字）（The Two-Faces Rule）。
+- **不要** 把主题键从状态行右端搬走：那是这一页上唯一「改自己样子」的入口，它属于状态，不属于内容。
+- **不要** 在终端世界里把正圆削成方块：`border-radius: 50%` 的悬浮球、滑块圆点、标签小点跟着归零的是**方块的角**（The Square-Corners Rule）。
 
 ---
 
 ## Recorded drift (not repaired; the build wins)
 
-The page and chrome are one system by construction, and in the shipped code they **agree exactly on every color, on the font stack, and on the 4px small radius** — the theme layer (`themes.css`) declares each value once under both the page's name and the chrome's (e.g. `#2563eb` is both `--accent` and `--moyu-accent`), so they cannot drift apart. Three real drifts remain, recorded rather than papered over:
+页与界面是一套系统，靠构造对齐：颜色只在 `themes.css` 一处声明，页面的名字（`--ground/--text/…`）与界面的名字（`--moyu-*`）指向同一份值。四处真实的错位记在这里，而不是被抹平：
 
-1. **Base size.** The page sets `html, body { font-size: 13px }`; the chrome sets `12px`. Both are inside the ≥12px accessibility floor; the chrome is the denser surface, so the split is defensible, but it is a split.
-2. **Medium radius.** The page's default radius is `8px`; the chrome's is `6px` (the 4px small step matches). Recorded as `{rounded.md-page}` vs `{rounded.md-chrome}`.
-3. **Scrollbars.** Both surfaces draw the same 8px bar in the Hairline Strong gray (`--divider-strong` / `--moyu-border`) with the 4px small radius, so they agree today; the chrome reaches it through tokens and the page through its own variable names, which is two paths to one look. The chrome's earlier hard-coded `rgba(21, 23, 28, 0.42)` — unbacked by any token, and coinciding with the abandoned world's ink — is gone.
-4. **The color rules describe one theme out of three.** The One Accent Rule and the Neutral Ground Rule above hold for `paper`, and are violated on purpose by `night` (no white ground) and `crt-green` (no neutral at all, one luminous ink instead). The rules are still the right ones for the default; the theme block is the documented exception, not a hole in them. Likewise the type and shape rules ("never ship a display face", zero radii nowhere): the terminal world swaps the stack for a monospace one and sets every radius to 0 — and, since the theme now covers the whole interface, it does so on the chrome as well as on the page. The one thing it must not touch is the transparent middle, which is why the scanline overlay stays in `home.css` (see Themes).
+1. **基础字号。** 页面 13px、界面 12px、设置页 13px。三处都在 ≥12px 的地板之上，界面是更密的那一面，因此这个劈叉站得住，但它是个劈叉。
+2. **圆角。** 页面 4px / 8px，界面 4px / 6px / 12px / 13px / 8px / 7px。上一版那个「页面 8 对界面 6」的中档劈叉还在。**另有一枚 999px 的胶囊令牌（`--radius-pill`）声明着却没人用**——上一版的 46px 胶囊搜索框是它唯一的用户，那个框已经没了；它留在主题层里没有害处，但**不要**为了让令牌有主而把哪个键做成胶囊。
+3. **地（页）与面（界面）在纸白下不是同一个值**：`--ground #f9fafb` 比 `--moyu-surface #ffffff` 暗 6/255，悬停与按下各差一档（`#f0f2f5`/`#f3f4f6`、`#e6e9ee`/`#e8eaee`）。这是有意的（见 The Paper Ground Rule），但它让上一版文档里那句「页与界面逐值相同」只剩线还成立：细线两级（`--divider`/`--moyu-hairline`、`--divider-strong`/`--moyu-border`）严格同值，面不是。暗夜与磷绿下地与面正好重合。
+4. **滚动条两条路径。** 页走 `--divider-strong`，界面走 `--moyu-border`，今天同值同形（8px 轨道、4px 圆角），但是两条路走到同一个样子。
+5. **有一处颜色不在主题层里。** 悬浮球与裁剪弹窗的阴影是硬编码的中性黑（`rgba(17, 24, 39, …)` 与 `rgba(9, 11, 14, …)`），没有令牌支撑；其中 `#111827` 正好是上一版那套配色里的墨色。三套主题下它都还站得住，因此没动，但它是这套系统里唯一一处「值不在主题层」的颜色。
+6. **颜色规则是按一套主题写的。** The One Accent Rule 与 The Paper Ground Rule 是按纸白写的，暗夜与磷绿按各自的底重读（没有白的地、磷绿里根本没有「中性色」）。规则仍然是对的，主题段是它们的例外，不是它们的漏洞。The Two-Faces Rule 同理：终端世界把展示字指回那套等宽字，那也是「一副字」而不是两副。
+
+## Open items (unresolved; recorded, not invented)
+
+- **选文件框只列 TXT / PDF，不挂「所有文件」。** 列上它，用户就能选中一本 EPUB，然后看着它变成一次下载——那比选不到更让人摸不着头脑。EPUB / MOBI / AZW3 未实现（本轮不铺开）。
+- **栏目线的第三档字号没实测过。** 已知 560px 以下退两字缩写（`离线阅读` → `离线`），430px 那一档从 432 的最小正文区推出来没问题；420 以下没有测试。
+- **主题仍是三套（亮 1 暗 2）。** 架构上加一套就是加一段变量组加 `HOME_THEMES` 一行，随时可加。
+- **「从网页切回这一页时光标会不会自己回来」没有在真机上验过。** 依据是 Chromium 里「一份文档只有被聚焦时它的 window 才收到 focus」，而探针只有一扇窗，跑不出多个 `WebContentsView` 并存的场景。真机上点一下起始页那颗键、直接按 `←` `→` 就知道了；不成立的话，退路是在主进程切到这一屏时叫一次 `webContents.focus()`。
+- **主题菜单浮层的宽度写死 268px**（最长那条说明 17 字，11px）。再长一个字就又会折行——它现在靠的是一个数，不是一条约束。
+- **展示字只覆盖「这一页真的会说的那些字」**（从 `SECTIONS` 与 `StartPage.vue` 抽字集再子集）。用户自己加的站点名与书名**不在**那份字集里，会落到 `--font-display` 后面的兜底衬线——这是有意的取舍（整份中文字体 25MB，子集之后 27KB），但没有为「落回兜底时好不好看」做过设计。

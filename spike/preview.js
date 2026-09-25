@@ -410,6 +410,14 @@ const BALL_IMAGE_DATA = (() => {
   }
 })()
 
+/**
+ * 热门站点那张表，开窗前填好（见 presetSitesOf）。写在这里而不是 whenReady
+ * 里面：下面是 `preview:options` 的应答，它在模块作用域里读这个变量，
+ * 而 whenReady 里面那个作用域它看不见——写进去就是一条静默的 ReferenceError，
+ * 应答整个不发，假桥拿不到任何选项。
+ */
+let PRESETS = []
+
 ipcMain.on('preview:options', (event) => {
   event.returnValue = {
     mode,
@@ -425,7 +433,8 @@ ipcMain.on('preview:options', (event) => {
     noticePhase: NOTICE_PHASE,
     noticePercent: NOTICE_PERCENT,
     noticeMessage: NOTICE_MESSAGE,
-    openFile: OPEN_FILE
+    openFile: OPEN_FILE,
+    presets: PRESETS
   }
 })
 
@@ -799,6 +808,23 @@ const PAGE_MEASURE = `(() => {
     }),
     /** 这一跑里「减少动态效果」开着没有（--reduced-motion 那一档） */
     reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    /*
+     * 这一页上**哪个元素**被选中了。
+     *
+     * 起始页的键盘整副都挂在输入行上（onInputKeydown 是它唯一的 keydown），
+     * 因此没选中输入行 = 状态行第一帧就写着的那句「← → 换板块」是句空话。
+     * 这件事从代码上看不出来（组件里写着 focus()，什么时候调才是关键），
+     * 从截图上也看不出——所以直接问 DOM：该是 input。
+     * 没有元素被选中时 activeElement 是 body，打印出来就是 body。
+     */
+    active: (() => {
+      const el = document.activeElement
+      if (!el) return null
+      const cls = String(el.className ?? '')
+        .split(' ')
+        .filter(Boolean)[0]
+      return cls ? el.tagName.toLowerCase() + '.' + cls : el.tagName.toLowerCase()
+    })(),
     /** 行首那一格画的是什么：本机文件挂文件图标，站点要么图标要么首字母 */
     lineFavicons: [...document.querySelectorAll('.lines .line .favicon')].map((el) =>
       el.querySelector('svg') ? 'file' : el.querySelector('img') ? 'img' : 'initial'
@@ -963,6 +989,21 @@ const READ_PLATES = `(() => {
     }))
   }
 })()`
+
+/**
+ * 此刻正在跑的那几条动画。换栏那一下是不是真的动了，只有**点完之后马上问**
+ * 才答得出来——那两条都是 180ms，等 400ms 再读，`document.getAnimations()`
+ * 已经空了，于是「什么都没有」会被读成「它没动」。
+ *
+ * 与 measured.animations 问的是同一件事，只是时机不同：那一份是在页面已经安定
+ * 下来之后读的，回答的是「这一页被安排过什么」；这一份回答的是「刚刚那一下动了没有」。
+ */
+const RUNNING_ANIMATIONS = `document.getAnimations().map((a) => ({
+  name: a.animationName ?? null,
+  ms: Math.round(a.effect?.getTiming?.().duration ?? 0),
+  easing: (a.effect?.getKeyframes?.() ?? [])[0]?.easing ?? null,
+  state: a.playState
+}))`
 
 /**
  * 拖动探针：在一组**有名有姓**的位置上按一下再松开，问这一下起没起拖动。
@@ -1190,6 +1231,42 @@ async function bodyRectOf(width, height) {
   }
 }
 
+/**
+ * 热门站点那一列（弹出面板的「热门站点」一节）。
+ *
+ * 真机上这条桥回的就是 `PRESET_SITES` 本身（`registerDataIpc.ts` 把那张表
+ * 原样递出去），而假桥原先回的是空数组——于是面板里「热门站点」这个标题
+ * 底下一条都没有，下半截空着。那不是设计成这样的留白，是假数据没给。
+ *
+ * 表从 presets.ts 打出来，不在这儿另抄一份：抄本会走样，而走样的方式恰好是
+ * 「探针里那十几个站点名和产品里的对不上」，看图的看不出来。
+ */
+async function presetSitesOf() {
+  const ROOT = path.join(__dirname, '..')
+  const outdir = fs.mkdtempSync(path.join(os.tmpdir(), 'moyu-presets-'))
+  try {
+    await esbuild.build({
+      entryPoints: [path.join(ROOT, 'src', 'shared', 'presets.ts')],
+      bundle: true,
+      format: 'cjs',
+      platform: 'node',
+      outdir,
+      outbase: path.join(ROOT, 'src'),
+      outExtension: { '.js': '.cjs' },
+      alias: { '@shared': path.join(ROOT, 'src', 'shared') },
+      external: ['electron'],
+      logLevel: 'silent'
+    })
+    return require(path.join(outdir, 'shared', 'presets.cjs')).PRESET_SITES
+  } finally {
+    try {
+      fs.rmSync(outdir, { recursive: true, force: true })
+    } catch {
+      // 临时目录删不掉不影响结论
+    }
+  }
+}
+
 app.whenReady().then(async () => {
   /*
    * 真正开窗的那对尺寸。
@@ -1199,6 +1276,12 @@ app.whenReady().then(async () => {
    * 于是下面量出来的每一行、每一次换行，都是用户会看到的那一份。
    */
   const rect = BODY ? await bodyRectOf(WIDTH, HEIGHT) : null
+  /*
+   * 只有弹出面板会经假桥读这张表（起始页是直接 import 的），因此只在那一页
+   * 打一次包——每跑都打一次没必要，而这一跑是为了看图，不是量时间。
+   * 赋给的是模块级那个变量：`preview:options` 的应答在模块作用域里读它。
+   */
+  PRESETS = page === 'popover' ? await presetSitesOf() : []
   const viewW = rect ? rect.width : WIDTH
   const viewH = rect ? rect.height : HEIGHT
   if (rect) {
@@ -1406,6 +1489,7 @@ app.whenReady().then(async () => {
           endRule: measured.endRule ?? null,
           animations: measured.animations ?? null,
           reducedMotion: measured.reducedMotion ?? null,
+          active: measured.active ?? null,
           pathLeaks: measured.pathLeaks ?? null,
           titleLeaks: measured.titleLeaks ?? null,
           displayLoaded: measured.displayLoaded ?? null,
@@ -1571,7 +1655,15 @@ app.whenReady().then(async () => {
      */
     if (page === 'home' && CLICK_PLATE) {
       console.log(`PLATE 点之前：${JSON.stringify(await run(READ_PLATES))}`)
+      /*
+       * 点之前先问一遍正在跑什么：换栏那条动画只在真的换栏时才该跑，
+       * 因此「点之前是空的、点之后有两条」才是完整的证据。
+       * fill: both 让它们跑完仍留在列表里，所以点之后**不等**也不会漏
+       * ——但先读那一次必须是点之前，否则分不清是挂载那一次还是换栏那一次。
+       */
+      console.log(`SETTLE 点之前正在跑的：${JSON.stringify(await run(RUNNING_ANIMATIONS))}`)
       await run(`document.querySelector('.plates .plate[data-plate="${CLICK_PLATE}"]').click()`)
+      console.log(`SETTLE 点之后正在跑的：${JSON.stringify(await run(RUNNING_ANIMATIONS))}`)
       await wait(400)
       console.log(`PLATE 点之后：${JSON.stringify(await run(READ_PLATES))}`)
       await shoot(`${name}-clickplate-${CLICK_PLATE}`)

@@ -139,9 +139,11 @@ const config = {
   lastSession: { openUrls: [], activeIndex: 0 }
 }
 
+/** 热门站点那张表，主进程打出来递进来的（只有弹出面板那一页非空） */
+const presets = opts.presets ?? []
+
 /** 起始页的磁贴来自「自己固定的 → 常访问的 → 预置的」，三样都给一点 */
-const SITES = [
-  {
+const SITES = [  {
     id: 's1',
     title: '微信读书',
     url: 'https://weread.qq.com/',
@@ -509,7 +511,20 @@ contextBridge.exposeInMainWorld('moyu', {
       return () => ballListeners.delete(listener)
     }
   },
-  sites: { list: () => Promise.resolve(SITES), add: list, update: list, remove: list, reorder: list, presets: list },
+  sites: {
+    list: () => Promise.resolve(SITES),
+    add: list,
+    update: list,
+    remove: list,
+    reorder: list,
+    /*
+     * 热门站点那张表由主进程打出来递进来（见 preview.js 的 presetSitesOf）。
+     * 原先这里回的是空数组，于是弹出面板的「热门站点」标题底下一条都没有
+     * ——真机上那张表是有内容的，假桥必须跟着走，否则看到的是一个
+     * 只存在于探针里的空面板。
+     */
+    presets: () => Promise.resolve(presets)
+  },
   history: { list: () => Promise.resolve(HISTORY), clear: ok },
   bookmarks: { list: () => Promise.resolve(BOOKMARKS), remove: list, update: list },
   /*
