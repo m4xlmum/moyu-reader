@@ -165,6 +165,34 @@ const SITES = [
   }
 ]
 
+/**
+ * 本机文件的那几条假数据。
+ *
+ * 地址照 `pathToFileURL` 的写法给：非 ASCII 一律百分号编码。真机上的 TXT
+ * 十有八九落在「文档」「下载」这种中文目录里，而起始页那一栏要显示的正是
+ * **解码回来**的文件名——假数据要是直接写中文，那条解码的路就没走过。
+ */
+const fileUrl = (name) => `file:///E:/books/${encodeURIComponent(name)}`
+
+/**
+ * 两本本机书，排在历史里。
+ *
+ * 「离线阅读」那一栏的行、以及本机文件出现在「继续上次」时的样子（书名 + 格式，
+ * 而不是一条路径），都要有假数据才画得出来。
+ */
+const LOCAL_HISTORY = [
+  ['斗破苍穹.txt', 2],
+  ['三体（全集）.pdf', 1]
+].map(([name, visitCount], i) => ({
+  id: `f${i}`,
+  url: fileUrl(name),
+  // 真机落库时标题就是文件名（见 HistoryStore 的 titleOf），这里照着摆
+  title: name,
+  faviconUrl: undefined,
+  visitedAt: Date.now() - (i + 5) * 60000,
+  visitCount
+}))
+
 const HISTORY = [
   ['如何在 Electron 里做无边框透明窗口', 'https://www.zhihu.com/question/123456789', 9],
   ['CSS 扫描线与文字发光效果', 'https://juejin.cn/post/7123456789', 6],
@@ -179,6 +207,16 @@ const HISTORY = [
   visitedAt: Date.now() - i * 60000,
   visitCount
 }))
+
+/*
+ * 本机那两条排在网页之后（历史按时间倒序，所以它们更旧）。
+ *
+ * --resume-file 把第一本提到最前：那时「继续上次」落在本机文件上，
+ * 走的是 rowsOf 里另一条分支（书名 + 格式，而不是域名）。
+ * 这一态在真机上要「刚刚读完一本书」才出现，命令行不摆出来就看不到。
+ */
+if (opts.resumeFile) HISTORY.unshift(...LOCAL_HISTORY.splice(0, 1))
+HISTORY.push(...LOCAL_HISTORY)
 
 const BOOKMARKS = [
   {
@@ -397,6 +435,56 @@ function patchConfig(input) {
 let ballImage = opts.ballImage ?? null
 const ballListeners = new Set()
 
+/**
+ * 「用户选了这几本」（--open-file 一册一册给），走完真机那一整套：
+ * 开一页、记一条历史、把新开的那一页变成正在看的那一页。
+ *
+ * 标题取**文件名**，与 HistoryStore 里 `file:` 那一条的规矩一致——
+ * 这里要是照路径存，预览就会在一个真机上不存在的形状上渲染。
+ */
+let openedSeq = 9
+function openLocalFiles() {
+  const names = String(opts.openFile ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)
+  if (!names.length) return Promise.resolve([])
+
+  for (const name of names) {
+    const url = fileUrl(name)
+    const id = `t${openedSeq}`
+    openedSeq += 1
+    TABS.push({
+      id,
+      url,
+      title: name,
+      faviconUrl: undefined,
+      isLoading: false,
+      canGoBack: false,
+      canGoForward: false,
+      uaMode: 'desktop',
+      zoom: 1,
+      muted: false
+    })
+    // 新开的这一页就是正在看的那一页（真机上 activate: true），起始页随之退到后台
+    activeTabId = id
+    lastGuestId = id
+    screen = null
+    HISTORY.unshift({
+      id,
+      url,
+      title: name,
+      faviconUrl: undefined,
+      visitedAt: Date.now(),
+      visitCount: 1
+    })
+  }
+
+  emitTabs()
+  // 只回文件名，不回路径——与真机的 handler 同一个规矩
+  return Promise.resolve(names)
+}
+
 contextBridge.exposeInMainWorld('moyu', {
   config: {
     get: () => Promise.resolve(config),
@@ -424,6 +512,25 @@ contextBridge.exposeInMainWorld('moyu', {
   sites: { list: () => Promise.resolve(SITES), add: list, update: list, remove: list, reorder: list, presets: list },
   history: { list: () => Promise.resolve(HISTORY), clear: ok },
   bookmarks: { list: () => Promise.resolve(BOOKMARKS), remove: list, update: list },
+  /*
+   * 打开本机文件那条桥。
+   *
+   * 真机上是主进程弹系统选文件框、把选中的路径转成 file:// 再开一张标签页
+   * （见 src/main/ipc/registerFileIpc.ts）。无头窗口里弹不出系统对话框，因此这里
+   * 把「用户选了这几本」直接摆出来，后面那几步照做：新开一格标签、往历史里记
+   * 一条、广播出去。
+   *
+   * 摆到这一步是有用的：点一下「打开文件…」之后，标签条上多一格、历史里多一条、
+   * 「离线阅读」那一栏随后就列出这本书——界面这一半的路全通了。剩下那一半
+   * （对话框的过滤器、路径转 URL、选中的书真读得起来）在真机上，由
+   * spike/home-sections.js 拿一个假的 dialog 验。
+   *
+   * 不给 --open-file 时按「用户点了取消」算：什么都不发生，返回空数组。
+   * 取消这条路也要看得见——它是这条路上最常发生的一步。
+   */
+  files: {
+    openLocal: () => openLocalFiles()
+  },
   tabs: {
     create: () => Promise.resolve({ tabId: 't9' }),
     /*

@@ -8,8 +8,10 @@
  * 四份文档各自加载同一份 styles/themes.css，再各自把主题名写到 html[data-theme]
  * 上（文档之间没有继承路径，只能各写一遍）。于是这里有三种问法：
  *
- * 1. **默认零回归**：paper 下界面的每一条 --moyu-* 与改动前硬编码的值逐条相同。
- *    主题层是重写，重写最怕的就是顺手改了默认色，而这种改动在截图上看不出来。
+ * 1. **纸白这一套钉住了**：paper 下界面的每一条 --moyu-* 与一张定格表逐条相同。
+ *    主题层里配色散在四份文档各自的变量组里，重做最怕的就是顺手改了不想改的那
+ *    一档，而这种改动在截图上看不出来。表本身随配色一起更新，但判据一条不放松
+ *    （见 PAPER_EXPECT 的说明）。
  * 2. **三套主题真的各自生效**：调色板两两不同，且四份文档都拿到了当前主题
  *    （少了任意一份，"改了没反应"就会从那里冒出来）。
  * 3. **透明中部没被弄坏**——本次最要紧的一条。窗口是逐像素透明的，chrome 视图的
@@ -122,31 +124,39 @@ ipcMain.on('preview:options', (event) => {
 })
 
 /**
- * 改动前 chrome 那几条 --moyu-* 的值（tokens.css 原文）。
+ * 纸白这一套的**定格值**：一条一条钉在这里，改动它必须是有意的。
  *
- * 抄成一张表而不是从 git 里现读：这张表的用处正是「与改动前逐条相同」，
- * 它会随着主题层一起被改坏——真去读 git 上的旧文件，等于让被验的一方
- * 自己出题。半径与字体另外比，见 PAPER_SHAPE。
+ * 这张表原先记的是「改动前的字面量」，用来问「默认零回归」。起始页改版时
+ * 纸白这一套是**有意重做的**（靛替代浏览器蓝、细线合成一种、字压到 4.5:1 以上），
+ * 那一问就不再成立了——但表本身的用处没变，而且现在更值钱：配色散在四份文档
+ * 各自的变量组里，改一个想改的值顺手带坏另一个，从截图上完全看不出来。
+ * 因此这里不再是「与改动前相同」，而是「与本表逐条相同」，**判据一条没放松**：
+ * 仍然逐条比到四通道，仍然要求 --moyu-font 是无衬线栈。
+ *
+ * 值来自 styles/themes.css 的纸白那一段；改动那边的配色，这里跟着一起改，
+ * 改不动就说明这次改的不是纸白一套，而是顺手带了别的主题。
  */
 const PAPER_EXPECT = {
+  /* 这个必须是纯白：Q4 要求「底板淡、面还是 #ffffff 的那三通道」 */
   '--moyu-surface': ['#ffffff', 1],
   '--moyu-surface-hover': ['#f3f4f6', 1],
   '--moyu-surface-active': ['#e8eaee', 1],
-  '--moyu-border': ['#d1d5db', 1],
-  '--moyu-hairline': ['#e5e7eb', 1],
-  '--moyu-ink': ['#111827', 1],
-  '--moyu-text': ['#111827', 1],
-  '--moyu-text-dim': ['#5b6472', 1],
-  '--moyu-text-faint': ['#6f7683', 1],
-  '--moyu-accent': ['#2563eb', 1],
-  '--moyu-accent-hover': ['#1d4ed8', 1],
-  '--moyu-accent-soft': ['#2563eb', 0.1],
-  '--moyu-danger': ['#b91c1c', 1],
+  '--moyu-border': ['#d2d6dd', 1],
+  '--moyu-hairline': ['#e6e8ec', 1],
+  '--moyu-ink': ['#15181d', 1],
+  '--moyu-text': ['#15181d', 1],
+  '--moyu-text-dim': ['#5a6270', 1],
+  '--moyu-text-faint': ['#666d79', 1],
+  /* 靛，不是浏览器蓝：这一套里没有一处强调色长在链接上，见 themes.css 的说明 */
+  '--moyu-accent': ['#2f4a9e', 1],
+  '--moyu-accent-hover': ['#273f86', 1],
+  '--moyu-accent-soft': ['#2f4a9e', 0.1],
+  '--moyu-danger': ['#b3261e', 1],
   /* 后五个是这次新起名的令牌，纸白下的值就是它们各自取代的那个字面量 */
   '--moyu-sunken': ['#eef0f3', 1],
   '--moyu-sunken-hover': ['#e2e5ea', 1],
   '--moyu-danger-soft': ['#fdf3f2', 1],
-  '--moyu-selected': ['#eef4fd', 1],
+  '--moyu-selected': ['#eef1fa', 1],
   '--moyu-on-fill': ['#ffffff', 1]
 }
 
@@ -158,7 +168,11 @@ const PAPER_SHAPE = {
   '--moyu-radius-pill': '13px',
   '--moyu-radius-tag': '8px',
   '--moyu-radius-track': '7px',
-  '--moyu-panel': ['#ffffff', 1],
+  /* 浮层不跟着底板变淡，用的是起始页的页底色（`--moyu-panel: var(--ground)`），
+     而起始页的页底这一版从纯白改成了 #f9fafb——那张裁剪弹窗跟着沉了一档，
+     是这次重做的一部分，因此这里记的是新值 */
+  '--moyu-panel': ['#f9fafb', 1],
+  /* 设置页自己的页底：它比卡片面暗一档，卡片才浮得起来。这一条没动 */
   '--moyu-ground': ['#f6f7f9', 1]
 }
 
@@ -615,7 +629,7 @@ const expectRgba = ([hex, alpha]) => {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255, alpha]
 }
 
-function checkZeroRegression(paper) {
+function checkPaperPinned(paper) {
   const bad = []
   for (const [name, want] of Object.entries({ ...PAPER_EXPECT, ...PAPER_SHAPE })) {
     if (typeof want === 'string') {
@@ -631,8 +645,8 @@ function checkZeroRegression(paper) {
   if (paper.vars['--moyu-font'].includes('Cascadia Mono')) {
     bad.push('--moyu-font 在纸白下不该是等宽')
   }
-  if (bad.length) fail('Q1', `默认零回归：纸白下界面那几条 --moyu-* 与改动前不一致 —— ${bad.join('；')}`)
-  else pass('Q1', `默认零回归：纸白下 ${Object.keys(PAPER_EXPECT).length + Object.keys(PAPER_SHAPE).length} 条 --moyu-* 与改动前逐条相同`)
+  if (bad.length) fail('Q1', `纸白定格：界面那几条 --moyu-* 与定格表不一致 —— ${bad.join('；')}`)
+  else pass('Q1', `纸白定格：${Object.keys(PAPER_EXPECT).length + Object.keys(PAPER_SHAPE).length} 条 --moyu-* 与定格表逐条相同`)
 }
 
 /** 一套主题的"指纹"：配色变了它就变，用来问"三套互不相同" */
@@ -1063,7 +1077,7 @@ app.whenReady().then(async () => {
   for (const t of THEMES) withNotice[t.id] = await loadNotice(t.id)
   withNotice.downloading = await loadNotice('paper', 'downloading')
 
-  checkZeroRegression(byPage.chrome.paper)
+  checkPaperPinned(byPage.chrome.paper)
   checkDistinct(byPage)
   checkTerminalShape(byPage.chrome['crt-green'])
   checkRadius(byPage.chrome.paper, byPage.chrome['crt-green'])

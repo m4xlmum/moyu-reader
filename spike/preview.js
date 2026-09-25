@@ -22,6 +22,11 @@
  *   npx electron spike/preview.js --resize 1100x700   # 改窗口尺寸再截一张：让位与回归
  *   npx electron spike/preview.js --home          # 起始页
  *   npx electron spike/preview.js --home --themes # 起始页三套主题各截一张（走真实换主题那条路）
+ *   npx electron spike/preview.js --home --plate local   # 起始页停在「离线阅读」那一栏
+ *   npx electron spike/preview.js --home --click-plate video  # 照完「全部」再点一下「视频」栏
+ *   npx electron spike/preview.js --home --plate local --open-file 斗破苍穹.txt,三体（全集）.pdf
+ *   # 上一行：点一下「打开文件…」，让对话框返回这两本，看那一圈走完之后是什么样
+ *   npx electron spike/preview.js --home --plate local --width 448 --height 297   # 迷你档那一栏
  *   npx electron spike/preview.js --home --theme crt-green --width 448 --height 297
  *   npx electron spike/preview.js --theme night    # 界面也跟主题走，换一套配色看顶栏与右栏
  *   npx electron spike/preview.js --settings --theme crt-green   # 设置页同理
@@ -112,6 +117,60 @@ const SCREEN = (() => {
   const value = i >= 0 ? args[i + 1] : null
   return value === 'home' || value === 'settings' ? value : null
 })()
+/**
+ * --plate <id>：起始页停在某一栏上（all / video / reading / news / quiz / local）。
+ *
+ * 与 --screen 有一处不一样：那一屏是主进程记着的状态，因此 --screen 只要把它
+ * 摆出来；而「停在哪一栏」是起始页自己的、不落盘的临时状态——真机上只有
+ * 「点一下那一栏」这一条路走得到，这里也就照着点一下，不另开旁路摆状态。
+ * （点的那一下会顺手清空输入框，与真机上一样。）
+ *
+ * id 名单从界面上读（见下面的 PLATE_IDS），不在脚本里另抄一份——抄一份就会
+ * 在改名之后悄悄对不上，而那时照出来的图仍然叫那个名字。
+ */
+const PLATE = (() => {
+  const i = args.indexOf('--plate')
+  const value = i >= 0 ? args[i + 1] : null
+  return value && !value.startsWith('--') ? value : null
+})()
+
+/**
+ * --click-plate <id>：照完默认那一张（全部）之后点一下这一栏，再照一张。
+ *
+ * 与 --plate 的分工和 --screen / --click-screen 那一对一样：一个是「就在那一态
+ * 上」，一个是「看着它切过去」。换栏这一步要验的不只是画面换了——输入框里的
+ * 光标该留在原处、行列表该换成另一摊、状态行那个读数该跟着变一种说法
+ * （「站点 16」摆在离线阅读那一栏里是句错话），三件事只有点一下才知道。
+ */
+const CLICK_PLATE = (() => {
+  const i = args.indexOf('--click-plate')
+  const value = i >= 0 ? args[i + 1] : null
+  return value && !value.startsWith('--') ? value : null
+})()
+
+/**
+ * --open-file 斗破苍穹.txt,三体（全集）.pdf：让「打开文件…」那次对话框返回这几本。
+ *
+ * 无头窗口里弹不出系统对话框，因此这一步由假桥代劳（见 preview-preload.js），
+ * 而**点击是真的**：探针会去点「离线阅读」那一栏里那行「打开文件…」，
+ * 界面照真机那条路走一遍——调到 files.openLocal、拿到文件名、重新取一遍历史。
+ * 要看的是这一圈走完之后：页眉的标签数加一、「离线阅读」那一栏多出这本书，
+ * 而且那一行印的是书名与 .TXT，不是一条路径。
+ */
+const OPEN_FILE = (() => {
+  const i = args.indexOf('--open-file')
+  const value = i >= 0 ? args[i + 1] : null
+  return value && !value.startsWith('--') ? value : null
+})()
+
+/**
+ * 这一次先停在哪一栏。
+ *
+ * 由 --plate 说了算；--open-file 没配 --plate 时就是「离线阅读」——那行
+ * 「打开文件…」只长在那一栏里，因此用户不必再写一遍 --plate local。
+ */
+const PLATE_TARGET = PLATE ?? (OPEN_FILE ? 'local' : null)
+
 /**
  * --bg 0.35：把界面底板透明度设成这个值。
  *
@@ -320,7 +379,8 @@ ipcMain.on('preview:options', (event) => {
     notice: NOTICE,
     noticePhase: NOTICE_PHASE,
     noticePercent: NOTICE_PERCENT,
-    noticeMessage: NOTICE_MESSAGE
+    noticeMessage: NOTICE_MESSAGE,
+    openFile: OPEN_FILE
   }
 })
 
@@ -617,6 +677,66 @@ const PAGE_MEASURE = `(() => {
     termLineCount: document.querySelectorAll('.term .line').length,
     termFirstLine: box('.term .line'),
     termStatus: box('.term .status'),
+    /*
+     * 栏目线。当前那一栏与其余各栏的**字号对照**是这条线成不成立的判据，
+     * 因此两边都量：只量当前栏看不出「它比其余大」这件事。
+     */
+    plates: box('.plates'),
+    plateOn: document.querySelector('.plates .plate.on')?.dataset.plate ?? null,
+    plateItems: [...document.querySelectorAll('.plates .plate')].map((el) => {
+      const r = el.getBoundingClientRect()
+      return {
+        id: el.dataset.plate,
+        text: el.textContent.trim(),
+        on: el.classList.contains('on'),
+        x: Math.round(r.x),
+        w: Math.round(r.width),
+        size: getComputedStyle(el).fontSize
+      }
+    }),
+    /*
+     * 栏目线放不放得下。--width 448 那一档问的就是这个：六栏要么缩字号、要么
+     * 退回两字缩写，两者都量得出来（字号在上面那一项里，缩写看 text 有多长）。
+     * gap 是末栏右端到这一页内容右边界还剩多少像素，负数就是顶出边了。
+     */
+    plateFit: (() => {
+      const el = document.querySelector('.plates')
+      if (!el) return null
+      const root = document.querySelector('.modern, .term')
+      const last = el.lastElementChild
+      const pad = root ? parseFloat(getComputedStyle(root).paddingRight) : 0
+      return {
+        scrollW: el.scrollWidth,
+        clientW: el.clientWidth,
+        gap:
+          root && last
+            ? Math.round(root.getBoundingClientRect().right - pad - last.getBoundingClientRect().right)
+            : null
+      }
+    })(),
+    /** 根上挂着哪几个类：narrow 在不在，就是「六栏有没有退回两字缩写」 */
+    rootClass: document.querySelector('.modern, .term')?.className ?? null,
+    /** 状态行左端那个读数：它数的是什么、用哪种写法，随栏目与搜索状态变 */
+    stat: document.querySelector('.status .stat')?.textContent?.trim() ?? null,
+    /** 「离线阅读」那一栏的格式说明。别的栏目没有它 */
+    note: document.querySelector('.note')?.textContent?.trim() ?? null,
+    noteBox: box('.note'),
+    /** 行首那一格画的是什么：本机文件挂文件图标，站点要么图标要么首字母 */
+    lineFavicons: [...document.querySelectorAll('.lines .line .favicon')].map((el) =>
+      el.querySelector('svg') ? 'file' : el.querySelector('img') ? 'img' : 'initial'
+    ),
+    /*
+     * 行里露出来的文字若带着路径或 file: 就是漏了本机路径。起始页上本机文件
+     * 只该显示文件名（斗破苍穹.txt）；显示成 C:\Users\…\斗破苍穹.txt 就等于
+     * 把用户机器上的目录结构摆进了截图，这一项必须为空。
+     */
+    pathLeaks: [...document.querySelectorAll('.lines .line')]
+      .map((el) => {
+        const label = el.querySelector('.label')?.textContent ?? ''
+        const host = el.querySelector('.host')?.textContent ?? ''
+        return label + ' ' + host
+      })
+      .filter((text) => /[\\/]|file:/.test(text)),
     // 两套世界共用的主题选择器
     themeMenu: box('.theme-menu'),
     themePanel: box('.theme-menu .panel'),
@@ -658,6 +778,37 @@ const POPOVER_MEASURE = `(() => {
 })()`
 
 /** 从主题选择器里取全部主题 id——不在脚本里另抄一份名单 */const THEME_IDS = `[...document.querySelectorAll('.theme-menu .panel .chips')].map((el) => el.dataset.theme)`
+
+/**
+ * 从栏目线上取全部栏目 id——同样不另抄一份名单。
+ *
+ * --plate 要的是「界面上真有这一栏」，而不是「脚本里写着有这个 id」：
+ * 后者在栏目改名之后照样通过，照出来的却是一张没换过的图。
+ */
+const PLATE_IDS = `[...document.querySelectorAll('.plates .plate')].map((el) => el.dataset.plate)`
+
+/**
+ * 读一遍栏目线此刻的样子：停在哪一栏、状态行的读数、说明条、以及底下那几行
+ * 各自印着什么（动词 / 名称 / 右端）。
+ *
+ * 换栏这件事从截图上只看得出一半——「读数说的是不是这一栏在数的东西」、
+ * 「本机文件那几行右端印的是不是 .TXT 而不是域名」这类事，得把文字读出来。
+ */
+const READ_PLATES = `(() => {
+  const root = document.querySelector('.modern, .term')
+  return {
+    在哪一栏: document.querySelector('.plates .plate.on')?.dataset.plate ?? null,
+    缩成两字: root ? root.classList.contains('narrow') : null,
+    读数: document.querySelector('.status .stat')?.textContent?.trim() ?? null,
+    说明: document.querySelector('.note')?.textContent?.trim() ?? null,
+    行: [...document.querySelectorAll('.lines .line')].map((el) => ({
+      动词: el.querySelector('.verb')?.textContent?.trim() ?? '',
+      名称: el.querySelector('.label')?.textContent?.trim() ?? '',
+      右端: el.querySelector('.host')?.textContent?.trim() ?? '',
+      本机文件: !!el.querySelector('.favicon svg')
+    }))
+  }
+})()`
 
 /**
  * 拖动探针：在一组**有名有姓**的位置上按一下再松开，问这一下起没起拖动。
@@ -1016,6 +1167,11 @@ app.whenReady().then(async () => {
    * 不给 --screen 时一个字都不加——默认那几张图的名字 README 在用。
    */
   const screenTag = SCREEN ? `-screen${SCREEN}` : ''
+  /*
+   * 停在哪一栏也写进名字：六栏各是一张图，跑第二轮时彼此不能覆盖。
+   * 不给 --plate 时一个字都不加——「全部」那一张就是默认那张图，重跑该盖掉旧的。
+   */
+  const plateTag = PLATE_TARGET ? `-plate${PLATE_TARGET}` : ''
 
   /*
    * --drag-probe：先按一遍，再照第一张。
@@ -1047,6 +1203,40 @@ app.whenReady().then(async () => {
     )
   }
 
+  /*
+   * 起始页的栏目。三条路分开走：
+   *   --plate       先把这一栏点出来，再照（六栏各一张，看每一栏长什么样）
+   *   --click-plate 先照默认那一眼（全部），点一下这一栏再照一张（看换栏那一步）
+   *   --open-file   停在「离线阅读」上，点那行「打开文件…」，看走完之后是什么样
+   *
+   * 三条都是**真的点界面**：这一页「停在哪一栏」不落盘，真机上只有点这一条路
+   * 走得到，绕开它摆状态就会验出一个真实程序走不到的形状。
+   */
+  if (page === 'home' && (PLATE_TARGET || CLICK_PLATE)) {
+    const ids = await run(PLATE_IDS)
+    console.log(`PLATE_IDS ${JSON.stringify(ids)}`)
+    /*
+     * 名字对不上就直接失败，不照那一张：把一张「全部」标成 video 存下来，
+     * 比什么都不存更坏——那张图会被当作「视频栏长这样」的证据用。
+     */
+    for (const wanted of [PLATE_TARGET, CLICK_PLATE]) {
+      if (wanted && !ids.includes(wanted)) {
+        console.log(`PLATE_BAD ${JSON.stringify({ 要的: wanted, 界面上的: ids })}`)
+        app.exit(1)
+        return
+      }
+    }
+    if (PLATE_TARGET) {
+      await run(`document.querySelector('.plates .plate[data-plate="${PLATE_TARGET}"]').click()`)
+      await wait(300)
+      console.log(`PLATE 在 ${PLATE_TARGET}：${JSON.stringify(await run(READ_PLATES))}`)
+    }
+    // --themes 那一档照的是三套配色，换栏那一步在那一档里会把名字弄乱，明说一句
+    if (CLICK_PLATE && has('--themes')) {
+      console.log('PLATE_SKIP --themes 照的是三套配色，换栏那一步请用 --home --click-plate')
+    }
+  }
+
   if (page === 'home' && has('--themes')) {
     /*
      * 展开主题选择器。
@@ -1064,7 +1254,7 @@ app.whenReady().then(async () => {
     // 主题名单从面板里读，不在脚本里另抄一份
     const ids = await run(THEME_IDS)
     console.log(`THEMES ${JSON.stringify(ids)}`)
-    await shoot(`home-picker${size}${bg}`)
+    await shoot(`home-picker${plateTag}${size}${bg}`)
 
     for (let i = 0; i < ids.length; i += 1) {
       /*
@@ -1074,16 +1264,47 @@ app.whenReady().then(async () => {
        */
       await run(`document.querySelectorAll('.theme-menu .panel .item')[${i}].click()`)
       await wait(400)
-      await shoot(`home-${ids[i]}${size}${bg}`)
+      await shoot(`home-${ids[i]}${plateTag}${size}${bg}`)
       await run(openMenu)
       await wait(250)
     }
   } else {
     const name =
       page !== 'chrome'
-        ? `${page}${themeTag}${page === 'popover' ? `-${KIND}` : ''}${size}${tabs}${bg}${ball}${zoom}`
+        ? `${page}${themeTag}${plateTag}${page === 'popover' ? `-${KIND}` : ''}${size}${tabs}${bg}${ball}${zoom}`
         : `preview-${mode}${max}${themeTag}${noticeTag}${screenTag}${size}${tabs}${bg}${ball}${zoom}`
     await shoot(name)
+
+    /*
+     * 点一下那一栏，再照一张。要看的是「换栏」这一步本身：输入框里的光标该留在
+     * 原处、行列表该换成另一摊、状态行那个读数该跟着变一种说法（「站点 16」
+     * 摆在离线阅读那一栏里是句错话）——三件事在截图上只看得出一半，
+     * 因此前后各读一遍栏目线，打一行 PLATE。
+     */
+    if (page === 'home' && CLICK_PLATE) {
+      console.log(`PLATE 点之前：${JSON.stringify(await run(READ_PLATES))}`)
+      await run(`document.querySelector('.plates .plate[data-plate="${CLICK_PLATE}"]').click()`)
+      await wait(400)
+      console.log(`PLATE 点之后：${JSON.stringify(await run(READ_PLATES))}`)
+      await shoot(`${name}-clickplate-${CLICK_PLATE}`)
+    }
+
+    /*
+     * 走一遍「打开文件…」。
+     *
+     * 点的是那一行本身，界面照真机那条路走：调到 files.openLocal → 拿到文件名 →
+     * 重新取一遍历史（见 HomeApp.openFile）。对话框由假桥代劳，点击是真的。
+     * 要看的三件事都在那行日志里：页眉的标签数加了一、「离线阅读」那一栏多出
+     * 这本书、而那一行印的是书名与 .TXT 而不是一条路径。
+     */
+    if (page === 'home' && OPEN_FILE) {
+      const meta = () => run(`document.querySelector('.bar .meta')?.textContent?.trim() ?? null`)
+      console.log(`OPEN_FILE 点之前：${JSON.stringify({ 页眉: await meta(), ...(await run(READ_PLATES)) })}`)
+      await run(`document.querySelector('.lines .line.file')?.click()`)
+      await wait(400)
+      console.log(`OPEN_FILE 点之后：${JSON.stringify({ 页眉: await meta(), ...(await run(READ_PLATES)) })}`)
+      await shoot(`${name}-openfile`)
+    }
 
     /*
      * 最大化那一档：点一下右上角那枚还原键，再照一张。

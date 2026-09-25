@@ -24,12 +24,12 @@ import {
   type HomeTheme,
   type SectionId
 } from '@shared/constants'
-import { PRESET_SITES, sectionOfUrl } from '@shared/presets'
-import { registrableDomain, hostOf, resolveInput } from '@shared/url'
+import { resolveInput } from '@shared/url'
 import type { AppConfig, Bookmark, HistoryEntry, SiteRecord, TabState } from '@shared/types'
 import StartPage from './StartPage.vue'
 import { useBox } from './useBox'
-import { localRowsOf, rowsOf, type HomeRow } from './useRows'
+import type { HomeRow } from './useRows'
+import { plateRowsOf, statOf, tilesOf } from './useTiles'
 import { applyThemeToDocument } from '../composables/useTheme'
 import type { HomeTile } from './types'
 
@@ -60,12 +60,6 @@ const { h: pageH } = useBox(page)
  * 小号档有 406，还宽裕。
  */
 const compact = computed(() => pageH.value < 360)
-
-function domainOf(url: string | null | undefined): string | null {
-  if (!url) return null
-  const host = hostOf(url)
-  return host ? registrableDomain(host) : null
-}
 
 onMounted(async () => {
   config.value = await window.moyu.config.get()
@@ -117,102 +111,41 @@ async function reload(): Promise<void> {
 
 // ---------------------------------------------------------------- 站点编排
 
-/** 域名 → 图标地址。历史与书签里存过图标的，直接复用，这是浏览器的做法 */
-const iconByDomain = computed(() => {
-  const map = new Map<string, string>()
-  for (const entry of [...history.value, ...bookmarks.value]) {
-    const domain = domainOf(entry.url)
-    const icon = 'faviconUrl' in entry ? entry.faviconUrl : undefined
-    if (domain && icon && !map.has(domain)) map.set(domain, icon)
-  }
-  return map
-})
-
-/** 按访问次数排序的常访问站点 */
-const mostVisited = computed(() => {
-  const byDomain = new Map<string, HistoryEntry>()
-  for (const entry of history.value) {
-    const domain = domainOf(entry.url)
-    if (!domain) continue
-    const existing = byDomain.get(domain)
-    if (!existing || entry.visitCount > existing.visitCount) byDomain.set(domain, entry)
-  }
-  return [...byDomain.values()].sort((a, b) => b.visitCount - a.visitCount)
-})
-
-/**
- * 候选站点。
- *
- * 顺序即优先级：自己固定的 → 常访问的 → 预置的热门站点。
- *
- * 上限只是防着一份用了很久的历史把 DOM 撑起来：任何一档窗口都显示不了这么多行，
- * 因此这个截断不会被看见。
+/*
+ * 站点怎么挑、一栏里该有谁、读数数的是什么，全在 useTiles 里——那边不引 vue，
+ * 是纯数据，因此可以被 spike/home-sections.js 直接 require 到真跑的这一份。
+ * 这里只剩「把这些喂给它们」以及「量出这一页有多高」。
  */
-const MAX_TILES = 36
 
-const tiles = computed<HomeTile[]>(() => {
-  const seen = new Set<string>()
-  const out: HomeTile[] = []
-
-  const push = (name: string, url: string, key: string): void => {
-    const domain = domainOf(url)
-    if (!domain || seen.has(domain)) return
-    seen.add(domain)
-    out.push({
-      key,
-      name,
-      url,
-      domain,
-      icon: iconByDomain.value.get(domain),
-      section: sectionOfUrl(url)
-    })
-  }
-
-  for (const site of mySites.value) push(site.title, site.url, site.id)
-  for (const entry of mostVisited.value) push(entry.title || entry.url, entry.url, entry.id)
-  for (const preset of PRESET_SITES) push(preset.title, preset.url, preset.id)
-
-  return out.slice(0, MAX_TILES)
-})
+const tiles = computed<HomeTile[]>(() =>
+  tilesOf(mySites.value, history.value, bookmarks.value)
+)
 
 const lastRead = computed<HistoryEntry | null>(() => history.value[0] ?? null)
-
-/** 「全部」那一栏：继续上次在最前，其后是全部站点 */
-const allRows = computed(() => rowsOf(tiles.value, lastRead.value))
-
-/** 「离线阅读」那一栏：打开文件…在最前，其后是最近读过的本机文件 */
-const localRows = computed(() => localRowsOf(history.value))
 
 /** 搜索时要搜的是**全部板块**：在「视频」栏里搜「起点」得搜得到 */
 const searching = computed(() => query.value.trim() !== '')
 
-const plateRows = computed<HomeRow[]>(() => {
-  if (plate.value === 'local') return localRows.value
-  if (plate.value === 'all') return allRows.value
-  // 单栏只放本栏的站点。认不出栏目（section 为 null）的只在「全部」里出现
-  return rowsOf(
-    tiles.value.filter((tile) => tile.section === plate.value),
-    null
-  )
-})
+/** 「全部」那一栏。搜索时底下列的也是它（外加本机文件那一栏） */
+const allRows = computed(() => plateRowsOf(tiles.value, history.value, lastRead.value, 'all'))
 
-const rows = computed(() => (searching.value ? [...allRows.value, ...localRows.value] : plateRows.value))
+/** 「离线阅读」那一栏：打开文件…在最前，其后是最近读过的本机文件 */
+const localRows = computed(() => plateRowsOf(tiles.value, history.value, lastRead.value, 'local'))
 
-/**
- * 状态行左端的读数。
- *
- * 数的是这一栏里有多少东西——「站点 0」摆在离线阅读那一栏里是句错话，
- * 那边的数是本机文件。搜索时数的是命中的行，因为底下显示的就是那些。
- */
-const stat = computed<{ kind: 'site' | 'local' | 'match'; count: number }>(() => {
-  if (searching.value) return { kind: 'match', count: rows.value.length }
-  if (plate.value === 'local') return { kind: 'local', count: localRows.value.length - 1 }
-  const count =
-    plate.value === 'all'
-      ? tiles.value.length
-      : tiles.value.filter((tile) => tile.section === plate.value).length
-  return { kind: 'site', count }
-})
+const rows = computed<HomeRow[]>(() =>
+  searching.value
+    ? [...allRows.value, ...localRows.value]
+    : plateRowsOf(tiles.value, history.value, lastRead.value, plate.value)
+)
+
+const stat = computed(() =>
+  statOf({
+    tiles: tiles.value,
+    history: history.value,
+    plate: plate.value,
+    matchCount: searching.value ? rows.value.length : null
+  })
+)
 
 /** 格式说明只挂在离线阅读那一栏上，别的栏目没有 */
 const note = computed(() =>
