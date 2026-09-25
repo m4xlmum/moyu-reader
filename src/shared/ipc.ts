@@ -183,6 +183,17 @@ export interface TabsStatePayload {
   activeTabId: string | null
   /** 起始页 / 系统设置哪一屏正在上面；看着网页时为 null */
   screen: OwnScreen | null
+  /**
+   * 上一次看着的那张网页。
+   *
+   * 「原路返回」回的就是它（TabManager.leaveScreen）。它出现在这份快照里
+   * **只为顶栏那个地址栏开关**：那一格写的是「当前这张网页」，而停在自家那两屏上时
+   * 没有当前网页——没有它，界面就只剩屏名可写，于是那一格会变成「起始页」「系统设置」，
+   * 顶栏读起来像多了一个叫「系统设置」的标签页（用户报的正是这条）。
+   *
+   * 界面拿到它，就不必自己攒一份「上一次是什么」的副本——那类副本迟早与真身对不上。
+   */
+  lastGuestId: string | null
 }
 
 export interface OpenPopoverRequest {

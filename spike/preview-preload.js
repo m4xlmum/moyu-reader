@@ -55,6 +55,10 @@ const FAVICON =
  *
  * --tabs N 只取前 N 个：标签条放得下与否由宽度算出来，得能拿少几张标签
  * 试出「放得下」那一态，否则永远只看得到它让位。
+ *
+ * --no-tabs：一张网页都没有——全关光了，正文区自己落回起始页。
+ * 这是顶栏上那个地址栏开关**唯一一个字都不写**的场合（没有网页就没有名字，
+ * 只剩一枚放大镜），而它在别处都写得出东西来，所以得单独摆一次。
  */
 const ALL_TABS = [
   ['Claude Code 官方文档 · 快速开始与环境配置', 'https://docs.claude.com/en/docs/claude-code'],
@@ -75,7 +79,7 @@ const ALL_TABS = [
   muted: false
 }))
 
-const TABS = opts.tabs > 0 ? ALL_TABS.slice(0, opts.tabs) : ALL_TABS
+const TABS = opts.noTabs === true ? [] : opts.tabs > 0 ? ALL_TABS.slice(0, opts.tabs) : ALL_TABS
 
 /**
  * 正文区此刻停在哪一屏——`'home' | 'settings' | null`（null = 正在看着某张网页）。
@@ -88,8 +92,10 @@ const TABS = opts.tabs > 0 ? ALL_TABS.slice(0, opts.tabs) : ALL_TABS
  *
  * --screen home|settings 摆的是「先开着网页、再进那一屏」那一态，
  * 因此两张表都要照着填：停在那屏上、并且记得回来该回哪张。
+ * --no-tabs 时没有「刚才那张」可记，`lastGuestId` 就是 null，屏也跟着落回起始页
+ * （与主进程关掉最后一张网页时同一条路，见 TabManager.close）。
  */
-let screen = opts.screen ?? null
+let screen = opts.noTabs === true ? (opts.screen ?? 'home') : (opts.screen ?? null)
 /** 默认停在第二格（有 favicon 的那一格），--tabs 1 时退回第一格 */
 const FIRST_TAB = TABS[1]?.id ?? TABS[0]?.id ?? null
 let activeTabId = screen ? null : FIRST_TAB
@@ -384,12 +390,18 @@ function leaveScreen() {
   emitTabs()
 }
 
-/** 标签页的对外快照。isActive 跟着当前那一格算，不另存一份，免得两处说法对不上 */
+/**
+ * 标签页的对外快照。isActive 跟着当前那一格算，不另存一份，免得两处说法对不上。
+ *
+ * `lastGuestId` 照真机填（见 shared/ipc.ts 的同名字段）：顶栏那个地址栏开关写的是
+ * **一张网页**，停在自家那两屏上时它写的就是这一张，而不是屏名。
+ */
 function tabsState() {
   return {
     tabs: TABS.map((t) => ({ ...t, isActive: t.id === activeTabId })),
     activeTabId,
-    screen
+    screen,
+    lastGuestId
   }
 }
 

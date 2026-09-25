@@ -126,12 +126,20 @@ if (has('--reduced-motion')) app.commandLine.appendSwitch('force-prefers-reduced
 /** 只留前 N 个标签页。标签条放不放得下是算出来的，得能用少几张试出「放得下」那一态 */
 const TABS = num('--tabs', 0)
 /**
+ * --no-tabs：一张网页都没有（全关光了，正文区自己落回起始页）。
+ *
+ * 这是顶栏那个地址栏开关唯一一个字都不写的场合：它写的是一张网页，
+ * 而没有网页就没有名字（见 TopBar 的 siteLabel），只剩一枚放大镜。
+ */
+const NO_TABS = has('--no-tabs')
+/**
  * --screen home|settings：界面停在这一屏上。
  *
  * 与 --home / --settings 是两回事：那两个是把起始页 / 设置**那一份文档**单独
  * 渲染出来看它自己长什么样；这个是「界面处在『停在那一屏上』那一态」——
  * 正文区那块原生的视图在预览里根本不存在，要看的是界面这一圈：
- * 标签条哪一格都不高亮、那颗键自己亮着、地址栏开关上写着这一屏的名字。
+ * 标签条哪一格都不高亮、那颗键自己亮着。顶栏那个地址栏开关**不跟着变**：
+ * 它写的是一张网页，停在自家那两屏上时写的是「刚才那张」（见 TopBar 的 siteLabel）。
  *
  * 想看见「点进去 / 再点一次回来」这一步，用 --click-screen。
  */
@@ -431,6 +439,7 @@ ipcMain.on('preview:options', (event) => {
     maximized: MAXIMIZED,
     theme,
     tabs: TABS,
+    noTabs: NO_TABS,
     screen: SCREEN,
     bgAlpha: BG,
     ballIcon: BALL_ICON,
@@ -668,6 +677,15 @@ const MEASURE = `(() => {
         ]
       })
     ),
+    /*
+     * 地址栏开关上写着的那几个字。
+     *
+     * 它说的是**一张网页**，因此停在起始页 / 系统设置上时不该跟着变成那一屏的名字
+     * （用户要求）：那两个词一出现，顶栏读起来就像多了一个叫「系统设置」的标签页。
+     * 这一格是纯渲染结果——siteLabel 怎么算是 TopBar 的事，它画在屏幕上是什么
+     * 只有量一遍才知道。迷你档里那一格是藏起来的（读回空串），因此要在 960 这一档问。
+     */
+    addressLabel: document.querySelector('.address-toggle .ellipsis')?.textContent?.trim() ?? null,
     /*
      * 右栏那两条透明度滑块，以及功能栈有没有被撑出滚动区。
      *
@@ -1458,6 +1476,22 @@ app.whenReady().then(async () => {
       console.log(`BALL_GLYPH ${JSON.stringify(measured.ballGlyph)}`)
       // 两屏那两颗键的实测配色：亮着的那颗是不是真的亮着，暗夜下靠肉眼分不清
       console.log(`SCREEN_KEYS ${JSON.stringify(measured.screenKeys)}`)
+      /*
+       * 地址栏开关上写着什么，以及**它有没有跟着屏名变**——用户报的就是这一条。
+       *
+       * 判据：停在自家那两屏上时，那一格必须仍是刚才那张网页（与不给 --screen 时
+       * 逐字相同），因此 `写的是屏名` 必须是 false。这两个屏名写死在这里，
+       * 与上面 SCREEN_KEYS 那两个键同一个理由：这一条要盯的正是「屏名有没有漏到
+       * 一个该写网页的地方」。
+       */
+      console.log(
+        `SCREEN_PILL ${JSON.stringify({
+          停在哪一屏: SCREEN ?? null,
+          开关上写着: measured.addressLabel,
+          写的是屏名:
+            measured.addressLabel === '起始页' || measured.addressLabel === '系统设置'
+        })}`
+      )
       // 最大化那一档：右上角两样东西的实测几何，判据见 MEASURE 里的说明
       if (MAXIMIZED) {
         console.log(

@@ -47,7 +47,7 @@ import { useTabs } from '../composables/useTabs'
 import { useWindowState } from '../composables/useWindowState'
 
 const { config, patch } = useConfig()
-const { tabs, activeTabId, activeTab, screen } = useTabs()
+const { tabs, activeTabId, activeTab, screen, lastGuest } = useTabs()
 const { state, collapse, expand, restore } = useWindowState()
 
 /** 底板透明度写在文档根上，理由见 useBackgroundAlpha */
@@ -146,6 +146,7 @@ const geometryVars = {
         :tabs="tabs"
         :active-tab-id="activeTabId"
         :active-tab="activeTab"
+        :last-guest="lastGuest"
         :screen="screen"
         :address-open="addressOpen"
         :rail-visible="railVisible"

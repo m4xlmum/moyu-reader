@@ -3,7 +3,8 @@
  * 顶部功能栏：两屏入口、导航、地址栏开关、标签页、手机 / 置顶、窗口操作。
  *
  * 地址栏本身不在这里——它默认折叠，展开时是顶栏下方独立的一行。
- * 这里只留一个开关，兼作「当前在哪」的一眼可见处。
+ * 这里只留一个开关，它写的是**当前这张网页**（停在自家那两屏上时写「刚才那张」，
+ * 理由见 siteLabel）：顶栏里只有它跟着网页走，「在哪一屏」由左上角那两颗键的高亮说。
  *
  * 起始页与系统设置这两屏**不是标签页**，各自在栏左占一枚键（见下），
  * 因此它们不出现在标签条里，也不跟着标签页一起被关掉。
@@ -16,7 +17,6 @@
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed } from 'vue'
-import { HOME_TITLE, SETTINGS_TITLE } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
 import type { OwnScreen, TabState } from '@shared/types'
 import Icon from './Icon.vue'
@@ -28,6 +28,8 @@ const props = defineProps<{
   tabs: TabState[]
   activeTabId: string | null
   activeTab: TabState | null
+  /** 上一次看着的那张网页；停在自家那两屏上时地址栏开关写它，见 siteLabel */
+  lastGuest: TabState | null
   /** 正文区此刻停在自家哪一屏上；看着网页时为 null */
   screen: OwnScreen | null
   /** 地址栏当前是否展开，来自主进程回传的窗口状态 */
@@ -47,22 +49,23 @@ const emit = defineEmits<{
 /** 整条栏可拖动。按在按钮、地址栏开关、标签条上是操作，其余地方都是拖窗口 */
 const drag = useWindowDrag()
 
-/** 当前那一屏的名字；看着网页时为 null。只有地址栏开关读它（标签条不读，见 TabStrip） */
-const screenTitle = computed(() =>
-  props.screen === 'settings' ? SETTINGS_TITLE : props.screen === 'home' ? HOME_TITLE : null
-)
-
 /**
- * 当前页的域名，显示在地址栏开关上。
+ * 地址栏开关上那个名字。
  *
- * 停在起始页 / 系统设置上时显示那一屏的名字：这两屏不在标签状态里
- * （它们不是标签页），域名也就无从谈起。真实的那条 file:// 路径既不显示，
- * 也不该显示。
+ * 它说的是**一张网页**，因此停在起始页 / 系统设置上时**不跟着变成那一屏的名字**
+ * （用户要求）：那两个词一出现，顶栏读起来就像多了一个叫「系统设置」的标签页
+ * ——与标签条上那一格同一个道理（见 TabStrip 里那段注释，那里也是这么改的）。
+ *
+ * 此刻手里没有当前网页，就写「刚才那张」——也就是左上角那两颗键再点一次会回到的
+ * 那一个（主进程的 lastGuestId，见 tabManager.leaveScreen）。于是切进切出这两屏时，
+ * 这一格**一动不动**，而它说的话与那两颗键的提示语「回到刚才那张网页」是同一句。
+ *
+ * 一张网页都没有时（刚启动、又被关光了）它一个字都不写：没有网页就没有名字，
+ * 那个开关只剩一枚放大镜。
  */
 const siteLabel = computed(() => {
-  if (screenTitle.value) return screenTitle.value
-  const url = props.activeTab?.url
-  if (!url) return HOME_TITLE
+  const url = (props.activeTab ?? props.lastGuest)?.url
+  if (!url) return ''
   try {
     return new URL(url).host || url
   } catch {

@@ -341,6 +341,23 @@ async function main() {
     { 标签条: snapSettings.tabs.length, screen: snapSettings.screen, 显隐: visibles() }
   )
 
+  /*
+   * 停在自家屏上时，快照里还得记着「刚才那张网页」。
+   *
+   * 顶栏那个地址栏开关靠它才不跟着写成屏名（用户报的毛病：切到起始页 / 设置之后，
+   * 那一格写起了「起始页」「系统设置」，读起来像顶栏上多了一个叫「系统设置」的标签页）。
+   * 这条事实**唯一的主人**在主进程：界面拿不到它，就只能自己攒一份「上一次是什么」的
+   * 副本，而那正是这一版要避免的东西（状态只有一份，界面只是它的投影）。
+   *
+   * 与 Q4 是一对：那一问验的是「原路返回回到谁」，这一问验的是「同一份记忆也有外发的路」。
+   */
+  record(
+    'Q2b',
+    '停在自家那两屏上时，快照里仍记着刚才那张网页（顶栏那个开关靠它才不跟着变成屏名）',
+    snapHome.lastGuestId === bId && snapSettings.lastGuestId === bId ? '是' : '否',
+    { 起始页上的: snapHome.lastGuestId, 设置上的: snapSettings.lastGuestId, 刚才那张: bId }
+  )
+
   // ------------------------------------------------------------ Q3 不叠视图
   step('再点一次「设置」')
   const settingsWcId = settingsView.webContents.id

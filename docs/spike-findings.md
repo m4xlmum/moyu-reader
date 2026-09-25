@@ -26,6 +26,8 @@ Q18 起是「悬浮球图标 · 16:9 边缘缩放 · 最大化与还原 · 视�
 Vue 的重画在微任务里，派事件那一个任务里读到的显示值是上一帧的**。
 **Q48 来自「更新压成两下」那一版，量的不是本机行为而是 electron-builder 的安装器模板：
 assisted installer（`oneClick: false`）要静默装完还把应用叫回来，命令行里到底缺哪一枚不行**。
+**Q49 来自「切到起始页 / 设置时顶栏那个名字跟着变」那一版，量的是「此刻」与「刚才」的分别：
+快照里那几个字段说的全是此刻，而顶栏那一格要写的是刚才**。
 
 ## 结论
 
@@ -86,6 +88,7 @@ assisted installer（`oneClick: false`）要静默装完还把应用叫回来，
 | Q46 | 「配置改了要告诉界面」这件事，广播挂在发起写入的那一条 IPC 上够不够 | **不够，而且这就是用户报的那条毛病。**原先只有 `INVOKE.configPatch` 那一条路广播 `config:changed`，而整体透明度走的是另一条：右栏那条滑块 → `win.setOpacity` → `WindowController.setOpacity()` → `config.set(...)`，它只发 `window:state`。`ConfigStore.subscribe()` 一直在、写得也对，但**订阅者是 0**——于是界面手里那份配置镜像停在挂载时读到的值（默认 100%）。实测（修之前）：拖动中配置已是 0.4、窗口确实 40%，**松手那一帧滑块显示 100%**。设置页里改同一条也会跳，只是那儿改完不松手 | 广播改挂在 `ConfigStore` 的订阅上（`src/main/index.ts` 里一句 `config.subscribe(...)`），**谁改的都算**：configPatch、setOpacity、setChrome、updateService.ignore、persistExpandedBounds、lastSession 全在这一句之下，不必逐条去补——补一条就还有下一条要走这条老路。`configPatch` 那个 handler 从此只留窗口那一侧的副作用。验证：`spike/live-app.js` A10（合成拖动）/ A11（不碰界面，直接调 `win.setOpacity(0.55)`，滑块也得跟着到 55%）、`spike/preview.js --drag-opacity 40` |
 | Q47 | 在派发 `input` 的那个任务里，紧接着读那一格渲染出来的文字，读到的是哪一帧 | **上一帧。**Vue 的重画在微任务里，而 `dispatchEvent` 是同步的——同一个 `executeJavaScript` 任务里读 `.value`、读元素高度这类**渲染结果**，拿到的是改动之前的值。摔的样子：拖动中那一次读出来 100%（配置已经是 0.4），于是「修正起效了没有」被自己的读数判红 | 写与读分成两次 `executeJavaScript`，中间等一次冲刷（`live-app.js` A10 与 `preview.js` 的 `--drag-opacity` 里都是 `await wait(50)` 再读）。它与 Q11（隐藏窗口抓图晚一帧）同属一类：**要读的是画出来的东西，就得让画先画完**。只读状态（`config.window.opacity` 这种由主进程给的值）不受影响，那个不是渲染结果 |
 | Q48 | assisted installer（`oneClick: false`）上，`安装包.exe /S --updated` 够不够让它在装完之后**把应用启动回来** | **不够，而且症状是静默的：装完了，没有人回来。**electron-builder 的 `templates/nsis/installSection.nsh` 里「装完启动应用」这一段分两支：`!ifdef ONE_CLICK` 那一支的判据是 `${Silent}`（静默就重启，所以 oneClick 的安装包天生全自动）；我们这一支（assisted）的判据是 `${isForceRun} ${andIf} ${Silent}`——**静默之外还要求 `--force-run`**。少了它，`/S` 让向导不出现、`--updated` 让旧实例自己退掉，然后安装程序一声不响地退出，「全自动」断在最后一步：用户点的是「更新并重启」，回来的是空桌面 | 三枚参数一起用，一枚都不能少（`src/main/services/updateService.ts` 的 `SILENT_INSTALL_ARGS`）：`/S`（不走向导）、`--updated`（这是升级：容忍还有一个实例在跑、跳过桌面快捷方式重建）、`--force-run`（装完启动应用）。**装到哪儿不归我们管**——`/S` 下不选目录，安装程序从 `HKCU\Software\<APP_GUID>\InstallLocation` 读回上次那个目录（`APP_GUID` = `UUID.v5(appId, ELECTRON_BUILDER_NS_UUID)`，`include/installer.nsh` 写、`multiUser.nsh` 读回 `$INSTDIR`），本机实测该键为 `8a1898f1-95fb-5c4a-9689-1796e9580e72` → `C:\Users\poem\Desktop\moyu-reader`，即用户当初选的目录，升级不会多出一份。验证：`spike/update-check.js` Q10 断言 spawn 的参数**逐字**等于这三枚——少了 `--force-run` 那一遍，Q10 当场红 |
+| Q49 | 顶栏那一格写着「当前这张网页」，而界面手里的快照有没有「当前这张网页」 | **停在自家那两屏上时没有——三个字段说的全是「此刻」。**`TabsStatePayload` 里 `tabs` 是此刻开着的网页、`activeTabId` 是此刻正看着的那张（停在自家两屏上是 **null**）、`screen` 是此刻停在哪一屏，一个「刚才」都没有。于是顶栏唯一那点跟着网页走的字（地址栏开关上的域名）在那种时刻只剩屏名可写，切进去那一格就变成「起始页」「系统设置」——读起来像多了一个叫「系统设置」的标签页（用户报的正是这条）。实测（修之前，`preview.js --screen settings`）：`{"停在哪一屏":"settings","开关上写着":"系统设置","写的是屏名":true}` | 把真身**本来就有**的那个事实放进快照：`TabManager.lastGuestId`（`leaveScreen` 回的就是它）加进 `TabsStatePayload`，界面只投影、不另攒一份「上一次是什么」——副本迟早与真身对不上（托盘菜单进去、主进程关掉那张网页、`lastSession` 恢复，界面那份副本一个都跟不上）。修后同一读数：三个状态（不在屏上 / 起始页 / 设置）全是 `juejin.cn`，`--click-screen` 五个来回每一步也读到同一个域名；而「此刻在哪一屏」仍旧由左上角那颗键的高亮说（`SCREEN_KEYS` 照旧）。一张网页都没有时（全关光了，落回起始页）那一格一个字都不写，只剩放大镜（`--no-tabs`，判据在 `TopBar` 的 `siteLabel`） |
 
 ## 对原设计的两处修正
 

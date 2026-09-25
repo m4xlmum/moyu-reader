@@ -216,7 +216,12 @@ export class TabManager {
    * 哪天加了一个字段只补了一边。
    */
   snapshot(): TabsStatePayload {
-    return { tabs: this.list(), activeTabId: this.getActiveId(), screen: this.getScreen() }
+    return {
+      tabs: this.list(),
+      activeTabId: this.getActiveId(),
+      screen: this.getScreen(),
+      lastGuestId: this.lastGuestId
+    }
   }
 
   /** 供会话恢复使用的网址列表。起始页与设置不是访客内容，不参与恢复 */
