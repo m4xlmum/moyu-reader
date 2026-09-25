@@ -6,6 +6,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
+import type { SiteSection } from '@shared/constants'
 
 /** 一个可打开的站点条目 */
 export interface HomeTile {
@@ -14,4 +15,12 @@ export interface HomeTile {
   url: string
   domain: string
   icon?: string
+  /**
+   * 这个站点归在哪一栏（见 @shared/presets 的 sectionOfUrl）。
+   *
+   * null 是「认不出来」，不是「没有这一栏」：用户自己加的站点与他不常走的
+   * 那些域名都可能落在这里。这样的条目只出现在「全部」里——宁可让它在
+   * 「全部」中多占一行，也不要按关键词猜一个可能猜错的栏目。
+   */
+  section: SiteSection | null
 }

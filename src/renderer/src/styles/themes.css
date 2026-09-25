@@ -21,32 +21,47 @@
  * 这也正是起始页那几个 rgba 面在这里要另给一份等价三通道的原因：起始页的
  * hover 是「半透明绿叠在黑底上」，而界面的面必须能被一个变量整体乘淡。
  *
+ * 这次重做的场景是一句话：**白天的办公室，屏幕旁边就是 Word 与 Excel**。
+ * 三套配色都照它定：亮的那套是纸不是纯白（旁边那些软件的白更刺眼，这一块要
+ * 沉一档），暗的两套分别走「深蓝近黑」与「单色荧光屏」。
+ *
+ * 字压底一律 ≥4.5:1，逐条由 spike/theme-chrome.js 量过；下面几段里的
+ * 「实测」都是它给的数。其中起始页的第三级字（--text-tertiary）量的是**页底**
+ * 而不是界面那块面——那行 11px 的注脚就落在页底上，压面合格压页底不合格
+ * 等于没量（#767e8c 那一档正是这么被否掉的）。
+ *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 /*
  * 纸白。默认主题，也是兜底：`:root` 一并列出，于是 html 上永远至少有它这一份，
  * 配置还没读回来（或主题名写坏了）的那一瞬间不会出现「变量没有值」。
- * 值与改动前的 tokens.css / home.css 逐条相同——默认外观一个像素都不许变。
+ *
+ * 底是 #f9fafb 而不是纯白：#ffffff 留给顶栏与地址栏那些**面**（它们要像
+ * 浏览器自己的工具条），起始页与设置页的**地**沉一档。两者差 6/255，
+ * 单看不出来，并排看就是「工具条浮在纸上」。
  */
 :root,
 [data-theme='paper'] {
   /* 起始页 */
-  --ground: #ffffff;
-  --ground-hover: #f3f4f6;
-  --ground-active: #e8eaee;
+  --ground: #f9fafb;
+  --ground-hover: #f0f2f5;
+  --ground-active: #e6e9ee;
 
-  --text: #111827;
-  --text-secondary: #5b6472;
-  --text-tertiary: #6f7683;
+  --text: #15181d;
+  --text-secondary: #5a6270;
+  /* 压页底 4.64:1，压白色的面 4.85:1 */
+  --text-tertiary: #666d79;
 
-  --divider: #e5e7eb;
-  --divider-strong: #d1d5db;
+  --divider: #e6e8ec;
+  --divider-strong: #d2d6dd;
   --tile: #f1f3f5;
 
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --accent-soft: rgba(37, 99, 235, 0.1);
+  /* 靛，不是浏览器蓝。#2563eb 那一档蓝是「链接的颜色」，
+     而这个程序的每一处强调色都长在按钮与栏目线上，不在链接上 */
+  --accent: #2f4a9e;
+  --accent-hover: #273f86;
+  --accent-soft: rgba(47, 74, 158, 0.1);
 
   /* 形状。默认与世界无关，终端世界会整组覆盖掉（见文件末尾） */
   --radius-sm: 4px;
@@ -58,18 +73,20 @@
   --moyu-surface-rgb: 255 255 255;
   --moyu-surface-hover-rgb: 243 244 246;
   --moyu-surface-active-rgb: 232 234 238;
-  --moyu-border-rgb: 209 213 219;
-  --moyu-hairline-rgb: 229 231 235;
+  /* 细线与起始页那一对同一个值：同一个主题里只有一种细线，
+     否则顶栏的边和起始页的分节线会差一个色号，挨着看就是两条线 */
+  --moyu-border-rgb: 210 214 221;
+  --moyu-hairline-rgb: 230 232 236;
 
-  --moyu-ink: #111827;
-  --moyu-text: #111827;
-  --moyu-text-dim: #5b6472;
-  --moyu-text-faint: #6f7683;
+  --moyu-ink: #15181d;
+  --moyu-text: #15181d;
+  --moyu-text-dim: #5a6270;
+  --moyu-text-faint: #666d79;
 
-  --moyu-accent: #2563eb;
-  --moyu-accent-hover: #1d4ed8;
-  --moyu-accent-soft: rgba(37, 99, 235, 0.1);
-  --moyu-danger: #b91c1c;
+  --moyu-accent: #2f4a9e;
+  --moyu-accent-hover: #273f86;
+  --moyu-accent-soft: rgba(47, 74, 158, 0.1);
+  --moyu-danger: #b3261e;
 
   /*
    * 「凹下去」的面：设置页左栏、行内代码的底。
@@ -85,18 +102,17 @@
   /*
    * 「这一格是选中的」那张面。设置页上被选中的按钮用它当底，字是强调色。
    *
-   * 它为什么不直接借 --moyu-accent-soft：那张面上要**压字**。10% 的强调色叠在
-   * 卡面上是 #e9effd，同样的强调色字压上去是 4.49:1——差一点点不到 4.5，而这里
-   * 是正文。浅一档（#eef4fd）就到 4.67:1。顶栏上的高亮按钮用的是 accent-soft，
-   * 那上面是图标不是字，两者本来就该分开取值。
+   * 它为什么不直接借 --moyu-accent-soft：那张面上要**压字**，而且要求 4.5:1。
+   * 靛这一档很深（压白 8.1:1），因此这里有余量把面染得看得见：
+   * #eef1fa 上压强调色是 7.3:1，比要求宽出一倍多。
    */
-  --moyu-selected: #eef4fd;
+  --moyu-selected: #eef1fa;
 
   /*
    * 画在实色填充（强调色、危险色）之上的字。
    *
-   * 纸白下它是白：强调色 #2563eb 够深，白字在上面 5.2:1。到了深色主题，
-   * #6ea8fe 与 #6dffa0 都是亮的，白字压上去只剩 2.4:1 与 1.3:1——悬浮球里
+   * 纸白下它是白：强调色 #2f4a9e 够深，白字在上面 8:1。到了深色主题，
+   * #8ea9ea 与 #6bffa4 都是亮的，白字压上去只剩 2.4:1 与 1.3:1——悬浮球里
    * 那枚图形、关闭键悬停时的那个 ✕ 会一起糊掉。因此这个值要跟着主题翻面，
    * 而不是钉死成白。它盖的是「填充 + 填充上的字」这一对，两个填充色在
    * 三套主题下深浅同步，一个值够用。
@@ -129,100 +145,103 @@
   --moyu-panel: var(--ground);
 
   /* 系统设置那一页自己的底板。与起始页的 --ground 不是同一个值：
-     起始页是纯白，设置页是浅灰——两者都是「页底」，但一直以来取色不同，
-     这次只把名字并过来，不改其中任何一页的观感 */
+     设置页整页都是卡片，页底要再暗一档卡片才浮得起来，
+     而起始页的页底是「纸」。这个差别一直存在，不是这次改出来的 */
   --moyu-ground: #f6f7f9;
 }
 
 /* 暗夜。深色但不发光：屏幕不亮，晚上眼睛舒服 */
 [data-theme='night'] {
-  --ground: #16181d;
-  --ground-hover: #1e2128;
-  --ground-active: #262a33;
+  --ground: #12151c;
+  --ground-hover: #1b1f28;
+  --ground-active: #232833;
 
-  --text: #e6e8ec;
-  --text-secondary: #a2a9b6;
-  --text-tertiary: #7d8695;
+  /* 实测压面 #12151c：15.0 / 7.8 / 5.0 */
+  --text: #e7e9ee;
+  --text-secondary: #a3aab8;
+  --text-tertiary: #7e8697;
 
-  --divider: #262a33;
-  --divider-strong: #363c47;
-  --tile: #22262e;
+  --divider: #242a36;
+  --divider-strong: #333b4a;
+  --tile: #1e232c;
 
-  --accent: #6ea8fe;
-  --accent-hover: #8bbcff;
-  --accent-soft: rgba(110, 168, 254, 0.14);
+  --accent: #8ea9ea;
+  --accent-hover: #a8c0f2;
+  --accent-soft: rgba(142, 169, 234, 0.14);
 
-  --moyu-surface-rgb: 22 24 29;
-  --moyu-surface-hover-rgb: 30 33 40;
-  --moyu-surface-active-rgb: 38 42 51;
-  --moyu-border-rgb: 54 60 71;
-  --moyu-hairline-rgb: 38 42 51;
+  --moyu-surface-rgb: 18 21 28;
+  --moyu-surface-hover-rgb: 27 31 40;
+  --moyu-surface-active-rgb: 35 40 51;
+  --moyu-border-rgb: 51 59 74;
+  --moyu-hairline-rgb: 36 42 54;
 
-  --moyu-ink: #e6e8ec;
-  --moyu-text: #e6e8ec;
-  --moyu-text-dim: #a2a9b6;
-  --moyu-text-faint: #7d8695;
+  --moyu-ink: #e7e9ee;
+  --moyu-text: #e7e9ee;
+  --moyu-text-dim: #a3aab8;
+  --moyu-text-faint: #7e8697;
 
-  --moyu-accent: #6ea8fe;
-  --moyu-accent-hover: #8bbcff;
-  --moyu-accent-soft: rgba(110, 168, 254, 0.14);
-  --moyu-danger: #ff8a8a;
+  --moyu-accent: #8ea9ea;
+  --moyu-accent-hover: #a8c0f2;
+  --moyu-accent-soft: rgba(142, 169, 234, 0.14);
+  --moyu-danger: #ff9a9a;
 
   /* 页底 #101216 再压暗一档。悬停反过来要抬亮，否则在深色下「悬停」与
      「没悬停」看不出区别 */
   --moyu-sunken: #0b0d10;
   --moyu-sunken-hover: #1a1d23;
-  --moyu-danger-soft: rgba(255, 138, 138, 0.14);
-  --moyu-selected: rgba(110, 168, 254, 0.12);
-  --moyu-on-fill: #16181d;
+  --moyu-danger-soft: rgba(255, 154, 154, 0.14);
+  --moyu-selected: rgba(142, 169, 234, 0.12);
+  --moyu-on-fill: #12151c;
 
   --moyu-ground: #101216;
 }
 
 /* 磷绿。P1 单色荧光屏：绿字、黑底、扫描线、余辉。终端世界目前唯一的配色 */
 [data-theme='crt-green'] {
-  --ground: #050a06;
-  --ground-hover: rgba(77, 255, 136, 0.08);
-  --ground-active: rgba(77, 255, 136, 0.15);
+  --ground: #050b07;
+  --ground-hover: rgba(87, 240, 140, 0.08);
+  --ground-active: rgba(87, 240, 140, 0.15);
 
-  --text: #4dff88;
-  --text-secondary: #35cc6d;
-  --text-tertiary: #2a9e57;
+  /* 实测压面 #050b07：13.5 / 8.8 / 5.2 */
+  --text: #57f08c;
+  --text-secondary: #3cc46f;
+  --text-tertiary: #2b9455;
 
   --divider: #12401f;
   --divider-strong: #1e6b35;
-  --tile: rgba(77, 255, 136, 0.1);
+  --tile: rgba(87, 240, 140, 0.1);
 
-  --accent: #6dffa0;
+  --accent: #6bffa4;
   --accent-hover: #9bffc2;
-  --accent-soft: rgba(109, 255, 160, 0.14);
+  --accent-soft: rgba(107, 255, 164, 0.14);
 
   /* 界面那三个面要的是「能被 --moyu-alpha 整体乘淡」的三通道，
      因此不能直接搬上面那两个 rgba。这里给的是等价实色：
-     0.08 与 0.15 的荧光绿叠在 #050a06 上之后的结果 */
-  --moyu-surface-rgb: 5 10 6;
-  --moyu-surface-hover-rgb: 11 30 16;
-  --moyu-surface-active-rgb: 16 47 26;
+     一个面本身就是屏底（荧光屏没有卡片），另外两档是 0.08 与 0.15 的
+     荧光绿叠在 #050b07 上之后的结果——与起始页那两个 hover 严格同色 */
+  --moyu-surface-rgb: 5 11 7;
+  --moyu-surface-hover-rgb: 12 29 18;
+  --moyu-surface-active-rgb: 17 45 27;
   --moyu-border-rgb: 30 107 53;
   --moyu-hairline-rgb: 18 64 31;
 
-  --moyu-ink: #4dff88;
-  --moyu-text: #4dff88;
-  --moyu-text-dim: #35cc6d;
-  --moyu-text-faint: #2a9e57;
+  --moyu-ink: #57f08c;
+  --moyu-text: #57f08c;
+  --moyu-text-dim: #3cc46f;
+  --moyu-text-faint: #2b9455;
 
-  --moyu-accent: #6dffa0;
+  --moyu-accent: #6bffa4;
   --moyu-accent-hover: #9bffc2;
-  --moyu-accent-soft: rgba(109, 255, 160, 0.14);
+  --moyu-accent-soft: rgba(107, 255, 164, 0.14);
   --moyu-danger: #ff9a7a;
 
   /* 这一套的页底已经接近全黑（#030704），凹面只能再往黑里走一步。
      悬停用的是那三个三通道面里的同一档绿，与右栏的悬停是同一种绿 */
   --moyu-sunken: #010402;
-  --moyu-sunken-hover: #0b1e10;
+  --moyu-sunken-hover: #0c1d12;
   --moyu-danger-soft: rgba(255, 154, 122, 0.16);
-  --moyu-selected: rgba(109, 255, 160, 0.14);
-  --moyu-on-fill: #050a06;
+  --moyu-selected: rgba(107, 255, 164, 0.14);
+  --moyu-on-fill: #050b07;
 
   --moyu-ground: #030704;
 }

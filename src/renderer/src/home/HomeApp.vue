@@ -1,30 +1,35 @@
 <script setup lang="ts">
 /**
- * 起始页：一份数据，两套世界。
+ * 起始页：一份数据，一副骨架。
  *
- * 主题决定的不只是配色，还有这一页披哪一层皮（见 @shared/constants 的
- * HOME_THEMES 与 worldOfTheme）：
- * - modern   行式列表，纸白与暗夜 → StartModern
- * - terminal 命令行，磷绿 → StartTerminal
+ * 主题决定披哪一层皮（见 @shared/constants 的 HOME_THEMES 与 worldOfTheme）：
+ * - modern   行式列表，纸白与暗夜
+ * - terminal 命令行，磷绿
  *
- * 两套世界的**划分与交互是同一套**（页眉 / 输入行 / 内容行 / 状态行，
- * 见 useRows）：换主题换的是观感，不是这一页怎么用。
+ * 两套世界的**划分与交互是同一套**（页眉 / 输入行 / 栏目线 / 内容行 / 状态行，
+ * 见 StartPage 与 useRows）：换主题换的是观感，不是这一页怎么用。
  *
- * 这一层只管数据与动作：站点从哪来、继续上次打开哪一篇、回车去哪、主题怎么落盘。
- * 至于画成什么样、一屏放得下几行，交给两套世界各自按实测尺寸算——
- * 只有它们知道自己的行有多高、盒子里还剩多少地方。
+ * 这一层只管数据与动作：栏目停在哪一栏、那一栏有哪些行、点「打开文件…」弹谁、
+ * 回车去哪、主题怎么落盘。至于画成什么样、一屏放得下几行，交给 StartPage 按实测尺寸算。
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import { computed, onMounted, onUnmounted, ref, useTemplateRef } from 'vue'
-import { DEFAULT_HOME_THEME, worldOfTheme, type HomeTheme } from '@shared/constants'
-import { PRESET_SITES } from '@shared/presets'
+import {
+  DEFAULT_HOME_THEME,
+  DEFAULT_SECTION,
+  LOCAL_FORMATS_NOTE,
+  SECTIONS,
+  worldOfTheme,
+  type HomeTheme,
+  type SectionId
+} from '@shared/constants'
+import { PRESET_SITES, sectionOfUrl } from '@shared/presets'
 import { registrableDomain, hostOf, resolveInput } from '@shared/url'
 import type { AppConfig, Bookmark, HistoryEntry, SiteRecord, TabState } from '@shared/types'
-import StartModern from './StartModern.vue'
-import StartTerminal from './StartTerminal.vue'
+import StartPage from './StartPage.vue'
 import { useBox } from './useBox'
-import { rowsOf } from './useRows'
+import { localRowsOf, rowsOf, type HomeRow } from './useRows'
 import { applyThemeToDocument } from '../composables/useTheme'
 import type { HomeTile } from './types'
 
@@ -33,9 +38,11 @@ const history = ref<HistoryEntry[]>([])
 const bookmarks = ref<Bookmark[]>([])
 const config = ref<AppConfig | null>(null)
 const query = ref('')
+/** 此刻停在哪一栏 */
+const plate = ref<SectionId>(DEFAULT_SECTION)
 /** 主题，见 config.ui.homeTheme。它管的是整个界面，不只是这一页 */
 const theme = ref<HomeTheme>(DEFAULT_HOME_THEME)
-/** 开着几张标签页。两套世界的页眉都要报这个数 */
+/** 开着几张标签页。页眉要报这个数 */
 const tabCount = ref(0)
 
 let offConfig: (() => void) | null = null
@@ -69,13 +76,24 @@ onMounted(async () => {
     applyTheme(next.ui.homeTheme)
   })
 
+  /**
+   * 标签页一变就把历史重读一遍。
+   *
+   * 起始页是一屏「自家页面」，回到它上面时**不会重新挂载**——不重读的话，
+   * 刚读完的那本书不会出现在「离线阅读」里，「继续上次」也还指着再上一次。
+   * 一次本地 IPC 而已，而主进程那边的广播本身就是去抖过的。
+   *
+   * 挂载时那第一次不算：紧接着的 reload() 本来就要读一次。
+   */
+  let tabsSeen = false
   const applyTabs = (payload: { tabs: TabState[]; activeTabId: string | null }): void => {
     tabCount.value = payload.tabs.length
+    if (tabsSeen) void refreshHistory()
+    tabsSeen = true
   }
+  await reload()
   applyTabs(await window.moyu.tabs.list())
   offTabs = window.moyu.tabs.onState(applyTabs)
-
-  await reload()
 })
 
 onUnmounted(() => {
@@ -83,15 +101,18 @@ onUnmounted(() => {
   offTabs?.()
 })
 
+async function refreshHistory(): Promise<void> {
+  history.value = await window.moyu.history.list({ limit: 200 })
+}
+
 async function reload(): Promise<void> {
-  const [sites, hist, marks] = await Promise.all([
+  const [sites, marks] = await Promise.all([
     window.moyu.sites.list(),
-    window.moyu.history.list({ limit: 200 }),
     window.moyu.bookmarks.list()
   ])
   mySites.value = sites
-  history.value = hist
   bookmarks.value = marks
+  await refreshHistory()
 }
 
 // ---------------------------------------------------------------- 站点编排
@@ -137,7 +158,14 @@ const tiles = computed<HomeTile[]>(() => {
     const domain = domainOf(url)
     if (!domain || seen.has(domain)) return
     seen.add(domain)
-    out.push({ key, name, url, domain, icon: iconByDomain.value.get(domain) })
+    out.push({
+      key,
+      name,
+      url,
+      domain,
+      icon: iconByDomain.value.get(domain),
+      section: sectionOfUrl(url)
+    })
   }
 
   for (const site of mySites.value) push(site.title, site.url, site.id)
@@ -149,13 +177,71 @@ const tiles = computed<HomeTile[]>(() => {
 
 const lastRead = computed<HistoryEntry | null>(() => history.value[0] ?? null)
 
+/** 「全部」那一栏：继续上次在最前，其后是全部站点 */
+const allRows = computed(() => rowsOf(tiles.value, lastRead.value))
+
+/** 「离线阅读」那一栏：打开文件…在最前，其后是最近读过的本机文件 */
+const localRows = computed(() => localRowsOf(history.value))
+
+/** 搜索时要搜的是**全部板块**：在「视频」栏里搜「起点」得搜得到 */
+const searching = computed(() => query.value.trim() !== '')
+
+const plateRows = computed<HomeRow[]>(() => {
+  if (plate.value === 'local') return localRows.value
+  if (plate.value === 'all') return allRows.value
+  // 单栏只放本栏的站点。认不出栏目（section 为 null）的只在「全部」里出现
+  return rowsOf(
+    tiles.value.filter((tile) => tile.section === plate.value),
+    null
+  )
+})
+
+const rows = computed(() => (searching.value ? [...allRows.value, ...localRows.value] : plateRows.value))
+
 /**
- * 两套世界共用的一份行：继续上次在最前，其后是站点。
+ * 状态行左端的读数。
  *
- * 在这里建一次而不是交给两套世界各建一次——它们要的就是同一份东西，
- * 各建一遍只能多出两处会分家的地方。
+ * 数的是这一栏里有多少东西——「站点 0」摆在离线阅读那一栏里是句错话，
+ * 那边的数是本机文件。搜索时数的是命中的行，因为底下显示的就是那些。
  */
-const rows = computed(() => rowsOf(tiles.value, lastRead.value))
+const stat = computed<{ kind: 'site' | 'local' | 'match'; count: number }>(() => {
+  if (searching.value) return { kind: 'match', count: rows.value.length }
+  if (plate.value === 'local') return { kind: 'local', count: localRows.value.length - 1 }
+  const count =
+    plate.value === 'all'
+      ? tiles.value.length
+      : tiles.value.filter((tile) => tile.section === plate.value).length
+  return { kind: 'site', count }
+})
+
+/** 格式说明只挂在离线阅读那一栏上，别的栏目没有 */
+const note = computed(() =>
+  plate.value === 'local' && !searching.value ? LOCAL_FORMATS_NOTE : null
+)
+
+// ---------------------------------------------------------------- 栏目
+
+/**
+ * 换一栏。
+ *
+ * 顺手把输入框清空：正在搜索时底下列的是全部板块的行，不清掉的话点了「视频」
+ * 底下一动不动，看着像没点着。清掉才是「我这就去看视频」。
+ */
+function pickPlate(id: SectionId): void {
+  plate.value = id
+  query.value = ''
+}
+
+/**
+ * 左右键换栏。到头就停住，不绕回另一端。
+ *
+ * 栏不是环：从左端再往左没有「上一栏」，而绕回最右端会让人以为按错了。
+ */
+function movePlate(delta: number): void {
+  const index = SECTIONS.findIndex((s) => s.id === plate.value)
+  const next = SECTIONS[Math.max(0, Math.min(index + delta, SECTIONS.length - 1))]
+  if (next && next.id !== plate.value) plate.value = next.id
+}
 
 // ---------------------------------------------------------------- 动作
 
@@ -187,6 +273,22 @@ function resume(): void {
   open(last.url)
 }
 
+/**
+ * 打开本机的一本书。
+ *
+ * 选文件与开标签页都在主进程那边做（见 ipc/registerFileIpc）：那边才知道窗口是谁、
+ * 才知道路径要不要转成 `file://`。这里只负责把结果接住——回来的是**文件名**，
+ * 不是路径，这一页也从不需要路径。
+ *
+ * 主进程开完标签页会广播一次标签页状态，历史跟着也就重读了；这里再读一次是为了
+ * 让「离线阅读」那一栏立刻多出这一本，而不是等下一趟广播。
+ */
+async function openFile(): Promise<void> {
+  const names = await window.moyu.files.openLocal()
+  if (!names.length) return
+  await refreshHistory()
+}
+
 // ---------------------------------------------------------------- 主题
 
 /**
@@ -214,32 +316,23 @@ function pickTheme(next: HomeTheme): void {
 
 <template>
   <div ref="page" class="page">
-    <StartModern
-      v-if="world === 'modern'"
+    <StartPage
       :rows="rows"
-      :site-count="tiles.length"
+      :plate="plate"
+      :stat="stat"
       :tab-count="tabCount"
       :query="query"
       :theme="theme"
+      :world="world"
       :compact="compact"
+      :note="note"
       @open="open"
       @resume="resume"
+      @open-file="openFile"
       @submit="submit"
       @pick="pickTheme"
-      @update:query="query = $event"
-    />
-    <StartTerminal
-      v-else
-      :rows="rows"
-      :site-count="tiles.length"
-      :tab-count="tabCount"
-      :query="query"
-      :theme="theme"
-      :compact="compact"
-      @open="open"
-      @resume="resume"
-      @submit="submit"
-      @pick="pickTheme"
+      @pick-plate="pickPlate"
+      @move-plate="movePlate"
       @update:query="query = $event"
     />
   </div>
@@ -249,7 +342,7 @@ function pickTheme(next: HomeTheme): void {
 /*
  * 这一层是两套世界共同的地。
  *
- * 主题切换只换这里的颜色，两套世界各自也画一层底（理由见 styles/settings.css
+ * 主题切换只换这里的颜色，StartPage 自己也画一层底（理由见 styles/settings.css
  * 开头：自家页面的底板要画在自己身上，不能只挂在 html/body 上）。
  */
 .page {

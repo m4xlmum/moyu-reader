@@ -29,6 +29,7 @@ defineProps<{
     | 'maximize'
     | 'restore'
     | 'pause'
+    | 'file'
   size?: number
 }>()
 </script>
@@ -116,6 +117,16 @@ defineProps<{
     -->
     <template v-else-if="name === 'pause'">
       <path d="M9.5 5.5v13M14.5 5.5v13" />
+    </template>
+    <!--
+      本机文件：一页纸，右上角折起来。
+      它出现在起始页「离线阅读」那一栏的行首，作用是让那一栏一眼看出不是站点——
+      站点没有图标时画的是首字母的圆底，而一列圆底读起来就是一列网站。
+      不做「纸 + 笔」或「纸 + 放大镜」：15px 上第二件东西只剩一团墨。
+    -->
+    <template v-else-if="name === 'file'">
+      <path d="M13.5 4.5H8a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9z" />
+      <path d="M13.5 4.5V9H18" />
     </template>
     <template v-else-if="name === 'search'">
       <circle cx="11" cy="11" r="6.5" />

@@ -1,10 +1,10 @@
 /**
  * 起始页的行模型：两套世界共用的一份数据与一套交互。
  *
- * 三个主题现在共用同一套划分（页眉 / 输入行 / 内容行 / 状态行），差别只在皮上。
- * 骨架既然是同一个，行怎么建、怎么筛、选中哪一行、回车做什么就不该各写一遍——
- * 两份实现迟早会在某一次改动里分家，而分家之后的症状是「某一套主题里回车
- * 打开的不是选中的那一行」这类只在一边复现的怪事。
+ * 三个主题共用同一套划分（页眉 / 输入行 / 栏目线 / 内容行 / 状态行），
+ * 差别只在皮上。骨架既然是同一个，行怎么建、怎么筛、选中哪一行、回车做什么
+ * 就不该各写一遍——两份实现迟早会在某一次改动里分家，而分家之后的症状是
+ * 「某一套主题里回车打开的不是选中的那一行」这类只在一边复现的怪事。
  *
  * 因此：这个文件负责**行为**，两个世界组件只负责**画**。
  * 唯一留给世界自己的是按实测高度算出「这一屏放得下几行」——行高是皮的一部分。
@@ -13,23 +13,35 @@
  */
 import { computed, ref, watch, type ComputedRef } from 'vue'
 import type { HistoryEntry } from '@shared/types'
-import { hostOf } from '@shared/url'
+import { fileNameOf, hostOf } from '@shared/url'
 import type { HomeTile } from './types'
 
 export interface HomeRow {
   key: string
   /**
-   * 这一行是「继续上次」还是「打开某个站点」。
+   * 这一行是「继续上次」、「打开某个站点」，还是「打开一本本机文件」。
    *
-   * 终端世界把它印在行首（`resume` / `open`），现代世界只给继续那行一个「继续」，
-   * 站点行留白——但两者是同一件事，因此动词存在数据里，而不是各印各的。
+   * 终端世界把它印在行首（`resume` / `open` / `open-file`），现代世界把前两种
+   * 印成「继续」与留白——但两者是同一件事，因此动词存在数据里，而不是各印各的。
+   *
+   * 本机文件的那些行**不是**第三种行为：点它与点一个站点是同一条路（开一张
+   * 标签页），只有 `open-file` 那一行是新的——它要弹的是系统选文件框。
    */
-  verb: 'resume' | 'open'
+  verb: 'resume' | 'open' | 'open-file'
   label: string
   host: string
   url: string
   /** 站点图标，来自历史或书签。终端世界不画它 */
   icon?: string
+  /**
+   * 这一行通向本机的东西，不是网页。
+   *
+   * 与 `verb` 不是一回事：本机文件那些行的 `verb` 是 `open`（点它就是开一张
+   * 标签页，和点一个站点走同一条路），`local` 说的是「那一页不是网页」。
+   * 图标那一格靠它决定画文件还是画站点图标——本机文件没有站点图标，
+   * 落到首字母那一格上就和一列网站长得一模一样了。
+   */
+  local?: boolean
   /** 过滤用的一整串，省得每次比较都现拼 */
   haystack: string
 }
@@ -38,10 +50,19 @@ export interface HomeRow {
 export function rowsOf(tiles: HomeTile[], lastRead: HistoryEntry | null): HomeRow[] {
   const rows: HomeRow[] = []
   if (lastRead) {
-    const label = lastRead.title || lastRead.url
+    /*
+     * 上次读的是本机的一本书，就照本机文件那一栏的样子拆成两列。
+     *
+     * 历史里那一条的标题已经是文件名了（见 HistoryStore 的 titleOf），因此
+     * 「书名.txt」整个塞进名称那一列也说得过去；拆开是为了与「离线阅读」里
+     * 同一本书那一行长得一模一样——同一本书在两地不该是两个样子。
+     */
+    const file = fileNameOf(lastRead.url)
+    const parts = file ? splitName(file) : null
+    const label = parts ? parts.stem : lastRead.title || lastRead.url
     // 站点那一列显示的是可注册域名（qq.com，不是 weread.qq.com），
     // 继续上次这一行也照同一把尺子裁，两行的域名才对得齐
-    const host = (hostOf(lastRead.url) ?? '').replace(/^www\./, '')
+    const host = parts ? parts.ext.toUpperCase() : (hostOf(lastRead.url) ?? '').replace(/^www\./, '')
     rows.push({
       key: 'resume',
       verb: 'resume',
@@ -50,6 +71,7 @@ export function rowsOf(tiles: HomeTile[], lastRead: HistoryEntry | null): HomeRo
       url: lastRead.url,
       // 历史里存过图标就带上：这一行说的是「回上次那个站」，那就该是那个站的图标
       icon: lastRead.faviconUrl,
+      local: parts !== null,
       haystack: `${label} ${lastRead.url}`.toLowerCase()
     })
   }
@@ -62,6 +84,67 @@ export function rowsOf(tiles: HomeTile[], lastRead: HistoryEntry | null): HomeRo
       url: tile.url,
       icon: tile.icon,
       haystack: `${tile.name} ${tile.domain} ${tile.url}`.toLowerCase()
+    })
+  }
+  return rows
+}
+
+/**
+ * 文件名拆成「书名」与「格式」两截，给本机文件的那些行用。
+ *
+ * 拆开是因为行里就两列：名称那一列说「哪本书」，右端那一列说「什么东西」——
+ * 而 `斗破苍穹.txt` 连同格式一起挤在名称里，右端就只能空着或者重复一遍。
+ * 拆开之后它读起来与文件管理器里的「名称 / 类型」一个样子。
+ *
+ * 点开头的不算扩展名（`.gitignore` 是一整本书名），没有点就是整截书名。
+ */
+function splitName(name: string): { stem: string; ext: string } {
+  const dot = name.lastIndexOf('.')
+  if (dot <= 0) return { stem: name, ext: '' }
+  return { stem: name.slice(0, dot), ext: name.slice(dot + 1) }
+}
+
+/**
+ * 「离线阅读」那一栏的行：先「打开文件…」，再最近打开过的那几本。
+ *
+ * 顺序反了就不成立：这一栏的头一行永远是那个动作，它不是一本书，
+ * 而是这一栏唯一能接纳新内容的地方。
+ *
+ * 最近打开过的书取自历史里 `file:` 的那些条目，**按打开时间倒序**——
+ * 历史本身就是这么排的，因此这里不重排。名字走 fileNameOf：历史里存的
+ * 标题本来就该是文件名（见 HistoryStore 的 titleOf），这里再取一次是
+ * 为了挡住更早的版本留下的、标题里装着整条路径的那些旧记录。
+ */
+export function localRowsOf(history: HistoryEntry[]): HomeRow[] {
+  const rows: HomeRow[] = [
+    {
+      key: 'open-file',
+      verb: 'open-file',
+      label: '打开文件…',
+      host: '',
+      url: '',
+      local: true,
+      // 认得出的词都放进去：这一行是「我想读本机的东西」，而用户手里那个词
+      // 可能是「打开」「文件」「本机」「离线」里的任何一个
+      haystack: '打开文件 open file 本机 离线 txt pdf'
+    }
+  ]
+
+  const seen = new Set<string>()
+  for (const entry of history) {
+    const name = fileNameOf(entry.url)
+    if (!name || seen.has(entry.url)) continue
+    seen.add(entry.url)
+    const { stem, ext } = splitName(name)
+    rows.push({
+      key: entry.id,
+      verb: 'open',
+      label: stem,
+      host: ext.toUpperCase(),
+      url: entry.url,
+      icon: entry.faviconUrl,
+      local: true,
+      haystack: `${stem} ${ext} ${entry.url}`.toLowerCase()
     })
   }
   return rows
@@ -91,10 +174,13 @@ export function filterRows(rows: HomeRow[], query: string): HomeRow[] {
 export type RowIntent =
   | { kind: 'resume' }
   | { kind: 'open'; url: string }
+  | { kind: 'open-file' }
   | { kind: 'text'; text: string }
 
 function intentForRow(row: HomeRow): RowIntent {
-  return row.verb === 'resume' ? { kind: 'resume' } : { kind: 'open', url: row.url }
+  if (row.verb === 'resume') return { kind: 'resume' }
+  if (row.verb === 'open-file') return { kind: 'open-file' }
+  return { kind: 'open', url: row.url }
 }
 
 /**
@@ -130,6 +216,8 @@ export function intentOf(query: string, rows: HomeRow[], selected: number): RowI
 export interface RowListHandlers {
   open: (url: string) => void
   resume: () => void
+  /** 弹系统选文件框，开一本本机文件 */
+  openFile: () => void
   submit: (text: string) => void
   clearQuery: () => void
 }
@@ -161,7 +249,13 @@ export function useRowList(
 
   function pick(row: HomeRow): void {
     if (row.verb === 'resume') handlers.resume()
+    else if (row.verb === 'open-file') handlers.openFile()
     else handlers.open(row.url)
+  }
+
+  /** 光标回到第一行。换一栏的时候用——新的一栏与上一栏的行没有任何关系 */
+  function reset(): void {
+    sel.value = 0
   }
 
   function onKeydown(event: KeyboardEvent): void {
@@ -184,8 +278,9 @@ export function useRowList(
     if (!intent) return
     if (intent.kind === 'resume') handlers.resume()
     else if (intent.kind === 'open') handlers.open(intent.url)
+    else if (intent.kind === 'open-file') handlers.openFile()
     else handlers.submit(intent.text)
   }
 
-  return { visible, sel, pick, move, onKeydown, onSubmit }
+  return { visible, sel, pick, move, reset, onKeydown, onSubmit }
 }
