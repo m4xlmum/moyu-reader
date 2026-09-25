@@ -10,7 +10,8 @@
  *   Q1 起手：窗口就是配置里那块 16:9
  *   Q2 最大化：窗口 == 所在显示器的工作区；顶栏、地址栏与右栏一起让位、
  *      正文占满整窗；界面层缩成右上角那一小块（floatBox），并被抬到正文之上
- *   Q3 还原：回到最大化之前那块 16:9；正文让回、界面层让回，网页重新回到最上层
+ *   Q3 还原：回到最大化之前那块 16:9；正文让回、界面层让回——次序回到起手那样
+ *      （界面层在最底下），**后来才出现的那一屏**也在它之上（Q3d）
  *   Q4 最大化 → 收起 → 展开：球照常缩成正方形落在球心上，展开回到工作区；
  *      而且**落盘写的是那块 16:9，不是工作区**（「最大化着退出」不该下次满屏）
  *   Q5 最大化时选尺寸预设：退出最大化并落到那一档
@@ -124,8 +125,13 @@ app.whenReady().then(async () => {
 
   const registry = new WindowRegistry()
   let layoutCalls = 0
-  let raiseCalls = 0
   let pageView = null
+  /**
+   * 还原时会被叫一次（见 WindowController.restore 的注释）：网页里那份全屏
+   * 只有网页自己退得掉，因此这个回调是真的要有的——本探针里没有网页全屏，
+   * 给个空操作，但**数着次数**：它该在「刚才真的最大化着」时叫，且只叫一次。
+   */
+  let leaveFullscreenCalls = 0
 
   const controller = new WindowController({
     config,
@@ -139,11 +145,8 @@ app.whenReady().then(async () => {
       pageView?.setBounds(controller.getBodyRect())
     },
     onStateChange: () => {},
-    // 与真的 TabManager 一样：界面层让回去时把网页重新加回最上层
-    raiseActivePage: () => {
-      raiseCalls += 1
-      const win = controller.getWindow()
-      if (win && pageView) win.contentView.addChildView(pageView)
+    onLeavePageFullscreen: () => {
+      leaveFullscreenCalls += 1
     }
   })
 
@@ -258,13 +261,53 @@ app.whenReady().then(async () => {
   )
   record(
     'Q3c',
-    '还原：界面层铺回整窗，并让回网页之下（网页重新回到最上层）',
+    '还原：界面层铺回整窗，并让回网页之下——次序回到起手那样（界面层在最底下）',
     rectEq(backChrome, { x: 0, y: 0, width: START.width, height: START.height }) &&
-      topName() === 'page' &&
-      raiseCalls >= 1
+      JSON.stringify(order()) === JSON.stringify(['chrome', 'page'])
       ? '是'
       : '否',
-    { 界面层: backChrome, 次序: order(), 让回次数: raiseCalls }
+    { 界面层: backChrome, 次序: order() }
+  )
+
+  /*
+   * Q3d：让回之后**后来才出现的那一屏**也得在界面层之上。
+   *
+   * 这是用户报的那条毛病本身：界面层是整窗大的一层，正文区那一块在它上面是空档。
+   * 让回若只把「当前那一屏」抬上去，其余每一屏都沉在界面层下面——切屏只是翻显隐、
+   * 不再抬次序，于是点顶栏那颗键回起始页之后，页面上怎么点都没反应，
+   * 而顶栏与右栏照常好用（它们就在界面层里）。中间那一屏在这里扮演起始页。
+   */
+  const laterView = new WebContentsView({
+    webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }
+  })
+  laterView.setBackgroundColor('#00000000')
+  win.contentView.addChildView(laterView)
+  laterView.setBounds(controller.getBodyRect())
+  await laterView.webContents.loadURL('data:text/html,<body style="margin:0">later</body>')
+  await delay(200)
+  const laterNames = win.contentView.children.map((v) =>
+    v === controller.getChromeView() ? 'chrome' : v === pageView ? 'page' : 'later'
+  )
+  record(
+    'Q3d',
+    '还原之后再出现一屏（回起始页那种情形）：它也在界面层之上，正文区那一点归它',
+    laterNames.indexOf('chrome') === 0 && laterNames[laterNames.length - 1] === 'later' ? '是' : '否',
+    { 次序: laterNames }
+  )
+  win.contentView.removeChildView(laterView)
+
+  /*
+   * Q3e：还原要叫一次「退网页全屏」。
+   *
+   * 网页里那份全屏（视频右下角那枚键按下去之后的那个）只有网页自己退得掉，
+   * 窗口还原而网页还挂着一层全屏，正文区就会停在一块「铺满整屏」的矩形上。
+   * 判据是**恰好一次**：还原键在不曾最大化时什么都不该做。
+   */
+  record(
+    'Q3e',
+    '还原时叫了一次「退网页全屏」（网页里那份全屏只有网页自己退得掉）',
+    leaveFullscreenCalls === 1 ? '是' : '否',
+    { 叫了几次: leaveFullscreenCalls }
   )
 
   // ---- Q4：最大化 → 收起 → 展开 ----
@@ -384,7 +427,7 @@ app.whenReady().then(async () => {
         presetBounds,
         persistedWhileMax,
         layoutCalls,
-        raiseCalls,
+        leaveFullscreenCalls,
         results
       },
       null,

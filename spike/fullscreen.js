@@ -284,7 +284,6 @@ async function stage(scenario, mods) {
     onVisibilityChange: () => {},
     onLayoutChange: () => tabsRef?.layoutAll(),
     onStateChange: () => {},
-    raiseActivePage: () => tabsRef?.raiseActive(),
     onLeavePageFullscreen: () => tabsRef?.exitPageFullscreen()
   })
 

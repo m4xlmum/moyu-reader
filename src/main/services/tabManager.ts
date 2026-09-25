@@ -664,26 +664,6 @@ export class TabManager {
     }
   }
 
-  // ------------------------------------------------------------ 叠放次序
-
-  /**
-   * 把当前标签页的视图重新加到最上层。
-   *
-   * 界面层压到网页之上之后要让回去（见 WindowController.syncChromeOrder），
-   * 而「场上有哪些视图、哪个是当前标签页」只有这一侧知道，因此由这里代劳。
-   * 重新 addChildView 就是把它重排到最上层，不会多出一份（spike/vieworder.js Q1）。
-   */
-  raiseActive(): void {
-    const win = this.deps.getWindow()
-    const entry = this.activeId ? this.tabs.get(this.activeId) : null
-    if (!win || !entry) return
-    try {
-      win.contentView.addChildView(entry.view)
-    } catch {
-      // 窗口可能已在销毁中
-    }
-  }
-
   // ------------------------------------------------------------ 网页全屏
 
   /**

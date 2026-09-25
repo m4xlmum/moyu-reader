@@ -130,7 +130,6 @@ app.whenReady().then(async () => {
     onVisibilityChange: () => {},
     onLayoutChange: () => {},
     onStateChange: () => {},
-    raiseActivePage: () => {},
     onLeavePageFullscreen: () => {}
   })
 

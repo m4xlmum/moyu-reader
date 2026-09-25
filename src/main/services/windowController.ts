@@ -69,15 +69,6 @@ export interface ControllerDeps {
   onLayoutChange: () => void
   onStateChange: () => void
   /**
-   * 把当前标签页的视图重新抬到最上层。
-   *
-   * 界面层有时要压到网页之上（最大化时的还原键与悬浮球、光标贴到窗口边框时的
-   * 左 / 下手柄，见 syncChromeOrder），让回去时就得有人把网页抬回来——
-   * 而「场上有哪些视图、哪个是当前标签页」只有标签页那一侧知道，
-   * 因此这一步交给它代劳，界面层这一侧不必认识标签页。
-   */
-  raiseActivePage: () => void
-  /**
    * 让停在网页全屏的标签页退出来。
    *
    * 窗口不再铺满工作区时（还原、收起成球），网页里那份全屏也留不住：
@@ -697,8 +688,16 @@ export class WindowController {
    *
    * 抬上去是**重加一次子视图**：`View.addChildView` 对一个已经在场的子视图
    * 就是把它重排到最上层，不会出现两份（spike/vieworder.js Q1/Q5 验过，
-   * 这里整套做法都架在那条文档上）。让回去要动标签页那一层，交给
-   * deps.raiseActivePage()——界面层这一侧不认识标签页。
+   * 这里整套做法都架在那条文档上）。让回去同理，只是换个落脚点——送回**最底下**，
+   * 那里本来就是界面层住的地方（create() 里第一个加进来）。
+   *
+   * 为什么让回去是「回最底下」，而不是「把当前那一屏抬到界面层之上」：
+   * 界面层是整窗大的一层，正文区那一块在它上面是空档，那一点的像素归谁只看
+   * 原生那一侧的次序。抬走一屏只救了那一屏，**其余每一屏都还沉在界面层下面**——
+   * 起始页、设置页、别的标签页都整块点不动。而切屏只是翻显隐、不再抬次序
+   * （TabManager.activate），于是「点顶栏那颗键回起始页之后，页面上点了没反应」
+   * 只要发生过一次抬升（最大化，或光标贴到窗口边框那一下）就会一直如此，
+   * 顶栏与右栏却照常好用。这一跤真摔过（spike/live-app.js 的 A9）。
    *
    * force：新建标签页的视图永远是加到最上层的，于是界面层会被盖住，
    * 而我们记的「我在上面」这一刻仍然是 true。这种情况必须无条件重抬一次，
@@ -713,8 +712,8 @@ export class WindowController {
 
     if (want) {
       win.contentView.addChildView(chrome)
-    } else if (this.chromeOnTop) {
-      this.deps.raiseActivePage()
+    } else {
+      win.contentView.addChildView(chrome, 0)
     }
     this.chromeOnTop = want
   }

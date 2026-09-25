@@ -270,7 +270,6 @@ app.whenReady().then(async () => {
     },
     onLayoutChange: () => tabsRef?.layoutAll(),
     onStateChange: () => {},
-    raiseActivePage: () => tabsRef?.raiseActive(),
     onLeavePageFullscreen: () => tabsRef?.exitPageFullscreen()
   })
   const tabs = new TabManager({

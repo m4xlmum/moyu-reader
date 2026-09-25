@@ -119,8 +119,6 @@ function bootstrap(): void {
     onStateChange: () => {
       broadcast(BROADCAST.windowState, controller.getRuntime())
     },
-    // 界面层让回网页之下时，把网页重新抬回来（「谁在场」只有标签页那一侧知道）
-    raiseActivePage: () => tabsRef?.raiseActive(),
     // 网页退出全屏（还原、收起成球这两种情况），见 setPageFullscreen 的注释
     onLeavePageFullscreen: () => tabsRef?.exitPageFullscreen()
   })

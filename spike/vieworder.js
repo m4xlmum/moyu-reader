@@ -199,6 +199,63 @@ app.whenReady().then(async () => {
     个数: win.contentView.children.length
   })
 
+  /*
+   * ---- Q6：第二个参数给 0，能不能把一个已经在场的视图送回最底下 ----
+   *
+   * 文档只写了「不传 index 就是加到末尾」，没说**已经在场的**子视图再给一个
+   * index 会怎样——而「界面层让回去」正需要这一条：让回时若只把它抬到第二
+   * （把当前那一屏顶上去），其余每一屏都还沉在它下面，切到哪一屏哪一屏点不动
+   * （用户报的那条毛病）。截图与真机点击都验不到这一步，只能在这里问清楚。
+   */
+  win.contentView.addChildView(chrome)
+  await delay(120)
+  const beforeIndex0 = order(win, names)
+  win.contentView.addChildView(chrome, 0)
+  await delay(120)
+  const afterIndex0 = order(win, names)
+  record(
+    'Q6a',
+    'addChildView(view, 0) 把已经在场的视图送回最底下',
+    afterIndex0[0] === 'chrome' ? '是' : '否',
+    { '给 0 之前': beforeIndex0, '给 0 之后': afterIndex0, 子视图个数: win.contentView.children.length }
+  )
+
+  // ---- Q6b：三格在场时同样成立吗（真的场上不止两格：起始页 + 好几个标签页） ----
+  const extra = await solidView('#00ff00')
+  win.contentView.addChildView(extra)
+  names.set(extra, 'extra')
+  extra.setBounds({ x: 0, y: 0, width: W, height: H })
+  await delay(120)
+  win.contentView.addChildView(chrome) // 先抬到最上面
+  const threeUp = order(win, names)
+  win.contentView.addChildView(chrome, 0)
+  await delay(120)
+  const threeDown = order(win, names)
+  record(
+    'Q6b',
+    '三格在场时，addChildView(view, 0) 同样把它送回最底下（其余三格的相对次序不动）',
+    threeDown[0] === 'chrome' &&
+      JSON.stringify(threeDown.slice(1)) === JSON.stringify(['page', 'extra']) &&
+      JSON.stringify(threeUp) === JSON.stringify(['page', 'extra', 'chrome'])
+      ? '是'
+      : '否',
+    { 抬上去: threeUp, 送回底部: threeDown }
+  )
+
+  // ---- Q7：越界的 index 会不会抛（探针与产品都不该踩这个坑） ----
+  let indexError = null
+  try {
+    win.contentView.addChildView(chrome, 99)
+  } catch (err) {
+    indexError = String(err && err.message ? err.message : err)
+  }
+  record(
+    'Q7',
+    'index 越界（99）时 addChildView 抛不抛',
+    indexError ? '抛' : '不抛',
+    { 报错: indexError, 之后的顺序: order(win, names) }
+  )
+
   win.destroy()
 
   const outDir = path.join(__dirname, 'out')
