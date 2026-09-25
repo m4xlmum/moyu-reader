@@ -28,6 +28,8 @@ Vue 的重画在微任务里，派事件那一个任务里读到的显示值是�
 assisted installer（`oneClick: false`）要静默装完还把应用叫回来，命令行里到底缺哪一枚不行**。
 **Q49 来自「切到起始页 / 设置时顶栏那个名字跟着变」那一版，量的是「此刻」与「刚才」的分别：
 快照里那几个字段说的全是此刻，而顶栏那一格要写的是刚才**。
+**Q50 来自「点设置的时候标签页这一块完全不变」那一版，量的是那枚让位的下拉按钮：
+「点身子进网页、点箭头展开清单」这两件事，一枚 `<button>` 装不装得下**。
 
 ## 结论
 
@@ -89,6 +91,7 @@ assisted installer（`oneClick: false`）要静默装完还把应用叫回来，
 | Q47 | 在派发 `input` 的那个任务里，紧接着读那一格渲染出来的文字，读到的是哪一帧 | **上一帧。**Vue 的重画在微任务里，而 `dispatchEvent` 是同步的——同一个 `executeJavaScript` 任务里读 `.value`、读元素高度这类**渲染结果**，拿到的是改动之前的值。摔的样子：拖动中那一次读出来 100%（配置已经是 0.4），于是「修正起效了没有」被自己的读数判红 | 写与读分成两次 `executeJavaScript`，中间等一次冲刷（`live-app.js` A10 与 `preview.js` 的 `--drag-opacity` 里都是 `await wait(50)` 再读）。它与 Q11（隐藏窗口抓图晚一帧）同属一类：**要读的是画出来的东西，就得让画先画完**。只读状态（`config.window.opacity` 这种由主进程给的值）不受影响，那个不是渲染结果 |
 | Q48 | assisted installer（`oneClick: false`）上，`安装包.exe /S --updated` 够不够让它在装完之后**把应用启动回来** | **不够，而且症状是静默的：装完了，没有人回来。**electron-builder 的 `templates/nsis/installSection.nsh` 里「装完启动应用」这一段分两支：`!ifdef ONE_CLICK` 那一支的判据是 `${Silent}`（静默就重启，所以 oneClick 的安装包天生全自动）；我们这一支（assisted）的判据是 `${isForceRun} ${andIf} ${Silent}`——**静默之外还要求 `--force-run`**。少了它，`/S` 让向导不出现、`--updated` 让旧实例自己退掉，然后安装程序一声不响地退出，「全自动」断在最后一步：用户点的是「更新并重启」，回来的是空桌面 | 三枚参数一起用，一枚都不能少（`src/main/services/updateService.ts` 的 `SILENT_INSTALL_ARGS`）：`/S`（不走向导）、`--updated`（这是升级：容忍还有一个实例在跑、跳过桌面快捷方式重建）、`--force-run`（装完启动应用）。**装到哪儿不归我们管**——`/S` 下不选目录，安装程序从 `HKCU\Software\<APP_GUID>\InstallLocation` 读回上次那个目录（`APP_GUID` = `UUID.v5(appId, ELECTRON_BUILDER_NS_UUID)`，`include/installer.nsh` 写、`multiUser.nsh` 读回 `$INSTDIR`），本机实测该键为 `8a1898f1-95fb-5c4a-9689-1796e9580e72` → `C:\Users\poem\Desktop\moyu-reader`，即用户当初选的目录，升级不会多出一份。验证：`spike/update-check.js` Q10 断言 spawn 的参数**逐字**等于这三枚——少了 `--force-run` 那一遍，Q10 当场红 |
 | Q49 | 顶栏那一格写着「当前这张网页」，而界面手里的快照有没有「当前这张网页」 | **停在自家那两屏上时没有——三个字段说的全是「此刻」。**`TabsStatePayload` 里 `tabs` 是此刻开着的网页、`activeTabId` 是此刻正看着的那张（停在自家两屏上是 **null**）、`screen` 是此刻停在哪一屏，一个「刚才」都没有。于是顶栏唯一那点跟着网页走的字（地址栏开关上的域名）在那种时刻只剩屏名可写，切进去那一格就变成「起始页」「系统设置」——读起来像多了一个叫「系统设置」的标签页（用户报的正是这条）。实测（修之前，`preview.js --screen settings`）：`{"停在哪一屏":"settings","开关上写着":"系统设置","写的是屏名":true}` | 把真身**本来就有**的那个事实放进快照：`TabManager.lastGuestId`（`leaveScreen` 回的就是它）加进 `TabsStatePayload`，界面只投影、不另攒一份「上一次是什么」——副本迟早与真身对不上（托盘菜单进去、主进程关掉那张网页、`lastSession` 恢复，界面那份副本一个都跟不上）。修后同一读数：三个状态（不在屏上 / 起始页 / 设置）全是 `juejin.cn`，`--click-screen` 五个来回每一步也读到同一个域名；而「此刻在哪一屏」仍旧由左上角那颗键的高亮说（`SCREEN_KEYS` 照旧）。一张网页都没有时（全关光了，落回起始页）那一格一个字都不写，只剩放大镜（`--no-tabs`，判据在 `TopBar` 的 `siteLabel`） |
+| Q50 | 让位后那一枚按钮要「点身子＝进那张网页、点箭头＝展开清单」，一枚 `<button>` 里装得下吗 | **装不下，而且两样东西会一起坏。**`<button>` 的内容模型不许再套 `<button>`，而箭头必须是一枚真的按钮——只有真的可点元素才拿得到「只展开清单、不进网页」这一下（靠的是 `@click.stop`）。于是身子只能做成 `role="button"` 的盒子，可它一旦是 `<div>`，两处「只有按钮才有的待遇」当场不管它了：`base.css` 的全局重置（`button { cursor: pointer }`）不再给它手型光标；`useWindowDrag` 的免拖名单（`INTERACTIVE = 'button, input, …, [data-drag-ignore]'`）不再认它——按住它会把窗口一起拖走 | `<div role="button" data-drag-ignore tabindex="0">` 里装一枚 `<button class="caret">`：cursor 自己写、`data-drag-ignore` 自己声明、键盘自己收（`@keydown.enter` / `@keydown.space.prevent`，与点它同一条路）。同一笔账先前已经在标签格那枚 ✕ 上算过一次（那里也是 div 套 button）。另外**锚点取整枚而不是箭头那 16px**：面板按 `anchorRect` 摆在按钮下方，挂在箭头上会让整块面板跟着右移，看着像从按钮右边缘长出来的。验证：`preview.js --click-fallback` 数假桥记下的 `openPopover` 次数——改之前按身子也会弹一次清单，改之后按身子 0 次、按箭头恰好 1 次，且停在设置上按身子回到原来那张网页（`FALLBACK_OK`） |
 
 ## 对原设计的两处修正
 

@@ -360,6 +360,14 @@ let resizeEnds = 0
 const resizeEdges = []
 
 /**
+ * 请求过的弹出面板，只记种类。
+ *
+ * 面板是另一个窗口，预览里不会出现，因此「点了它到底展开没展开」只能这么问：
+ * 看有没有那一条请求（见上面 ui.openPopover）。
+ */
+const POPOVERS = []
+
+/**
  * 进自家那一屏（起始页 / 系统设置）。
  *
  * 「正在看着的那张网页」就此变成没有——`activeTabId` 归 null，标签条上哪一格
@@ -674,8 +682,20 @@ contextBridge.exposeInMainWorld('moyu', {
    * 并广播，否则预览里点那颗键什么都不会变，也就验不出「再点一次原路返回」。
    */
   ui: {
-    openPopover: ok,
+    /*
+     * 弹出面板这一条要记账，不能收下就完。
+     *
+     * 「点标签条那枚下拉按钮展开清单」与「点它进到那张网页里去」是两件事，
+     * 而两件事都只是发一条请求：面板是另一个窗口，在预览里根本不会出现。
+     * 因此判据只能落在「发没发这条请求」上——`--click-fallback` 就是问这个。
+     */
+    openPopover: (input) => {
+      POPOVERS.push(input)
+      return Promise.resolve()
+    },
     closePopover: ok,
+    /** 只存在于这份假桥里（真实的 preload 没有它），给 --click-fallback 用 */
+    popoverLog: () => ({ requests: POPOVERS.map((p) => p.kind) }),
     openSettings: () => {
       openScreen('settings')
       return Promise.resolve()

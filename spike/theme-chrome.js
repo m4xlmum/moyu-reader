@@ -24,9 +24,10 @@
  *    提示条只在有新版时才占版面，一直挂着会让上面那几条基准漂移。
  * 5. **停在自家那一屏上时界面没散架**。起始页与系统设置不再是标签页：它们不进
  *    标签条，各有各的入口键。这一态也是一种**没有当前网页**的状态，因此单独加载
- *    两次（Q13）：标签条一格不多、一格不亮，两颗入口键各亮各的，地址栏开关上
- *    写着那一屏的名字——**而标签条那枚下拉按钮上不写**（用户报过第二次：停在
- *    设置上时它跟着顶上了「系统设置」四个字，读起来就是一个叫系统设置的标签）。
+ *    三次（Q13，含起点）：标签条一格不多、一格不亮，两颗入口键各亮各的，而顶上
+ *    那两处写字的地方（地址栏开关、标签条让位后那一枚）与起点**逐字相同**——
+ *    写的都是「一张网页」，不跟着变成那一屏的名字（用户报过两次：先是地址栏开关
+ *    跟着顶上了「系统设置」，后是标签条那枚按钮跟着顶，而它正是回到网页的唯一入口）。
  *
  * 颜色一律经 canvas 归一后比对：getPropertyValue 拿回来的是计算值，写法
  * （`rgb(255 255 255 / 1)` 还是 `#ffffff`）随主题层怎么写出入很大，比字符串
@@ -103,7 +104,7 @@ const opts = {
   tabs: 5,
   /*
    * 停在自家哪一屏上：null（看着网页）/ 'home' / 'settings'。
-   * 上面那些基准一律用 null；--screen 那一问单独加载两次，见 loadScreen。
+   * 上面那些基准一律用 null；Q13 那一问单独加载三次（起点 + 那两屏），见 loadScreen。
    */
   screen: null,
   bgAlpha: 1,
@@ -572,7 +573,7 @@ const COLLECT_NOTICE = `(() => {
 })()`
 
 /**
- * 「停在自家那一屏上」那一态，在界面那一侧量一圈。
+ * 顶上那一栏在这三种状态下各量一圈。
  *
  * 起始页与系统设置不是标签页：它们不进标签条，各有各的入口键（顶栏最左并排的
  * 那两颗），停在其中一屏上时**没有哪一格是高亮的**。正文区那块原生
@@ -580,9 +581,10 @@ const COLLECT_NOTICE = `(() => {
  * 改动最要紧的那一圈：
  *
  * - 标签条没有因为多了这一屏而多出一格（格子数 == 网页标签数）；
- * - 没有哪一格是高亮的（对照 --click-screen：点进去之前是有一格亮的）；
+ * - 没有哪一格是高亮的（对照起点：点进去之前是有一格亮的）；
  * - 两颗入口键里该亮的那一颗真的亮了，另一颗没亮；
- * - 地址栏开关上写的是这一屏的名字，不是某一页的域名，也不是一句「新标签页」。
+ * - 顶上那两处写字的地方（地址栏开关、标签条让位后那一枚）与起点**逐字相同**
+ *   ——它们说的都是「一张网页」，不跟着变成那一屏的名字（用户要求）。
  *
  * 少任何一条，就分不清「进去了」与「什么也没发生」。
  */
@@ -925,6 +927,11 @@ function checkNoticeTokens(withNotice) {
  * 它必须画在**已经算进版面**的那 30px 里：这个条的高度是主进程按 NOTICE_H 排给
  * 网页的，进度线只要多占一个像素，网页就被压住一条——而它在截图上看着完全正常。
  * 因此这里同时量宽度（是不是真有 42%）与「行高有没有变」。
+ *
+ * 顺带把这一态下的两枚按钮也看住：1.3.3 把更新压成两下之后，下载中主按钮写着
+ * 「更新并重启」（按下只是把意图记下，下完自己接着装），而 ✕ 是「这一版不要了」
+ * 的出口——它会真的把在下的那一份中止掉。这一条原先判的是反过来的
+ * 「下载中不给按钮」，见下面注释。
  */
 function checkNoticeProgress(withNotice) {
   const bad = []
@@ -945,59 +952,96 @@ function checkNoticeProgress(withNotice) {
     if (!page.text || !page.text.text.includes('42%')) {
       bad.push(`文案里没写出进度：${JSON.stringify(page.text?.text ?? null)}`)
     }
-    if (page.primary) bad.push('下载中不该给主按钮')
-    if (page.icon) bad.push('下载中不该给关闭键')
+    /*
+     * 下载中那两枚按钮。这一条原先判的是「下载中不给这两枚」——那是更早一版的
+     * 说法，那时下载只由用户点「下载」发起，下的过程中确实没什么可按的。
+     * 1.3.3 把更新压成两下之后反过来：主按钮还在，按下去把意图记下、下完自己
+     * 接着装（updateService.install）；✕ 也还在，它是「这一版不要了」的出口，
+     * 而且现在真的会把在下的那一份中止掉、把半截文件删掉（updateService.ignore）。
+     * 判据跟着改成「给了，且写的是那两句话」——否则这一问会在一个几版之前的行为
+     * 上一直红着，而它本该看住的是提示条这块版面。
+     */
+    if (page.primary?.text !== '更新并重启') {
+      bad.push(`下载中的主按钮写着 ${JSON.stringify(page.primary?.text ?? null)}，该是「更新并重启」`)
+    }
+    if (!page.icon) bad.push('下载中该留着 ✕——它是「这一版不要了」的出口，会真的把在下的那一份中止掉')
   }
   if (bad.length) fail('Q12', `下载态那条进度线不成立 —— ${bad.join('；')}`)
-  else pass('Q12', `下载态下进度线画在 ${show(bar?.background)} 上、宽 ${bar?.box.w}px（42%），行高仍是 ${NOTICE_H}px，且不给按钮`)
+  else {
+    pass(
+      'Q12',
+      `下载态下进度线画在 ${show(bar?.background)} 上、宽 ${bar?.box.w}px（42%），行高仍是 ${NOTICE_H}px，` +
+        `主按钮写着「更新并重启」、✕ 也留着`
+    )
+  }
 }
 
 /**
- * 停在自家那一屏上时，界面这一圈对不对。
+ * 停在自家那一屏上时，顶上那一栏对不对。
  *
  * 判据里那两条「格子数 == 网页标签数」与「没有哪一格高亮」是这一问的骨架：
  * 起始页与系统设置曾经是**普通标签页**，各占一格、各带一枚 ✕，点进设置之后
  * 想出来只能去点标签条上那一格。这一版把它们改成「屏」，这两条正是
  * 「不再混在标签里」在界面上唯一看得见的凭据。
+ *
+ * 后半段是用户报的两次、两条不同的毛病，都在**顶上那两处写字的地方**：
+ *
+ * 1. 地址栏开关跟着变成了「起始页」「系统设置」——那两个词一出现，顶栏读起来
+ *    就像多了一个叫「系统设置」的标签页（1.3.4 修）；
+ * 2. 标签条让位后那一枚按钮跟着变成那一屏的名字，而它**是回到网页的唯一入口**
+ *    （停在自家那两屏上时标签格看不见）：写的是屏名，用户按下去想回的那张网页
+ *    就无从认起（1.3.5 修）。
+ *
+ * 两条合起来是一句话：这一栏里写字的地方写的都是**一张网页**，
+ * 「此刻停在哪一屏」由左上角那两颗键各自的高亮说。因此判据不是「等于某个字」，
+ * 而是「与起点逐字相同」——起点那一份是同一次量出来的（见 loadScreen），
+ * 这正是用户的要求：点设置的时候这一块**完全不变**。
+ *
+ * 起点那处读不出来时（标签条放得下就没有那一枚按钮）这一条跳过不判：
+ * 没有可比的东西，不该编一个出来。
  */
-function checkScreens(home, settings) {
+function checkScreens(page, home, settings) {
   const bad = []
-  for (const [screen, page, want] of [
+  for (const [screen, got, want] of [
     ['home', home, stringConstant('HOME_TITLE')],
     ['settings', settings, stringConstant('SETTINGS_TITLE')]
   ]) {
-    if (page.screen !== screen) bad.push(`${screen} 那一态下 tabs.list().screen 是 ${page.screen}`)
-    if (page.activeTabId !== null) bad.push(`${screen} 那一态下 activeTabId 是 ${page.activeTabId}，该是 null`)
-    if (page.格子数 !== page.网页标签数) {
-      bad.push(`${screen} 那一态下标签条画了 ${page.格子数} 格，网页只有 ${page.网页标签数} 张`)
+    if (got.screen !== screen) bad.push(`${screen} 那一态下 tabs.list().screen 是 ${got.screen}`)
+    if (got.activeTabId !== null) bad.push(`${screen} 那一态下 activeTabId 是 ${got.activeTabId}，该是 null`)
+    if (got.格子数 !== got.网页标签数) {
+      bad.push(`${screen} 那一态下标签条画了 ${got.格子数} 格，网页只有 ${got.网页标签数} 张`)
     }
-    if (page.高亮的格数 !== 0) bad.push(`${screen} 那一态下还有 ${page.高亮的格数} 格是高亮的`)
-    if (page.起始页键亮着 !== (screen === 'home')) {
-      bad.push(`${screen} 那一态下「起始页」那颗键的亮灯是 ${page.起始页键亮着}`)
+    if (got.高亮的格数 !== 0) bad.push(`${screen} 那一态下还有 ${got.高亮的格数} 格是高亮的`)
+    if (got.起始页键亮着 !== (screen === 'home')) {
+      bad.push(`${screen} 那一态下「起始页」那颗键的亮灯是 ${got.起始页键亮着}`)
     }
-    if (page.设置键亮着 !== (screen === 'settings')) {
-      bad.push(`${screen} 那一态下「设置」那颗键的亮灯是 ${page.设置键亮着}`)
+    if (got.设置键亮着 !== (screen === 'settings')) {
+      bad.push(`${screen} 那一态下「设置」那颗键的亮灯是 ${got.设置键亮着}`)
     }
-    if (page.地址栏开关 !== want) {
-      bad.push(`${screen} 那一态下地址栏开关上写的是 ${JSON.stringify(page.地址栏开关)}，该是 ${want}`)
-    }
-    // 让位成下拉按钮时按钮上**不许**写这一屏的名字。那一档下没有格子可高亮，
-    // 于是「我现在停在哪儿」只剩这一枚按钮可说——但它属于标签条，上面写的每
-    // 一个字都该是「一张网页」；写上「系统设置」，读起来就是一个叫系统设置的
-    // 标签，正是这一版从标签条里清掉的东西（用户报的第二次）：
-    // 没有当前网页时它是一格中性的「标签页」，右边那枚小牌数着开着几张。
-    if (page.下拉按钮 !== null && page.下拉按钮 === want) {
-      bad.push(`${screen} 那一态下下拉按钮上写的是这一屏的名字 ${JSON.stringify(want)}——那是标签条，不该有这一格`)
-    }
-    if (page.下拉按钮 !== null && page.下拉按钮 !== '标签页') {
-      bad.push(`${screen} 那一态下下拉按钮上写的是 ${JSON.stringify(page.下拉按钮)}，该是「标签页」`)
+    for (const [name, key] of [
+      ['地址栏开关', '地址栏开关'],
+      ['标签条让位后那一枚', '下拉按钮']
+    ]) {
+      // 起点那一态下没有这一处（窗口宽得放得下标签条）→ 没有可比的，不判
+      if (page[key] === null) continue
+      const wrote = got[key]
+      if (wrote === want) {
+        bad.push(`${screen} 那一态下${name}上写的是这一屏的名字 ${JSON.stringify(want)}，而它属于网页那一摊`)
+      } else if (wrote !== page[key]) {
+        bad.push(
+          `${screen} 那一态下${name}上写的是 ${JSON.stringify(wrote)}，` +
+            `起点写的是 ${JSON.stringify(page[key])}——用户要求这一块完全不变`
+        )
+      }
     }
   }
-  if (bad.length) fail('Q13', `停在自家那一屏上时界面没跟上 —— ${bad.join('；')}`)
+  if (bad.length) fail('Q13', `停在自家那一屏上时顶上那一栏没跟上 —— ${bad.join('；')}`)
   else {
     pass(
       'Q13',
-      `停在起始页 / 系统设置上时（screen 各自对上、activeTabId 为 null）标签条一格不多、一格不亮，两颗入口键各亮各的，地址栏开关上写着那一屏的名字、而标签条那枚下拉按钮上不写`
+      `停在起始页 / 系统设置上时（screen 各自对上、activeTabId 为 null）标签条一格不多、一格不亮，` +
+        `两颗入口键各亮各的，而地址栏开关写着 ${JSON.stringify(page.地址栏开关)}、` +
+        `标签条让位那一枚写着 ${JSON.stringify(page.下拉按钮)}——都与起点逐字相同，都不是那一屏的名字`
     )
   }
 }
@@ -1052,11 +1096,17 @@ app.whenReady().then(async () => {
   }
 
   /**
-   * 停在自家那一屏上那一态，界面各加载一次。
+   * 顶上那一栏在三种状态下各量一次：正看着一张网页、停在起始页、停在系统设置。
    *
    * 单独加载而不是并进上面那个循环：这是**另一种状态**（没有当前网页），
    * 与那十二问赖以成立的「正看着某张网页」是两回事，混在一起量，
    * 上面那几条基准就会在一个没有当前页的版面上得出读数。
+   *
+   * 头一次传 null 量的是**起点**：用户对这两屏的要求是「点设置的时候标签页
+   * 这部分完全不变」，而「不变」得有个东西可对着比。起点就是那个东西——
+   * 三份读数出自同一段脚本、同一次窗口、同一套主题，差一个字都看得出来。
+   * （拿上面那份 COLLECT 当基准不行：它量的是另一段脚本、另一种收窄宽度，
+   * 而且它读的那些字段里根本没有这两处字。）
    */
   const loadScreen = async (screen) => {
     opts.screen = screen
@@ -1066,6 +1116,7 @@ app.whenReady().then(async () => {
     opts.screen = null
     return got
   }
+  const screenPage = await loadScreen(null)
   const screenHome = await loadScreen('home')
   const screenSettings = await loadScreen('settings')
 
@@ -1088,7 +1139,7 @@ app.whenReady().then(async () => {
   checkNoticeDrawn(withNotice)
   checkNoticeTokens(withNotice)
   checkNoticeProgress(withNotice)
-  checkScreens(screenHome, screenSettings)
+  checkScreens(screenPage, screenHome, screenSettings)
 
   for (const r of results) console.log(`[${r.id}] ${r.ok ? 'OK  ' : 'FAIL'} ${r.text}`)
 
@@ -1139,13 +1190,33 @@ app.whenReady().then(async () => {
     `NOTICE ${'downloading'.padEnd(10)} ${withNotice.downloading.text?.text ?? '—'} | 进度线 ${withNotice.downloading.progress ? `${withNotice.downloading.progress.box.w}×${withNotice.downloading.progress.box.h}` : '—'}`
   )
 
+  /*
+   * 顶上那一栏在三态下各自写的是什么，逐条列出来。
+   *
+   * 这一行是用户要看的那种读数：「点设置的时候标签页这一块完全不变」——
+   * 三行里的后两列必须一模一样，光看判据那一行「Q13 OK」看不出这件事。
+   */
+  for (const [name, got] of [
+    ['起点（看着网页）', screenPage],
+    ['停在起始页', screenHome],
+    ['停在系统设置', screenSettings]
+  ]) {
+    console.log(
+      `SCREEN ${name.padEnd(9)} 地址栏开关 ${JSON.stringify(got.地址栏开关)} 标签条那一枚 ${JSON.stringify(got.下拉按钮)} | 高亮的格 ${got.高亮的格数}/${got.格子数} 起始页键 ${got.起始页键亮着} 设置键 ${got.设置键亮着}`
+    )
+  }
+
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} 通过`)
 
   fs.mkdirSync(OUT_DIR, { recursive: true })
   fs.writeFileSync(
     path.join(OUT_DIR, 'theme-chrome.json'),
-    JSON.stringify({ results, painted, byPage, alphaProbe, withNotice, screenHome, screenSettings }, null, 2)
+    JSON.stringify(
+      { results, painted, byPage, alphaProbe, withNotice, screenPage, screenHome, screenSettings },
+      null,
+      2
+    )
   )
   console.log(`REPORT spike/out/theme-chrome.json`)
 

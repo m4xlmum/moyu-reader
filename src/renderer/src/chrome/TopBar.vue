@@ -230,7 +230,7 @@ function toggleSettings(): void {
       标签条。它自己占住中间那一整块，也自己决定放不下时退回下拉清单，
       新建按钮跟着它走——浏览器里那个「+」也是挨着最后一个标签。
     -->
-    <TabStrip :tabs="tabs" :active-tab-id="activeTabId">
+    <TabStrip :tabs="tabs" :active-tab-id="activeTabId" :last-guest-id="lastGuest?.id ?? null">
       <button class="icon" title="新建标签页" @click="newTab">
         <Icon name="plus" />
       </button>

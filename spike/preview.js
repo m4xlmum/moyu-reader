@@ -1492,6 +1492,22 @@ app.whenReady().then(async () => {
             measured.addressLabel === '起始页' || measured.addressLabel === '系统设置'
         })}`
       )
+      /*
+       * 让位成下拉按钮时，那枚按钮上写着什么。
+       *
+       * 与上面那一格同一条规矩：它代表的是**一张网页**，停在自家那两屏上时
+       * 写的是刚才那张（也就是按它一下会进去的那张），因此同一份界面上，
+       * 给不给 --screen 读到的都该是同一行字。`写的是屏名` 必须是 false。
+       */
+      console.log(
+        `SCREEN_STRIP ${JSON.stringify({
+          停在哪一屏: SCREEN ?? null,
+          让位了: measured.fallback !== null,
+          按钮上写着: measured.fallbackText,
+          写的是屏名:
+            measured.fallbackText === '起始页' || measured.fallbackText === '系统设置'
+        })}`
+      )
       // 最大化那一档：右上角两样东西的实测几何，判据见 MEASURE 里的说明
       if (MAXIMIZED) {
         console.log(
@@ -1935,6 +1951,92 @@ app.whenReady().then(async () => {
       await wait(400)
       steps.push({ 动作: '再点一次「起始页」键', ...(await readScreen()) })
       console.log(`SCREEN ${JSON.stringify({ 步骤: steps })}`)
+    }
+
+    /*
+     * 标签条让位成那一枚下拉按钮时，按**身子**与按**箭头**是两件事。
+     *
+     * 身子写着「这一条代表的那张网页」，按它就该进到那张网页里去；只有箭头
+     * 才是「展开清单」。理由很实在：停在起始页 / 系统设置上时这一枚是回到
+     * 原来那张网页的唯一入口（标签条上那些格子那一档下看不见），按下去却弹出
+     * 一份清单、还要再找一遍，等于白白多一步。
+     *
+     * 三件事一起问：
+     *   ① 停在自家那两屏上时按钮上写的东西**与看着网页时逐字相同**——用户报的
+     *      就是「点设置时标签页部分跟着变了」；
+     *   ② 按身子**不发**清单请求、按箭头**发**一条（面板是另一个窗口，预览里
+     *      不会出现，因此「展开没展开」只问得出这一个读数，见假桥的 popoverLog）；
+     *   ③ 停在自家那两屏上按身子，回到的是刚才那张网页。
+     */
+    if (page === 'chrome' && has('--click-fallback')) {
+      const BODY = '.zone .fallback'
+      const CARET = '.zone .fallback .caret'
+      const HOME_KEY = '.topbar button[aria-label="起始页"]'
+      const SETTINGS_KEY = '.topbar button[aria-label="系统设置"]'
+      const read = async () =>
+        run(`(async () => {
+          const s = await window.moyu.tabs.list()
+          return {
+            停在哪一屏: s.screen,
+            当前网页: s.activeTabId,
+            按钮上写着: document.querySelector('${BODY} .title')?.textContent?.trim() ?? null,
+            数字牌: document.querySelector('${BODY} .count')?.textContent?.trim() ?? null,
+            清单请求: window.moyu.ui.popoverLog().requests
+          }
+        })()`)
+      const press = async (sel) => {
+        await run(`document.querySelector('${sel}')?.click()`)
+        await wait(400)
+      }
+
+      const steps = [{ 动作: '起点（看着一张网页）', ...(await read()) }]
+      const 起点写着 = steps[0].按钮上写着
+      const 起点那张 = steps[0].当前网页
+
+      await press(BODY)
+      steps.push({ 动作: '按身子', ...(await read()) })
+      await press(CARET)
+      steps.push({ 动作: '按箭头', ...(await read()) })
+      await press(SETTINGS_KEY)
+      steps.push({ 动作: '点「设置」键', ...(await read()) })
+      await shoot(`${name}-fallback-settings`)
+      await press(CARET)
+      steps.push({ 动作: '停在设置上按箭头', ...(await read()) })
+      await shoot(`${name}-fallback-list`)
+      await press(BODY)
+      steps.push({ 动作: '停在设置上按身子', ...(await read()) })
+      await shoot(`${name}-fallback-back`)
+
+      console.log(`FALLBACK ${JSON.stringify({ 步骤: steps })}`)
+
+      const 破了 = []
+      const at = (n) => steps[n]
+      if (!起点写着 || 起点写着 === '起始页' || 起点写着 === '系统设置') {
+        破了.push(`起点按钮上写着 ${JSON.stringify(起点写着)}，该是当前那张网页的标题`)
+      }
+      if (at(1).清单请求.length !== 0) {
+        破了.push(`按身子发了清单请求 ${JSON.stringify(at(1).清单请求)}——只有箭头才该展开清单`)
+      }
+      if (at(1).当前网页 !== 起点那张) 破了.push(`看着网页时按身子，当前网页变成了 ${at(1).当前网页}`)
+      if (at(2).清单请求.join() !== 'tabs') {
+        破了.push(`按箭头发的清单请求是 ${JSON.stringify(at(2).清单请求)}，该恰好一条 tabs`)
+      }
+      if (at(2).当前网页 !== 起点那张) 破了.push(`按箭头之后当前网页变成了 ${at(2).当前网页}`)
+      if (at(3).停在哪一屏 !== 'settings') 破了.push(`点「设置」键之后停在哪一屏是 ${at(3).停在哪一屏}`)
+      if (at(3).按钮上写着 !== 起点写着) {
+        破了.push(
+          `停在设置上按钮上写着 ${JSON.stringify(at(3).按钮上写着)}，看着网页时写的是 ${JSON.stringify(起点写着)}——这一格不该跟着屏变`
+        )
+      }
+      if (at(4).清单请求.length !== 2) {
+        破了.push(`停在设置上按箭头，清单请求变成 ${JSON.stringify(at(4).清单请求)}`)
+      }
+      if (at(4).停在哪一屏 !== 'settings') 破了.push('停在设置上按箭头，人却被踢出了设置')
+      if (at(5).停在哪一屏 !== null) 破了.push(`停在设置上按身子，停在哪一屏是 ${at(5).停在哪一屏}`)
+      if (at(5).当前网页 !== 起点那张) {
+        破了.push(`停在设置上按身子，回到的是 ${at(5).当前网页}，该是刚才那张 ${起点那张}`)
+      }
+      console.log(破了.length ? `FALLBACK_FAIL ${JSON.stringify(破了)}` : 'FALLBACK_OK')
     }
 
     /*
