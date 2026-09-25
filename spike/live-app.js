@@ -11,7 +11,10 @@
  *      点顶栏那颗「起始页」键之后，正文区那一点到底归谁——这正是用户那一刻的处境；
  *   2. 起始页那一份文档在**真桥**上活着没有：拿不拿得到 window.moyu、点栏目换不换栏、
  *      点行开不开标签页。以前那些探针全用假桥喂 `window.moyu`，若毛病出在真桥上，
- *      它们一个都照不出来，而用户报的正是「点了没反应」。
+ *      它们一个都照不出来，而用户报的正是「点了没反应」；
+ *   3. 配置写进口袋之后，界面手里那份镜像跟不跟得上（A10 / A11）。这条线由
+ *      index.ts 亲手接（ConfigStore 的订阅 → 广播），别的探针都够不着——它们
+ *      要么自己拼服务、要么用假桥。整体透明度那条滑块跳回 100% 就是这么来的。
  *
  * ## 为什么要抄一份 userData
  *
@@ -485,6 +488,150 @@ async function main() {
       换栏后: after
     })
     invariant('A9', '这时正文区那一点仍归起始页吗', home)
+  }
+
+  // ------------------------------------------------------------ A10 整体透明度那条滑块
+  //
+  // 用户报的那一条：把整体透明度调小，右侧栏那条滑块一松手就跳回 100%。
+  //
+  // 根子在一条**没接上的广播**上。配置写进去之后要广播给界面——界面手里那份
+  // 配置镜像才是那一格显示值的依据；而从前只有设置页那条 configPatch 会广播。
+  // 这条滑块走的是 win.setOpacity → controller.setOpacity：值写进去了、盘也落了，
+  // 就是没人广播，于是镜像一直停在挂载时读到的那个数（默认 100%），一松手
+  // 显示就回落到它，再也不回来。
+  //
+  // 因此这一问盯的是**三个数对不对得上**：界面上显示的、主进程里的配置、
+  // 窗口实际的透明度。只问「配置改了没有」照不出这个毛病——配置一直是改了的。
+  //
+  // 拖动用合成事件（pointerdown → 写值 → input → pointerup）。原生那一下也顺手
+  // 发一遍，记在 detail 里，但它**不作判据**：这一问要问的是「写进去之后广播
+  // 跟不跟得上」，不是原生命中测试；合成事件派给 DOM 的那一串，与浏览器真拖动时
+  // 做的事一样（onInput 读的就是 target.value）。
+  mark('A10 拖右栏那条「整体」透明度滑块')
+  {
+    const 读取 = async () =>
+      JSON.parse(
+        await chrome.webContents.executeJavaScript(`(() => {
+          const box = [...document.querySelectorAll('.rail .opacity')]
+            .find((e) => e.querySelector('.label')?.textContent?.trim() === '整体')
+          if (!box) return 'null'
+          const el = box.querySelector('.slider')
+          const r = el.getBoundingClientRect()
+          return JSON.stringify({
+            显示: box.querySelector('.value')?.textContent?.trim() ?? null,
+            值: Number(el.value),
+            矩形: [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)]
+          })
+        })()`)
+      )
+    const 主进程这边 = async () =>
+      JSON.parse(
+        await chrome.webContents.executeJavaScript(`(async () => {
+          const cfg = await window.moyu.config.get()
+          const st = await window.moyu.win.getState()
+          return JSON.stringify({ 配置: cfg.window.opacity, 窗口: st.opacity })
+        })()`)
+      )
+
+    const 拖之前 = await 读取()
+
+    /*
+     * 原生拖一下（顺带量一件事：屏幕之外的窗口里，旋转过的 range 收不收得到拖动）。
+     * 轨道竖着放：右端 = 上限在**上面**（rotate(-90deg) 把 +x 转到了上方），
+     * 因此值越大越靠上；上下各留 7px 是滑块的半径。
+     */
+    if (拖之前?.矩形) {
+      const [rx, ry, rw, rh] = 拖之前.矩形
+      const x = Math.round(rx + rw / 2)
+      const yOf = (v) => Math.round(ry + 7 + (1 - (v - 5) / 95) * (rh - 14))
+      const wc = chrome.webContents
+      wc.sendInputEvent({ type: 'mouseMove', x, y: yOf(100) })
+      await delay(60)
+      wc.sendInputEvent({ type: 'mouseDown', x, y: yOf(100), button: 'left', clickCount: 1 })
+      await delay(60)
+      for (const v of [80, 60, 40]) {
+        wc.sendInputEvent({ type: 'mouseMove', x, y: yOf(v), button: 'left' })
+        await delay(80)
+      }
+      wc.sendInputEvent({ type: 'mouseUp', x, y: yOf(40), button: 'left', clickCount: 1 })
+      await delay(400)
+    }
+    const 原生拖完之后 = await 主进程这边()
+
+    // 目标定在 40%：一处一眼看得出「不是 100%」的值
+    const 目标 = 40
+    const 写值 = (v) =>
+      chrome.webContents.executeJavaScript(`(() => {
+        const box = [...document.querySelectorAll('.rail .opacity')]
+          .find((e) => e.querySelector('.label')?.textContent?.trim() === '整体')
+        if (!box) return false
+        const el = box.querySelector('.slider')
+        el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }))
+        el.value = String(${v})
+        el.dispatchEvent(new Event('input', { bubbles: true }))
+        return true
+      })()`)
+    await 写值(目标)
+    const 拖动中 = await 读取()
+    /*
+     * 松手那一帧（广播还没回来）：单看它不作判据，但它正是用户看见「跳回去」的那一刻。
+     * 读显示必须与派事件分成两次 executeJavaScript——Vue 的重画在微任务里，同一个任务
+     * 里读到的是上一次画出来的那一帧，那样读出来的「没问题」是假的。
+     */
+    await chrome.webContents.executeJavaScript(`(() => {
+      const box = [...document.querySelectorAll('.rail .opacity')]
+        .find((e) => e.querySelector('.label')?.textContent?.trim() === '整体')
+      box
+        ?.querySelector('.slider')
+        .dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }))
+    })()`)
+    const 松手那一帧 = await 读取()
+    await delay(800)
+    const 稳定之后 = await 读取()
+    const 主进程 = await 主进程这边()
+
+    const 该显示 = `${Math.round(主进程.配置 * 100)}%`
+    const ok =
+      稳定之后 !== null &&
+      稳定之后.显示 === 该显示 &&
+      主进程.配置 < 1 &&
+      Math.abs(主进程.窗口 - 主进程.配置) < 0.001
+    record('A10', '把整体透明度拖小之后，右栏那条滑块显示的是刚拖到的值吗（而不是跳回 100%）', ok ? '是' : '不是', {
+      原生拖动在屏幕外收不收得到: 原生拖完之后,
+      拖之前,
+      拖动中,
+      松手那一帧,
+      稳定之后,
+      主进程里的两个数: 主进程,
+      该显示: 该显示
+    })
+  }
+
+  // ------------------------------------------------------------ A11 没人碰界面时改配置
+  //
+  // A10 里若原生那一下没生效，改动就全来自合成事件——为了分清「广播通了」与
+  // 「合成事件恰好把 DOM 摆对了」，这里再问一次干净的：**完全不碰界面**，
+  // 直接调滑块背后那一个 IPC（win.setOpacity），只问那一格显示跟不跟得上。
+  // 这一问只有「配置广播」这一条线在起作用，是 A10 的对照组。
+
+  mark('A11 不碰界面，直接调 win.setOpacity')
+  {
+    const 目标 = 0.55
+    await chrome.webContents.executeJavaScript(`window.moyu.win.setOpacity({ value: ${目标} })`)
+    await delay(700)
+    const 状态 = JSON.parse(
+      await chrome.webContents.executeJavaScript(`(async () => {
+        const box = [...document.querySelectorAll('.rail .opacity')]
+          .find((e) => e.querySelector('.label')?.textContent?.trim() === '整体')
+        const cfg = await window.moyu.config.get()
+        return JSON.stringify({
+          显示: box?.querySelector('.value')?.textContent?.trim() ?? null,
+          值: box ? Number(box.querySelector('.slider').value) : null,
+          配置: cfg.window.opacity
+        })
+      })()`)
+    )
+    record('A11', '没人碰界面、只改配置（win.setOpacity）时，那一条滑块显示的值跟着改吗', 状态.显示 === `${Math.round(目标 * 100)}%` ? '是' : '不是', 状态)
   }
 
   // ------------------------------------------------------------ 收尾

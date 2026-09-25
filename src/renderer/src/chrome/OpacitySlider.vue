@@ -14,7 +14,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -36,18 +36,52 @@ const dragging = ref(false)
 
 /** 拖动期间不回写显示值，避免主进程回传造成的抖动 */
 const localValue = ref(props.modelValue)
-const current = computed(() => (dragging.value ? localValue.value : props.modelValue))
+
+/**
+ * 「刚拖到、还没被确认」的那个值。
+ *
+ * 松手那一帧 modelValue 还没跟上——写一次窗口透明度是一次 IPC 往返，广播回来
+ * 更晚，而 Vue 的状态更新在微任务里就刷了。于是松手后先画出来的那一帧读到的
+ * 仍是改动前的旧值（默认 100%），滑块当着用户的面跳回去；整体透明度那条更糟，
+ * 从前主进程根本不广播，跳回去就再也不回来了。
+ *
+ * 因此把自己刚拖到的值记在这里，显示先按它来，等 modelValue 真的追上
+ * （或用户又按下去）再交还给 props。
+ */
+const unconfirmed = ref<number | null>(null)
+
+const current = computed(() =>
+  dragging.value ? localValue.value : (unconfirmed.value ?? props.modelValue)
+)
 const displayValue = computed(() => Math.round(current.value * 100))
+
+// 模型一变就以它为准：那说明这一次写入已经有了下文（多半正是自己刚拖到的值，
+// 也可能是主进程夹紧后的结果——夹过也照它的，只有它说的是真话）
+watch(
+  () => props.modelValue,
+  () => {
+    unconfirmed.value = null
+  }
+)
+
+/** 从**画着的那一格**起步，而不是从 props 起步：上面那个未确认的值可能正被显示着 */
+function onPointerDown(): void {
+  localValue.value = current.value
+  unconfirmed.value = null
+  dragging.value = true
+}
+
+function onInput(event: Event): void {
+  const raw = Number((event.target as HTMLInputElement).value) / 100
+  const value = Math.max(props.min, Math.min(props.max, raw))
+  localValue.value = value
+  unconfirmed.value = value
+  emit('update:modelValue', value)
+}
 
 const title = computed(
   () => `${props.label} ${displayValue.value}%${props.hint ? `（${props.hint}）` : ''}`
 )
-
-function onInput(event: Event): void {
-  const value = Number((event.target as HTMLInputElement).value) / 100
-  localValue.value = value
-  emit('update:modelValue', Math.max(props.min, Math.min(props.max, value)))
-}
 </script>
 
 <template>
@@ -63,7 +97,7 @@ function onInput(event: Event): void {
         :value="displayValue"
         :title="title"
         :aria-label="title"
-        @pointerdown="dragging = true"
+        @pointerdown="onPointerDown"
         @pointerup="dragging = false"
         @input="onInput"
       />

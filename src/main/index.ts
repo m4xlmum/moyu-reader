@@ -149,6 +149,23 @@ function bootstrap(): void {
   })
   tabsRef = tabs
 
+  /*
+   * 配置一改就广播出去，**不问是谁改的**。
+   *
+   * 挂在这里而不是挂在某个 IPC 处理器里，是因为写配置的路不止一条：设置页走
+   * configPatch、右栏那条整体透明度滑块走 win.setOpacity → controller.setOpacity、
+   * 托盘与悬浮球菜单里显隐顶栏 / 右栏走 controller.setChrome、更新提示上那个
+   * 「忽略此版本」走 updateService、清掉自定义球图标时回落默认图标走
+   * ballIconSet——而 ConfigStore 本身不认识窗口。挂在 store 的订阅上，
+   * 谁写的都算数，也不必每加一条写路径就回来补一句广播。
+   *
+   * 从前只有 configPatch 那一条路广播，于是「不经过设置页」的改动只落在主进程
+   * 里：最典型的是整体透明度——右栏那条滑块的依据是渲染进程手里这份配置镜像，
+   * 它一直停在挂载时读到的旧值（默认 100%）上，用户每调小一次、一松手
+   * 滑块就跳回 100%。
+   */
+  config.subscribe((next) => broadcast(BROADCAST.configChanged, next))
+
   const popover = new PopoverWindowService(
     registry,
     preloadPath,

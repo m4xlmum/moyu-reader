@@ -16,6 +16,7 @@
  *   npx electron spike/preview.js --tabs 2        # 只留前 2 个标签页（标签条里只有网页）：放得下那一态
  *   npx electron spike/preview.js --click-tab 0   # 点第 0 格标签，再截一张
  *   npx electron spike/preview.js --click-rail-pause  # 点右栏那格开关，再截一张
+ *   npx electron spike/preview.js --drag-opacity 40   # 拖「整体」透明度那条滑块到 40%，问松手之后它显示什么
  *   npx electron spike/preview.js --screen settings   # 界面停在系统设置上：标签条哪一格都不高亮
  *   npx electron spike/preview.js --screen home       # 停在起始页上：起始页那颗键亮着
  *   npx electron spike/preview.js --click-screen      # 用两颗键各进出一次，打一行 SCREEN 再截两张
@@ -1740,6 +1741,104 @@ app.whenReady().then(async () => {
       const after = await railPause()
       console.log(`RAIL_PAUSE ${JSON.stringify({ 点之前: before, 点之后: after })}`)
       await shoot(`${name}-railpause`)
+    }
+
+    /*
+     * 拖右栏那条「整体」透明度滑块，问松手之后它显示的是刚拖到的那个值，
+     * 还是弹回改动前的旧值（默认 100%）。
+     *
+     * 用户报的正是这一条。这条滑块走的是窗口级属性（win.setOpacity），与设置页
+     * 那条走 configPatch 的不是同一条路，而配置广播从前只挂在 configPatch 上——
+     * 界面手里那份配置镜像一直停在挂载时读到的旧值上，用户一松手显示就回落到它，
+     * 调小多少次都还是 100%。
+     *
+     * 假桥把这一态**放大到看得见**：它的 setOpacity 收下请求就完
+     * （preview-preload.js），也就是「主进程一声不响」的极端情形——真机上广播
+     * 迟早会来，这里永远不来。于是这一问量的是滑块自己那半边：松手之后它该守着
+     * 自己刚拖到的值，直到 props 真的换掉，而不是立刻回落到 props 里的旧值。
+     *
+     * 三问，缺一不可：
+     *   拖动中   —— 显示跟得上手指，且请求真的发了出去（假桥那边记着账）；
+     *   松手     —— **用户报的那一帧**：显示仍是刚拖到的值，不是 100%；
+     *   模型换掉 —— 让假桥广播一个**别的**值进来（模拟主进程夹过一道），显示必须
+     *               改听它的。这一问盯的是「守着自己那个值」不许守成死锁：换了值
+     *               它还不动，这滑块就成了一个只会念自己旧心情的摆设。
+     */
+    if (page === 'chrome' && has('--drag-opacity')) {
+      const 目标 = num('--drag-opacity', 40)
+      // 与目标明显不同，用来把滑块从「守着自己那个值」里拽出来
+      const 别的值 = 目标 > 50 ? 20 : 80
+
+      const 找 = `[...document.querySelectorAll('.rail .opacity')]
+        .find((e) => e.querySelector('.label')?.textContent?.trim() === '整体')`
+      const 读 = `(() => {
+        const box = ${找}
+        if (!box) return null
+        const el = box.querySelector('.slider')
+        return { 显示: box.querySelector('.value')?.textContent?.trim() ?? null, 值: Number(el.value) }
+      })()`
+      const 按 = (type) =>
+        run(`(() => {
+          const box = ${找}
+          if (!box) return false
+          box.querySelector('.slider').dispatchEvent(
+            new PointerEvent(${JSON.stringify(type)}, { bubbles: true, pointerId: 1 })
+          )
+          return true
+        })()`)
+
+      const 拖之前 = await run(读)
+      await 按('pointerdown')
+      await wait(50)
+      /*
+       * 拖一格：把值写进去再派一次 input——这正是浏览器真拖动时做的事，
+       * onInput 读的就是 target.value，因此这一串没有一步是替它做主的。
+       *
+       * 写值与**读显示**必须是两次调用，中间那一小段等待也是必需的：Vue 的重画
+       * 在微任务里，与派事件同一个任务里读到的还是上一次画出来的那一帧。
+       * 少了这一步，被测的东西就变成了「DOM 里那个值」，而滑块坏没坏恰恰是
+       * 画出来的那个数说了算——下面松手那一帧同理（在那里漏掉它，毛病会
+       * 反过来被读成一个「没问题」）。
+       */
+      await run(`(() => {
+        const box = ${找}
+        const el = box.querySelector('.slider')
+        el.value = String(${目标})
+        el.dispatchEvent(new Event('input', { bubbles: true }))
+      })()`)
+      await wait(50)
+      const 拖动中 = await run(读)
+      const 发出去的请求 = (await run(`window.moyu.win.opacityLog().calls`)).slice(-1)[0] ?? null
+
+      await 按('pointerup')
+      await wait(50)
+      const 松手 = await run(读)
+
+      // 广播一个别的值进来：走的是与真机同一条路（假桥的 patch 真的会广播）
+      await run(`window.moyu.config.patch({ window: { opacity: ${别的值 / 100} } })`)
+      await wait(250)
+      const 模型换掉之后 = await run(读)
+
+      console.log(
+        `DRAG_OPACITY ${JSON.stringify({
+          目标: `${目标}%`,
+          拖之前,
+          拖动中,
+          假桥收到的: 发出去的请求,
+          松手,
+          模型换成: `${别的值}%`,
+          模型换掉之后
+        })}`
+      )
+      const 破了 = []
+      if (拖动中?.显示 !== `${目标}%`) 破了.push(`拖动中显示的是 ${拖动中?.显示}`)
+      if (发出去的请求 === null || Math.abs(发出去的请求 * 100 - 目标) > 1) {
+        破了.push(`假桥收到的不是 ${目标}%：${发出去的请求}`)
+      }
+      if (松手?.显示 !== `${目标}%`) 破了.push(`松手之后跳成了 ${松手?.显示}`)
+      if (模型换掉之后?.显示 !== `${别的值}%`) 破了.push(`模型换成 ${别的值}% 之后显示的是 ${模型换掉之后?.显示}`)
+      console.log(破了.length ? `DRAG_OPACITY_FAIL ${JSON.stringify(破了)}` : 'DRAG_OPACITY_OK')
+      await shoot(`${name}-dragopacity${目标}`)
     }
 
     /*

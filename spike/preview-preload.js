@@ -302,6 +302,8 @@ const updateState = {
   ignored: false
 }
 let installCalls = 0
+/** 整体透明度那条滑块发过来的请求，供 --drag-opacity 那一问来读（见下） */
+const opacityCalls = []
 
 /** 初始那一份也要按同一条判据算：--notice-ignored 供的就是「已忽略这一版」那一态 */
 updateState.ignored = updateState.version !== null && config.update.ignoredVersion === updateState.version
@@ -596,7 +598,19 @@ contextBridge.exposeInMainWorld('moyu', {
   nav: { goto: ok, back: ok, forward: ok, reload: ok, stop: ok },
   page: { setZoom: () => Promise.resolve(1), setUa: () => Promise.resolve('desktop') },
   win: {
-    setOpacity: ok,
+    /*
+     * 整体透明度这条滑块走的是窗口级属性，与设置页那条走 configPatch 的不是同一条
+     * 路，因此这里**收下就完**——配置镜像不动，正是「主进程一声不响」的极端情形
+     * （真机上广播迟早会来，这里永远不来）。--drag-opacity 那一问要量的恰恰是
+     * 滑块自己那半边：松手之后它守不守得住刚拖到的值。请求照旧记一笔账，
+     * 好确认它真的把意图发出去了。
+     */
+    setOpacity: (input) => {
+      opacityCalls.push(input?.value ?? null)
+      return Promise.resolve()
+    },
+    /** --drag-opacity 用：读回那条滑块发过哪些值 */
+    opacityLog: () => ({ calls: [...opacityCalls] }),
     collapse: ok,
     expand: ok,
     maximize: () => {

@@ -39,7 +39,12 @@ export function registerDataIpc(ctx: AppContext): void {
       ctx.controller.expand()
     }
 
-    ctx.broadcast('config:changed', after)
+    /*
+     * 广播不在这里做：配置的广播挂在 ConfigStore 的订阅上（见 index.ts），
+     * 谁写的都走同一条路。这里只负责「改配置会牵动窗口」的那几个副作用——
+     * 它们之所以需要单独写，正是因为走到这里的这次改动是**界面**发起的，
+     * 而控制器自己改配置时（显隐两栏、调透明度）顺手就把这些做完了。
+     */
     return after
   })
 
