@@ -24,11 +24,12 @@
  *       （画布设备像素宽 ×1.2，而 CSS 宽度不变）。
  *   Q7  CSP 一条都没报：这一页的 CSP 比别的页多三条放行（wasm、blob worker、
  *       moyu-pdf:），漏一条就会在运行时被拦下来，而**被拦下来是不出声的**。
- *   Q8  preload 到手了（这一页要读配置才画得出正文透明度），且页面里没有异常。
- *   Q9  正文透明度（配置 ui.readerOpacity，右栏第三条滑块）：**合成之后的窗口上**
- *       画布那一条的最大 alpha 跟着值一起减半，而右下角那条浮层的纹丝不动
- *       ——浮层是控件，控件不跟着淡。CSS opacity 动不了画布里的像素，
- *       因此这一问只能量合成结果（getImageData 读回来一个字节都不变）。
+ *   Q8  preload 到手了（这一页要读配置才画得出那张纸的透明度），且页面里没有异常。
+ *   Q9  阅读透明度（配置 ui.readerOpacity，右栏第三条滑块）：它调的是**纸**，
+ *       值 v 对应纸的 alpha = 1 − v。三处一起问：页面里画布自己的 opacity 恒是 1、
+ *       元素底色的 alpha 是 1 − v；画布位图里的墨一个像素都没动；合成之后的窗口上，
+ *       那一片从「以透明为主」变成「一片近白的实心」，而最暗的那一点（字）
+ *       没有变浅。CSS 底色动不了画布里的像素，因此最后一头只能量合成结果。
  *
  * 一问一个进程：本仓库的探针在同一个进程里开第二扇窗加载 file:// 会 ERR_FAILED
  * （Q24 那条环境的脾气），而这一支每个素材都要重新 loadURL 一次。因此跑法是一串
@@ -296,7 +297,7 @@ async function run(book) {
   mods.pdf.registerPdfProtocol(ses)
   mods.session.hardenWebContents()
 
-  // 页面要读配置：正文透明度（Q9）与主题（Q4，用来证明它**不**跟着主题走）都从
+  // 页面要读配置：纸的透明度（Q9）与主题（Q4，用来证明它**不**跟着主题走）都从
   // 这一条来。真程序里它由 registerDataIpc 提供，探针给一份最小的替身：
   // 只填 ui 那一格，够这一页用
   const cfg = { ...mods.config.defaultConfig(), ui: { homeTheme: 'paper', backgroundOpacity: 1 } }
@@ -482,38 +483,69 @@ async function run(book) {
   )
   win.webContents.zoomLevel = 0
 
-  // -------------------------------------------------------------- Q9 正文透明度
+  // -------------------------------------------------------------- Q9 阅读透明度调的是纸
   //
-  // 右栏第三条滑块（ui.readerOpacity）改的是这一页的**正文**：画布上乘一道
-  // CSS opacity。量的是合成之后的窗口，不是画布里的像素——CSS opacity 由合成器
-  // 做，getImageData 读回来的字节一个都不变（这正是选它、而不选「把 alpha 乘进
-  // 键控那一趟」的原因：后者要整页重算 50–100ms，一条滑块拖不动）。
+  // 右栏第三条滑块（ui.readerOpacity）。在这一页上它调的是**纸的透明度**：
+  // 值 v 对应纸的 alpha = 1 − v（见 @shared/constants 的 READER_OPACITY_MIN）。
+  // 1.5.2 之前这一条乘的是画布的 opacity——淡的是**字**，那是瞄错了对象：
+  // 要在一张花桌面上读得清，该给回来的是纸，字该一直是那个实心的墨。
   //
-  // 两处各取一个矩形：
-  //   · 画布顶上那一条 —— 里面只有字，最大 alpha 应当跟着值一起降；
-  //   · 右下角那条浮层 —— 它是控件，最大 alpha 应当纹丝不动。
-  // 量浮层之前先按一下 Shift 把它叫醒（它静止 2.6 秒就自己淡出去，
-  // 淡出去之后那一块当然是透明的，量出来是一条**假通过**）。
-  const 叫醒 = `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }))`
-  const 取矩形 = `(() => {
-    const box = (el) => {
-      const r = el.getBoundingClientRect()
-      return { x: r.x, y: r.y, width: r.width, height: r.height }
-    }
+  // 三处各问一头，缺一头都留着一条能静默坏掉的路：
+  //
+  //   · **页面里**：画布自己算出来的 opacity 恒是 1（字没被淡），而元素底色
+  //     那条 backgroundColor 的 alpha 正好是 1 − v（纸的透明度就是那个数）；
+  //   · **画布位图里**：墨那一批像素一个都不变（最实的那个 alpha 与深色墨的
+  //     个数都照旧）——这是「字不可能淡」的根：滑块只动元素底色，碰不到位图；
+  //   · **合成之后的窗口上**：纸那一头要真的铺上来。v = 1 时那一片以透明为主
+  //     （Q3b 量过的那个样子），v = 0 时变成一片近白的实心，而**最暗的那一点
+  //     不许变浅**——字还是那个字。
+  //
+  // 为什么不把 alpha 乘进键控那一趟：那要读回像素、把整页重算一遍（50–100ms），
+  // 而滑块每一格都得跟手。CSS 底色由合成器做，一个像素都不改——因此最后一头
+  // 只能量合成之后的窗口。
+  //
+  // 量之前要等右下角那条浮层自己退开：它是一块不透明的白面，醒着的时候会被
+  // 算进「近白」里，把「纸全透时一个近白的像素都没有」这条判据搅成假通过。
+  // 它静止 2.6 秒淡出去，这里等它真的淡到看不见为止。
+  const 取几何 = `(() => {
     const c = document.querySelector('canvas')
     const hud = document.querySelector('.hud')
+    const cs = getComputedStyle(c)
+    const m = cs.backgroundColor.match(/rgba?\\(([^)]+)\\)/)
+    const 分量 = m ? m[1].split(/[\\s,/]+/).filter(Boolean).map(Number) : []
+    const r = c.getBoundingClientRect()
     return JSON.stringify({
-      canvas: box(c),
-      hud: hud && !hud.classList.contains('off') ? box(hud) : null,
-      canvasOpacity: parseFloat(getComputedStyle(c).opacity),
-      hudOpacity: hud ? parseFloat(getComputedStyle(hud).opacity) : null,
+      画布: { x: r.x, y: r.y, width: r.width, height: r.height },
+      画布opacity: parseFloat(cs.opacity),
+      纸的alpha: 分量.length >= 4 ? 分量[3] : 分量.length === 3 ? 1 : null,
+      底色: cs.backgroundColor,
+      浮层退开了: !hud || (hud.classList.contains('off') && parseFloat(getComputedStyle(hud).opacity) < 0.05),
       视口: { w: window.innerWidth, h: window.innerHeight }
     })
   })()`
 
-  /** 一个矩形里最实的那一点。alpha 的最大值就是「有没有被淡掉」这一个数 */
-  async function maxAlpha(rect, 视口) {
-    // 与视口求交：画布比窗口高（一页要滚着看），越界的矩形交给 capturePage 是自找麻烦
+  /** 等浮层淡出去（它自己 2.6 秒后退开，那条过渡 220ms） */
+  async function 等浮层退开() {
+    for (let i = 0; i < 40; i++) {
+      const 几何 = JSON.parse(await win.webContents.executeJavaScript(取几何))
+      if (几何.浮层退开了) return 几何
+      await delay(200)
+    }
+    return JSON.parse(await win.webContents.executeJavaScript(取几何))
+  }
+
+  /**
+   * 画布那一片在**合成之后**是什么样。
+   *
+   * 与视口求交：画布比窗口高（一页要滚着看），越界的矩形交给 capturePage 是自找麻烦。
+   * 三个读数分别对应上面那三头里的最后一头：
+   *
+   *   透的   a < 8        纸全透时这一片的主体
+   *   近白   a ≥ 250 且近白   纸铺上来之后这一片的主体
+   *   最暗   a ≥ 250 里头最暗的那一点（体元铺在**白桌面上**看到的亮度）
+   *          ——字不变浅，就是这一个数不变。浮层已经退开，因此它只能是墨
+   */
+  async function 扫窗口(rect, 视口) {
     const x = Math.max(0, Math.round(rect.x))
     const y = Math.max(0, Math.round(rect.y))
     const shot = await win.webContents.capturePage({
@@ -523,64 +555,112 @@ async function run(book) {
       height: Math.max(1, Math.min(Math.round(rect.height), 视口.h - y))
     })
     const bmp = shot.toBitmap()
-    let max = 0
-    for (let i = 3; i < bmp.length; i += 4) if (bmp[i] > max) max = bmp[i]
-    return max
-  }
-
-  /**
-   * 量一轮：叫醒浮层 → 读矩形与两处 opacity → 各取一次最大 alpha。
-   *
-   * 叫醒与读矩形必须是两次调用，中间还得等**比它那条过渡更长**的一会儿
-   * （浮层的 opacity 有 220ms 的 transition）：Vue 把 `hudOn` 画到 class 上是在
-   * 微任务里，同一个任务里读到的还是「淡出去」的那一帧；而等不够的话量到的是
-   * 淡入到一半的浮层（实测 150ms 时读到 0.79），那一条读数就成了「浮层自己
-   * 在淡」，与这条滑块一点关系都没有。
-   */
-  async function 量正文() {
-    await win.webContents.executeJavaScript(叫醒)
-    await delay(450)
-    const 几何 = JSON.parse(await win.webContents.executeJavaScript(取矩形))
-    const 画布条 = { ...几何.canvas, height: Math.min(160, 几何.canvas.height) }
+    let 数了 = 0
+    let 透的 = 0
+    let 近白 = 0
+    let 最暗 = 255
+    for (let i = 0; i + 3 < bmp.length; i += 4) {
+      const b = bmp[i]
+      const g = bmp[i + 1]
+      const r = bmp[i + 2]
+      const a = bmp[i + 3]
+      数了++
+      if (a < 8) {
+        透的++
+        continue
+      }
+      if (a < 250) continue
+      if (r > 245 && g > 245 && b > 245) 近白++
+      else {
+        const 亮度 = 0.114 * b + 0.587 * g + 0.299 * r
+        if (亮度 < 最暗) 最暗 = 亮度
+      }
+    }
     return {
-      几何,
-      画布最大alpha: await maxAlpha(画布条, 几何.视口),
-      浮层最大alpha: 几何.hud ? await maxAlpha(几何.hud, 几何.视口) : null
+      数了,
+      透的,
+      近白,
+      最暗,
+      透的占比: +((透的 / 数了) * 100).toFixed(1),
+      近白占比: +((近白 / 数了) * 100).toFixed(1)
     }
   }
 
-  const 不淡 = await 量正文()
-  const 淡到 = 0.4
-  Object.assign(cfg, { ui: { homeTheme: 'paper', backgroundOpacity: 1, readerOpacity: 淡到 } })
-  win.webContents.send(mods.ipc.BROADCAST.configChanged, cfg)
-  await delay(700)
-  const 淡了 = await 量正文()
+  /**
+   * 等这一页真的画好。
+   *
+   * 上一问（Q6）刚把缩放调回 100%，那会重排这一页——画布先清空再重画
+   * （50–100ms）。这一问要读画布位图，抢在重画中间读到的是一张**刚清空的**
+   * 画布：深色墨 0 个像素，而「墨没动」那条判据就成了「0 === 0」自己通过自己
+   * （实测漏过一次：六份素材里有五份第一次读到 0）。判据与 Q3a 同一条——
+   * 画布上得有墨（那一问的门槛是 200 个像素）。之后每读一圈都只是确认。
+   */
+  async function 等画完(timeout = 8000) {
+    const until = Date.now() + timeout
+    let 页 = await readPage(win, INK_PAPER)
+    while (Date.now() < until && 页.darkInk + 页.lightInk < 200) {
+      await delay(200)
+      页 = await readPage(win, INK_PAPER)
+    }
+    return 页
+  }
 
-  // 回到 1：这一问还要证「拉回来就真的回来了」——注入过的那条 opacity 不许赖着
-  Object.assign(cfg, { ui: { homeTheme: 'paper', backgroundOpacity: 1, readerOpacity: 1 } })
-  win.webContents.send(mods.ipc.BROADCAST.configChanged, cfg)
-  await delay(700)
-  const 拉回 = await 量正文()
-  if (SHOTS) fs.writeFileSync(path.join(OUT, `pdf-scheme-${book}-dim.png`), (await win.webContents.capturePage()).toPNG())
+  /** 一档：等浮层退开 → 读几何与画布位图 → 扫一遍合成之后的窗口 */
+  async function 量一档() {
+    const 几何 = await 等浮层退开()
+    const 页 = await 等画完()
+    return { 几何, 页, 窗口: await 扫窗口(几何.画布, 几何.视口) }
+  }
+
+  /** 把滑块推到一个值上，等页面把它算完（配置是广播过去的） */
+  async function 推到(readerOpacity) {
+    Object.assign(cfg, { ui: { homeTheme: 'paper', backgroundOpacity: 1, readerOpacity } })
+    win.webContents.send(mods.ipc.BROADCAST.configChanged, cfg)
+    await delay(700)
+    return 量一档()
+  }
+
+  const 全透 = await 量一档() // 默认那个 1：纸全透，也就是 1.5.2 之前一直的样子
+  const 半透 = await 推到(0.4) // 纸 alpha 0.6
+  const 全实 = await 推到(0) // 纸全实：一张白纸铺在这一页下面
+  const 拉回 = await 推到(1) // 拉回来要真的回来
+  if (SHOTS) fs.writeFileSync(path.join(OUT, `pdf-scheme-${book}-paperon.png`), (await win.webContents.capturePage()).toPNG())
 
   {
-    const 应到 = Math.round(不淡.画布最大alpha * 淡到)
-    const 到了 = Math.abs(淡了.画布最大alpha - 应到) <= 6
-    const 浮层没动 =
-      不淡.浮层最大alpha !== null &&
-      淡了.浮层最大alpha !== null &&
-      Math.abs(淡了.浮层最大alpha - 不淡.浮层最大alpha) <= 2
-    const 拉得回来 = Math.abs(拉回.画布最大alpha - 不淡.画布最大alpha) <= 4
+    // 「字没淡」两头看：位图里的墨一个字节没动，窗口上最暗的那一点也没变浅。
+    // 容差 4 是留给抗锯齿的：纸一旦垫到字下面，边缘那圈半透明的墨会跟白面混一点
+    // （实测六份素材上差 0.1–2.1）。要提防的不是这 2 个，是**把字整页乘淡**那一种
+    // ——1.5.1 之前那个读数会从 23.7 直接跳到 120 上下。
+    const 墨没动 =
+      全透.页.maxInk === 全实.页.maxInk &&
+      全透.页.darkInk === 全实.页.darkInk &&
+      全透.页.darkInk > 200 &&
+      全实.页.paper === 0
+    const 字没淡 = Math.abs(全实.窗口.最暗 - 全透.窗口.最暗) <= 4
     ok(
-      'Q9 正文透明度只淡正文',
-      不淡.几何.canvasOpacity === 1 &&
-        淡了.几何.canvasOpacity === 淡到 &&
-        到了 &&
-        浮层没动 &&
-        拉得回来,
-      `画布 opacity ${不淡.几何.canvasOpacity} → ${淡了.几何.canvasOpacity} → ${拉回.几何.canvasOpacity}；` +
-        `画布最大 alpha ${不淡.画布最大alpha} → ${淡了.画布最大alpha}（按 ${淡到} 应当到 ${应到}）→ ${拉回.画布最大alpha}；` +
-        `浮层（控件）最大 alpha ${不淡.浮层最大alpha} → ${淡了.浮层最大alpha}，自身 opacity ${不淡.几何.hudOpacity}`
+      'Q9 阅读透明度调的是纸，不是字',
+      全透.几何.画布opacity === 1 &&
+        半透.几何.画布opacity === 1 &&
+        全实.几何.画布opacity === 1 &&
+        全透.几何.纸的alpha === 0 &&
+        Math.abs(半透.几何.纸的alpha - 0.6) <= 0.01 &&
+        全实.几何.纸的alpha === 1 &&
+        墨没动 &&
+        全透.窗口.透的占比 > 50 &&
+        全透.窗口.近白占比 < 2 &&
+        半透.窗口.透的占比 < 全透.窗口.透的占比 * 0.8 &&
+        全实.窗口.透的占比 < 2 &&
+        全实.窗口.近白占比 > 40 &&
+        字没淡 &&
+        拉回.几何.纸的alpha === 0 &&
+        拉回.窗口.透的占比 > 50 &&
+        Math.abs(拉回.窗口.透的占比 - 全透.窗口.透的占比) <= 2,
+      `纸的 alpha ${全透.几何.纸的alpha} → ${半透.几何.纸的alpha} → ${全实.几何.纸的alpha} → ${拉回.几何.纸的alpha}` +
+        `（底色 ${全实.几何.底色}）；画布 opacity 恒 ${全实.几何.画布opacity}；` +
+        `画布位图里的深色墨 ${全透.页.darkInk} → ${半透.页.darkInk} → ${全实.页.darkInk} 个像素（最实的 ${全实.页.maxInk}/255）；` +
+        `窗口上透明 ${全透.窗口.透的占比}% → ${半透.窗口.透的占比}% → ${全实.窗口.透的占比}% → ${拉回.窗口.透的占比}%，` +
+        `近白 ${全透.窗口.近白占比}% → ${半透.窗口.近白占比}% → ${全实.窗口.近白占比}%，` +
+        `最暗（墨压在纸上）${全透.窗口.最暗.toFixed(1)} → ${半透.窗口.最暗.toFixed(1)} → ${全实.窗口.最暗.toFixed(1)}`
     )
   }
 
@@ -611,7 +691,8 @@ async function run(book) {
         green,
         greenLeak,
         zoomed,
-        dim: { 不淡, 淡了, 拉回 },
+        /* 滑块的四个落点各读一圈：这一份是「淡的是纸、字没动」的原始凭据 */
+        sheet: { 全透, 半透, 全实, 拉回 },
         complaints,
         results
       },

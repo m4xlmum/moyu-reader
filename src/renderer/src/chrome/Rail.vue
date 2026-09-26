@@ -83,7 +83,12 @@ function setBackgroundOpacity(value: number): void {
 }
 
 /**
- * 离线阅读正文的透明度，界面与网页都不受影响。
+ * 离线阅读透明度，界面与网页都不受影响。
+ *
+ * 同一个值在两处落点不一样（见 @shared/constants 的 READER_OPACITY_MIN）：
+ * **PDF 阅读页**上它调的是那张纸——拉下去，一张白纸垫到字下面，字始终实心；
+ * **本机 TXT** 上调的是正文本身——那一页是 Chromium 自己渲染的，我们碰不到
+ * 它的底，只能整页淡（见 services/pageStyler.ts）。
  *
  * 判据是「此刻这张网页是不是本机文件」——本机 TXT 与自家 PDF 阅读页都对外的
  * 地址是 `file:`（见 @shared/url 的 isLocalFile），因此一个谓词两处通用。
@@ -99,8 +104,8 @@ const offlineReading = computed(() => isLocalFile(props.activeTab?.url))
 
 const readerHint = computed(() =>
   offlineReading.value
-    ? '只影响离线阅读的正文（本机 TXT 与 PDF），界面与网页不受影响'
-    : '只影响离线阅读的正文——此刻没有正在读的本机文件。先打开一本：起始页 → 离线阅读 → 打开文件…'
+    ? 'PDF 调的是垫在字下面那张纸（拉到底纸全实），TXT 调的是正文本身（那一页的底由 Chromium 画，碰不到）。界面与网页不受影响'
+    : '离线阅读透明度——此刻没有正在读的本机文件。先打开一本：起始页 → 离线阅读 → 打开文件…'
 )
 
 /**
@@ -203,8 +208,9 @@ function togglePauseOnCollapse(): void {
       />
 
       <!--
-        第三条：离线阅读的正文。前两条管窗口，这一条管「我在读的那点字」——
-        因此它们可以各走各的（界面 100% + 正文 40% 是常用的一种搭配）。
+        第三条：离线阅读。前两条管窗口，这一条管「我正在读的那一份」——
+        PDF 上是垫在字下面那张纸，TXT 上是正文本身——因此它们可以各走各的
+        （界面 100% + 一张实心白纸是常用的一种搭配）。
         只在读本机文件时是活的（见 offlineReading）。
       -->
       <OpacitySlider

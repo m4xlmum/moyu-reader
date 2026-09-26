@@ -6,7 +6,7 @@
  *
  *   1. 让网页本身透明（否则透明窗口里会残留一块不透明的网页底色）；
  *   2. 藏起滚动条；
- *   3. 离线阅读正文的不透明度（applyReaderOpacity）——这一条**只给本机文件**
+ *   3. 离线阅读的透明度（applyReaderOpacity）——这一条**只给本机文件**
  *      用，网页永远不许吃到它。第 1、2 条不分对象，第 3 条分；而且第 3 条
  *      还要**撤得回来**，因此它不走 insertCSS（原因见 applyReaderOpacity），
  *      与上面两块不是一条路。
@@ -69,13 +69,15 @@ export async function removePageStyles(wc: WebContents): Promise<void> {
 }
 
 /**
- * 离线阅读正文的不透明度。**调用方必须先判定这一页是本机文件**
+ * 离线阅读的透明度。**调用方必须先判定这一页是本机文件**
  * （TabManager 用 @shared/url 的 isLocalFile）——网页永远不许吃到它。
  *
- * 为什么是「给 html 一条 opacity」而不是把字重画一遍：本机 TXT 是 Chromium
- * 自己渲染的，我们碰不到它的字，能碰的只有这一层。整页 opacity 就是
- * 「字淡下去、桌面从笔画里透过来」，与 PDF 那一页的墨色乘 alpha 是同一件事的
- * 两种实现（PDF 那一页是我们自己画的，走的是 canvas 上的 opacity，见 PdfApp.vue）。
+ * 这一页（本机 TXT / 网页文件）的底由 Chromium 自己画，我们碰不到它，能碰的
+ * 只有最外面这一层，因此整页 `opacity` 就是「字淡下去、桌面从笔画里透过来」。
+ * 同一条滑块在 **PDF 那一页**落的是另一处：那一页的纸是我们自己画进画布的，
+ * 于是它把纸**补回来**（画布的底色，alpha 由同一条滑块给），字始终实心
+ * （见 pdf/PdfApp.vue）。两处落点不一样的原因写在 @shared/constants 的
+ * READER_OPACITY_MIN 里。
  *
  * ## 为什么不是 insertCSS（这一条摔过一跤）
  *

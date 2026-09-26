@@ -149,8 +149,8 @@
     （`willReadFrequently: true`）再交给 pdf.js；pdf.js 自己那份是 `{alpha: false}`，
     晚一步就轮到它说了算（Q55）。
 
-20. **离线阅读的正文透明度不用 `insertCSS` 注入，而且它必须由主进程推。** 这一条管的
-    是「被读的东西」（本机 TXT 与自家 PDF 阅读页），判据是 `isLocalFile(entry.url)`
+20. **离线阅读透明度不用 `insertCSS` 注入，而且它必须由主进程推。** 这一条管的
+    是「正在读的那一份」（本机 TXT 与自家 PDF 阅读页），判据是 `isLocalFile(entry.url)`
     ——**网页永远吃不到它**（与第 5、17 条同一条边界）。TXT 那一页是 Chromium 自己
     渲染的，界面侧没有那座桥（访客页不带 preload），因此值只能由主进程写进去：
     写配置的路不止一条，所以这件事挂在 `ConfigStore.subscribe` 上
@@ -161,7 +161,10 @@
     于是「拉回 100%」这一半会当着用户的面失效——而且它安静得只有量像素才看得出来
     （第 20 条这一条与 `spike/css-remove.js`、`live-app.js` 的 A12 一起读；Q58）。
     行内 `!important` 顺带压过页面自己样式表里的任何同属性声明，也不受 CSP 约束。
-    PDF 那一页走的是另一条实现——它是自家排的，直接给画布乘同一个数（第 17 条）。
+    PDF 那一页走的是另一条实现——它是自家排的，而 1.5.2 起那一条落的是**那张纸**
+    （给画布一层元素底色），不是给画布乘 `opacity`：这一页的位图里只剩墨，乘 `opacity`
+    淡的会是字。同一个值落两处之所以必须分开写，根子在 TXT 那一页的纸是 Chromium 画的、
+    我们碰不到（正是上面那条「撤不回来」逼出来的选择）；Q62。
 
 > 早期版本用 `setShape` 裁剪窗口的命中区域来实现「隐藏区域点击穿透」。
 > 改为收起成球之后这套机制已整体移除：窗口真的缩小了，就不需要再靠裁剪
@@ -186,9 +189,9 @@ src/renderer/  chrome 界面 / 弹出面板 / 系统设置 / PDF 阅读页
 | `src/main/services/geometry.ts` | 版面矩形计算，坐标判断的唯一来源 |
 | `src/main/services/updateService.ts` | 更新那一路：查 `latest.yml` → 比版本 → 下载并校验 sha512 → 起安装程序。**不用 electron-updater** 的三条理由写在文件头 |
 | `src/main/services/pdfReader.ts` | 本机 PDF 那条路：`moyu-pdf://` 的两张面（字节与资源）、token ↔ 路径的对应表、阅读页的地址 |
-| `src/main/services/pageStyler.ts` | 注入访客页面的三样东西：透明底、藏滚动条、离线阅读正文的 `opacity`（第三条只给本机文件，见第 20 条） |
+| `src/main/services/pageStyler.ts` | 注入访客页面的三样东西：透明底、藏滚动条、离线阅读透明度在 **TXT 那一半**上的 `opacity`（第三条只给本机文件，见第 20 条；PDF 那一半由页面自己落在画布底色上） |
 | `src/renderer/src/home/useRows.ts` | 起始页的行模型与交互：三套主题共用，世界组件只负责画 |
-| `src/renderer/src/pdf/PdfApp.vue` | 阅读页：pdf.js 把一页画进画布，再把纸收掉、把字上成一份固定的近黑墨（这一页不写主题，见 `useTheme.ts`；排版在 `styles/pdf.css`） |
+| `src/renderer/src/pdf/PdfApp.vue` | 阅读页：pdf.js 把一页画进画布，再把纸收掉、把字上成一份固定的近黑墨（这一页不写主题，见 `useTheme.ts`；排版在 `styles/pdf.css`）；离线阅读透明度在这一页上落的是**画布的元素底色**（那张纸），不是 `opacity`（见第 20 条） |
 | `src/renderer/src/pdf/keying.ts` | 键控本身：这一页的纸是哪一张（有没有、浅还是深）、墨的零点在哪儿、要不要翻面 |
 | `src/renderer/src/composables/useWindowDrag.ts` | 「按控件是操作、按别处是拖窗口」的唯一判据，界面各处共用 |
 | `src/renderer/src/composables/useBackgroundAlpha.ts` | 底板透明度写进文档根（必须与令牌同层，见架构要点第 9 条） |

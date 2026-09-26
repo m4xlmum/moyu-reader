@@ -815,19 +815,20 @@ export class TabManager {
       hideScrollbars: cfg.browser.hideScrollbars
     })
     /*
-     * 离线阅读正文的透明度走另一张样式表，**只有本机文件吃**。
+     * 离线阅读的透明度走另一张样式表，**只有本机文件吃**。
      *
      * 判据必须在这里：pageStyler 不知道这一页是什么，而「网页永远不许淡」
      * 是这一条的硬边界（见 PRODUCT.md）。本机 PDF 是自家阅读页（kind 是 'pdf'，
-     * 上面那一步就返回了），它的正文透明度由页面自己在 canvas 上乘——同一个
-     * 配置项，两条实现，因为那一页是我们画的、这一页是 Chromium 画的。
+     * 上面那一步就返回了），它的那一条由页面自己落在画布底色上——淡的是纸，
+     * 不是字（见 pdf/PdfApp.vue）。同一个配置项、两条实现，因为那一页是我们
+     * 画的、这一页是 Chromium 画的。
      */
     const reader = isLocalFile(entry.url) ? cfg.ui.readerOpacity : 1
     void applyReaderOpacity(entry.view.webContents, reader)
   }
 
   /**
-   * 正文透明度改了：把开着的本机文件**当场**重注入一遍。
+   * 离线阅读透明度改了：把开着的本机文件**当场**重注入一遍。
    *
    * 不能等下一次导航。那是一条会被拖着走的滑块，用户盯着眼前这本 TXT 拖，
    * 指望的就是它跟着淡；等下一次 reload 才生效等于这条滑块是坏的。

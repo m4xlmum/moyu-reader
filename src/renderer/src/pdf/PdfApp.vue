@@ -8,6 +8,13 @@
  * 注入的 CSS 与能算出 alpha 的 SVG 滤镜都落不到它头上（实测注入前后一个像素都不差，
  * 见 docs/spike-findings.md 的 Q51）。要「逐像素透明的窗口里只剩字」，只能自己画。
  *
+ * ## 纸与字
+ *
+ * 键控把纸写成 alpha 0（桌面透得过纸）、字写成一份固定的近黑墨。纸并没有被扔掉
+ * ——它作为**画布自己的底色**随时补得回来：右栏第三条滑块（阅读透明度）拉下去，
+ * 一张白纸就垫到字下面（0% 纸全实，100% 纸全透，也就是原来那个样子）。
+ * **字始终不跟着动**：要在一张花桌面上读得清，该给回来的是纸，不是把字抹淡。
+ *
  * ## 阅读模型
  *
  * **一次一页**。页面宽度铺满正文区（fit-width），一页比正文区高时在页内上下滚，
@@ -135,17 +142,28 @@ let dprQuery: MediaQueryList | null = null
 const { config } = useConfig()
 
 /**
- * 正文透明度（配置里的 ui.readerOpacity，右栏第三条滑块）。
+ * 垫在字下面那张纸的不透明度（配置里的 ui.readerOpacity，右栏第三条滑块）。
  *
- * 只乘在**画布**上：右下角那条浮层是控件，控件要一直看得见——与「背景透明度
- * 不淡字与图标」是同一条规矩。于是「界面 100%、正文 40%」这种搭配才成立。
+ * 这一条量的是**纸的透明度**：100% = 纸全透（桌面直接透过来，也是这一版之前
+ * 一直的样子，纸被键控写成 alpha 0 之后没有任何东西补回来），0% = 纸全实
+ * （一张白纸垫在字下面）。因此它取的正好是 **1 − 值**：默认那个 1 对应
+ * 「纸全透」，与 TXT 那一页「值 1 就是不淡」落在同一个点上，老配置一个数
+ * 都不用迁（见 @shared/constants 的 READER_OPACITY_MIN）。
  *
- * 用 CSS opacity，不把 alpha 乘进键控那一趟：键控要读回像素、把整页重算一遍
- * （实测一页 50–100ms），而滑块每一格都得跟手。CSS opacity 由合成器做，
+ * **字不跟着动**。这一页的墨是键控一笔一笔写死的（纸写 alpha 0、墨写 1），
+ * 纸只是作为画布的 CSS 底色补回来，于是滑块拖到底，字仍是那个近黑的实心
+ * `#15181d`。1.5.0 那条「拖下去整本书的字一起淡」是瞄错了对象：要在一张花
+ * 桌面上读得清，该给回来的是纸，不是把字抹淡。
+ *
+ * 用 CSS 底色，不把 alpha 乘进键控那一趟：键控要读回像素、把整页重算一遍
+ * （实测一页 50–100ms），而滑块每一格都得跟手。CSS 底色由合成器做，
  * 一个像素都不改——**所以画布里的像素读数不会变**，要量它只能量合成之后的窗口
  * （探针 spike/pdf-scheme.js 的 Q9 就是这么量的）。
  */
-const pageOpacity = computed(() => config.value?.ui.readerOpacity ?? 1)
+const paperAlpha = computed(() => {
+  const v = config.value?.ui.readerOpacity ?? 1
+  return Math.min(1, Math.max(0, 1 - v))
+})
 
 /*
  * 墨色只读一次。
@@ -162,6 +180,32 @@ const pageOpacity = computed(() => config.value?.ui.readerOpacity ?? 1)
  * 是同一条边界。
  */
 inkColor = inkFromCss(getComputedStyle(document.documentElement).getPropertyValue('--moyu-ink'))
+
+/**
+ * 纸的颜色：主题层里「面」的三通道（`--moyu-surface-rgb`，纸白那一份是
+ * `255 255 255`）。
+ *
+ * 读它而不是把 `255, 255, 255` 抄在这里，与上面那行墨色是同一条规矩：配色
+ * 唯一的真相在主题层。这一页不写主题，因此它拿到的恒是 `:root` 那一份白。
+ * 兜底那句只是防「读不到」——探针 Q9 量的正是这张纸白不白。
+ */
+const paperRgb = (() => {
+  const parts = getComputedStyle(document.documentElement)
+    .getPropertyValue('--moyu-surface-rgb')
+    .trim()
+    .split(/\s+/)
+    .map(Number)
+  return parts.length === 3 && parts.every(Number.isFinite) ? parts.join(', ') : '255, 255, 255'
+})()
+
+/**
+ * 画布自己的底色就是那张纸。
+ *
+ * 画布位图里只有墨（纸在键控那一趟被写成 alpha 0），因此把纸画成**元素底色**
+ * 正好补回它原来待的那一层：字在位图里，压在这张纸上面，两者的 alpha 各算各的
+ * ——纸按滑块来，字恒是实心。
+ */
+const paperStyle = computed(() => `rgba(${paperRgb}, ${paperAlpha.value.toFixed(3)})`)
 
 function fail(err: unknown): void {
   note.value = `打不开这本书：${err instanceof Error ? err.message : String(err)}`
@@ -479,9 +523,12 @@ onBeforeUnmount(() => {
     <!--
       正文区。一次一页，页比它高时在它里面滚；滚到头再由 onWheel / onKey 翻页。
       滚动条藏起来：这一页是「浮在桌面上的一叠纸」，一条灰色的槽会把它拆穿。
+
+      画布自己的底色 = 那张纸（`paperStyle`），纸的透明度由右栏第三条滑块给。
+      不给它 opacity：那会把字一起淡掉，而要淡的是纸。
     -->
     <div ref="stage" class="stage" @wheel="onWheel">
-      <canvas ref="canvas" class="sheet" :style="{ opacity: pageOpacity }" />
+      <canvas ref="canvas" class="sheet" :style="{ backgroundColor: paperStyle }" />
     </div>
 
     <!-- 出错与进度都写在这一句里：这一页没有别的可说话的地方 -->
@@ -521,8 +568,8 @@ onBeforeUnmount(() => {
 .sheet {
   display: block;
   margin: 0 auto;
-  /* 画布上什么都没有的地方就该透过去。默认的 canvas 是透明的，这一条是double保险：
-     键控会把纸写成 alpha 0，而不是写成白 */
+  /* 纸由行内那条 backgroundColor 给（透明到实心之间由滑块定），这里只是它落地
+     之前的一层底：默认的 canvas 本来就是透明的，这一条是双保险 */
   background: transparent;
 }
 
