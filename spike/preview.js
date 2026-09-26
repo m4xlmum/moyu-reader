@@ -37,8 +37,10 @@
  *   npx electron spike/preview.js --home --body --address-open  # 地址栏展开时正文区更矮那一档
  *   npx electron spike/preview.js --home --reduced-motion      # 系统开着「减少动态效果」时的那一页
  *   npx electron spike/preview.js --home --no-reduced-motion   # 反过来：那一档里才量得到换栏的那条动画
- *   npx electron spike/preview.js --theme night    # 界面也跟主题走，换一套配色看顶栏与右栏
- *   npx electron spike/preview.js --settings --theme crt-green   # 设置页同理
+ *   # --theme 只对起始页那一份文档有效（1.5.1 起）：界面、面板、设置页、PDF
+ *   #   都不写主题，给了也只是把 ui.homeTheme 记进 JSON，画面一个像素都不变。
+ *   #   唯一的例外是设置页自己那颗选中的按钮——它读的就是 ui.homeTheme。
+ *   npx electron spike/preview.js --settings --theme crt-green   # 设置页：磷绿那颗亮着
  *   npx electron spike/preview.js --settings --width 560 --height 400
  *   # 注意：--home / --settings 看的是**那一份文档**自己长什么样；
  *   #      --screen home|settings 看的是**界面处在「停在它上面」那一态**（见上）
@@ -1641,13 +1643,20 @@ app.whenReady().then(async () => {
   // 最大化那一档与展开态是两张不同的图（一张是右上角一小块、一张是整扇窗），不能互相覆盖
   const max = MAXIMIZED ? '-max' : ''
   /*
-   * 主题也写进名字。
+   * 主题也写进名字，但只有两张图配得上这个名字。
    *
-   * 起始页一直这么干（三套主题各截一张是它的常规用法）；界面、面板与设置页
-   * 这次也跟着主题走了，但它们的图名 README 在用，不能因为多了一个默认值就
-   * 全体改名——因此这三页只在 --theme 明确指到非默认主题时才缀上。
+   * 起始页一直这么干——三套主题各截一张是它的常规用法，而它也是**唯一**写主题的
+   * 那一份文档。设置页再算半个：它自己不换皮，但「主题」那一栏的选中态读的正是
+   * ui.homeTheme，换一个主题那张图里的按钮就换了地方。因此这两页照旧缀后缀
+   * （起始页一律缀，设置页只在 --theme 明确指到非默认主题时才缀——它的图名
+   * README 在用，不能因为多了一个默认值就全体改名）。
+   *
+   * 界面、弹出面板、PDF 这三份文档 1.5.1 起彻底不写主题，给了 --theme 画面也
+   * 一个像素都不变。它们若还缀后缀，落下来的就是两张一模一样的图、两个名字，
+   * 读图的人会以为自己在看两态——所以一律不缀。
    */
-  const themeTag = page === 'home' || theme !== 'paper' ? `-${theme}` : ''
+  const themeTag =
+    page === 'home' ? `-${theme}` : page === 'settings' && theme !== 'paper' ? `-${theme}` : ''
   /*
    * 提示条的形态也写进名字：四种形态各是一张图，跑第二轮时彼此不能覆盖。
    * 「已按过更新并重启」那一态另加一段后缀——它是另一种文案，会被上一种盖掉。

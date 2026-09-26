@@ -7,11 +7,16 @@
 # 没有任何手绘或摆拍」）能不能站住的地方。写下来之后，任何人跑一遍都能得到同一批原图。
 #
 # 两条容易搞混的尺寸规矩：
-#   * 界面底板（chrome-*）抓的是**整扇窗** 1280×720，且**必须带 --alpha**——
+#   * 界面底板（chrome*）抓的是**整扇窗** 1280×720，且**必须带 --alpha**——
 #     它是垫在网页之上的那一层，正文区要透明，否则叠出来是一块灰底。
 #   * 页面（home-*、settings）抓的是**正文区** 1232×676（--body），不是整扇窗。
 #     抓整扇窗再塞进正文区那个矩形，图会被压扁（1280/720 与 1232/676 不是同一个比例），
 #     而那在成品图上只是「看着有点扁」，很难认出来是哪个数字错了。
+#
+# 界面底板**只有一份**（1.5.1 起）：主题只管起始页，顶栏与右栏不再跟着换皮，
+# 于是 --theme night / --theme crt-green 抓出来的界面与不带 --theme 的一模一样。
+# 这里曾经有 chrome-night.png 与 chrome-crt-green.png 两张 —— 那是同一个像素的两份副本，
+# 名不同、内容相同，读图的人会以为自己在看两态（见 readme-assets.js 里那段说明）。
 #
 # 用法：bash spike/capture-readme.sh     （无头，不弹窗）
 set -u
@@ -33,13 +38,9 @@ cp_ () {
 
 echo "===== 界面底板：整扇窗 1280×720，正文区透明 ====="
 probe --alpha --width 1280 --height 720
-probe --alpha --theme night --width 1280 --height 720
-probe --alpha --theme crt-green --width 1280 --height 720
-probe --alpha --theme crt-green --bg 0 --width 1280 --height 720
-cp_ preview-default-1280x720.png            chrome.png
-cp_ preview-default-night-1280x720.png      chrome-night.png
-cp_ preview-default-crt-green-1280x720.png  chrome-crt-green.png
-cp_ preview-default-crt-green-1280x720-bg0.png  chrome-crt-green-bg0.png
+probe --alpha --bg 0 --width 1280 --height 720
+cp_ preview-default-1280x720.png       chrome.png
+cp_ preview-default-1280x720-bg0.png   chrome-bg0.png
 
 echo "===== 页面：按正文区 1232×676 渲染，叠进去是 1:1 ====="
 probe --home --body --theme paper --width 1280 --height 720
@@ -64,8 +65,7 @@ probe --collapsed --alpha --width 200 --height 200 --ball-zoom 5
 cp_ preview-collapsed-200x200-zoom5.png ball.png
 
 echo "===== 成品名那一批（看时间戳，全该是刚刚） ====="
-ls -la "$OUT"/chrome.png "$OUT"/chrome-night.png "$OUT"/chrome-crt-green.png \
-       "$OUT"/chrome-crt-green-bg0.png "$OUT"/home-paper.png "$OUT"/home-night.png \
+ls -la "$OUT"/chrome.png "$OUT"/chrome-bg0.png "$OUT"/home-paper.png "$OUT"/home-night.png \
        "$OUT"/home-crt-green.png "$OUT"/settings.png "$OUT"/popover.png "$OUT"/ball.png |
   awk '{print $5, $6, $7, $8, $9}'
 
@@ -73,4 +73,4 @@ if [ "$FAILED" -ne 0 ]; then
   echo "有 $FAILED 张没复制成——上面那些成品名里混着旧图，别拿去发 README。" >&2
   exit 1
 fi
-echo "OK：10 张全部换成这一轮抓的原图。"
+echo "OK：8 张全部换成这一轮抓的原图。"

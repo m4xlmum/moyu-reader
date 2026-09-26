@@ -87,12 +87,12 @@ const TABS = opts.noTabs === true ? [] : opts.tabs > 0 ? ALL_TABS.slice(0, opts.
  * 说法与真实主进程一致（见 shared/ipc.ts 的 TabsStatePayload）：`activeTabId`
  * 只说「正在看着哪张网页」，停在自家那两屏上时它是 **null**——标签条因此哪一格
  * 都不高亮，而标签条本身照旧把网页都列着；「原路返回」要回的那一张另记在
- * `lastGuestId` 里。把 screen 与 activeTabId 混成一个字段，就画不出
+ * `lastTabId` 里。把 screen 与 activeTabId 混成一个字段，就画不出
  * 「没有哪一格高亮」这一态了。
  *
  * --screen home|settings 摆的是「先开着网页、再进那一屏」那一态，
  * 因此两张表都要照着填：停在那屏上、并且记得回来该回哪张。
- * --no-tabs 时没有「刚才那张」可记，`lastGuestId` 就是 null，屏也跟着落回起始页
+ * --no-tabs 时没有「刚才那张」可记，`lastTabId` 就是 null，屏也跟着落回起始页
  * （与主进程关掉最后一张网页时同一条路，见 TabManager.close）。
  */
 let screen = opts.noTabs === true ? (opts.screen ?? 'home') : (opts.screen ?? null)
@@ -100,7 +100,7 @@ let screen = opts.noTabs === true ? (opts.screen ?? 'home') : (opts.screen ?? nu
 const FIRST_TAB = TABS[1]?.id ?? TABS[0]?.id ?? null
 let activeTabId = screen ? null : FIRST_TAB
 /** 「原路返回」要回的那一张。进自家那两屏不改它——这正是它记着来路的原因 */
-let lastGuestId = FIRST_TAB
+let lastTabId = FIRST_TAB
 const tabListeners = new Set()
 
 const config = {
@@ -212,7 +212,7 @@ if (opts.reader === true) {
     muted: false
   })
   activeTabId = 'r0'
-  lastGuestId = 'r0'
+  lastTabId = 'r0'
   screen = null
 }
 
@@ -405,7 +405,7 @@ const POPOVERS = []
  * 进自家那一屏（起始页 / 系统设置）。
  *
  * 「正在看着的那张网页」就此变成没有——`activeTabId` 归 null，标签条上哪一格
- * 都不高亮；`lastGuestId` 不动，它就是「再点一次原路返回」要回的那一张。
+ * 都不高亮；`lastTabId` 不动，它就是「再点一次原路返回」要回的那一张。
  */
 function openScreen(kind) {
   screen = kind
@@ -416,12 +416,12 @@ function openScreen(kind) {
 /**
  * 再点一次那颗键：原路返回。
  *
- * 回的是 `lastGuestId` 那一张；它已经不在了就落回起始页——正文区不能空着
+ * 回的是 `lastTabId` 那一张；它已经不在了就落回起始页——正文区不能空着
  * （与主进程同一条规矩，见 TabManager.close / leaveScreen）。
  */
 function leaveScreen() {
   if (!screen) return
-  const back = lastGuestId && TABS.some((t) => t.id === lastGuestId) ? lastGuestId : null
+  const back = lastTabId && TABS.some((t) => t.id === lastTabId) ? lastTabId : null
   if (back) {
     screen = null
     activeTabId = back
@@ -435,15 +435,21 @@ function leaveScreen() {
 /**
  * 标签页的对外快照。isActive 跟着当前那一格算，不另存一份，免得两处说法对不上。
  *
- * `lastGuestId` 照真机填（见 shared/ipc.ts 的同名字段）：顶栏那个地址栏开关写的是
- * **一张网页**，停在自家那两屏上时它写的就是这一张，而不是屏名。
+ * 四个字段名逐字照 `shared/ipc.ts` 的 TabsStatePayload 填。**这一条必须当真**：
+ * 假桥是拿给真组件用的，字段名对不上不会报错，只会静静地读到 undefined——
+ * 顶栏那个地址栏开关在停在自家那两屏上时就成了空白，而探针量到的是一句
+ * 「与起点不一样」。这里原先那一格叫 `lastGuestId`（真机上没有这个名字），
+ * 于是 Q13 那一问自它上线起就一直在报一个假失败，见 spike/theme-chrome.js。
+ *
+ * `lastTabId` 说的是**一张网页**：顶栏那个地址栏开关写的就是它，
+ * 而不是屏名。
  */
 function tabsState() {
   return {
     tabs: TABS.map((t) => ({ ...t, isActive: t.id === activeTabId })),
     activeTabId,
     screen,
-    lastGuestId
+    lastTabId
   }
 }
 
@@ -528,7 +534,7 @@ function openLocalFiles() {
     })
     // 新开的这一页就是正在看的那一页（真机上 activate: true），起始页随之退到后台
     activeTabId = id
-    lastGuestId = id
+    lastTabId = id
     screen = null
     HISTORY.unshift({
       id,
@@ -617,7 +623,7 @@ contextBridge.exposeInMainWorld('moyu', {
     close: (input) => {
       const at = TABS.findIndex((t) => t.id === input.tabId)
       if (at >= 0) TABS.splice(at, 1)
-      if (lastGuestId === input.tabId) lastGuestId = null
+      if (lastTabId === input.tabId) lastTabId = null
       /*
        * 关掉的是**正在看着的那一张**：还有网页就切到最后一张，一张都不剩就
        * 落回起始页。停在自家那两屏上时「正在看着的那张」是 null（关谁都动不到
@@ -627,7 +633,7 @@ contextBridge.exposeInMainWorld('moyu', {
         const next = TABS[TABS.length - 1]
         if (next) {
           activeTabId = next.id
-          lastGuestId = next.id
+          lastTabId = next.id
           screen = null
         } else {
           screen = 'home'
@@ -640,7 +646,7 @@ contextBridge.exposeInMainWorld('moyu', {
     activate: (input) => {
       activeTabId = input.tabId
       screen = null
-      if (input.tabId) lastGuestId = input.tabId
+      if (input.tabId) lastTabId = input.tabId
       emitTabs()
       return Promise.resolve()
     },

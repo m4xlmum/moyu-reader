@@ -42,7 +42,6 @@ import ResizeFrame from './ResizeFrame.vue'
 import Icon from './Icon.vue'
 import { useConfig } from '../composables/useConfig'
 import { useBackgroundAlpha } from '../composables/useBackgroundAlpha'
-import { useTheme } from '../composables/useTheme'
 import { useTabs } from '../composables/useTabs'
 import { useWindowState } from '../composables/useWindowState'
 
@@ -53,8 +52,15 @@ const { state, collapse, expand, restore } = useWindowState()
 /** 底板透明度写在文档根上，理由见 useBackgroundAlpha */
 useBackgroundAlpha(config)
 
-/** 顶栏、地址栏、右栏、悬浮球都跟着主题走。网页在另一个 WebContentsView 里，管不到 */
-useTheme(config)
+/*
+ * 这里**故意不写主题**（useTheme 只有起始页那一份文档调）。
+ *
+ * themes.css 里那三组配色是按 `html[data-theme]` 挑的，这一份文档从不写这个属性，
+ * 于是顶栏、地址栏、右栏、悬浮球永远落在 `:root` 那一组——固定的纸白配色与圆角形态。
+ * 主题是起始页那一屏的事，工具的样子不该跟着一页换了皮就变（PDF 阅读页更明显：
+ * 那一页画的是内容，墨色跟着主题走会让磷绿下的整本书变成荧光绿）。
+ * 网页在另一个 WebContentsView 里，本来也管不到。
+ */
 
 const collapsed = computed(() => state.value?.mode === 'collapsed')
 const addressOpen = computed(() => state.value?.addressOpen ?? false)

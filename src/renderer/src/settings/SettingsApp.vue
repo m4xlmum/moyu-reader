@@ -22,7 +22,6 @@ import BallGlyph from '../chrome/BallGlyph.vue'
 import Icon from '../chrome/Icon.vue'
 import BallIconCropper from './BallIconCropper.vue'
 import { useBallIcon } from '../composables/useBallIcon'
-import { useTheme } from '../composables/useTheme'
 import { useUpdate } from '../composables/useUpdate'
 
 type SectionKey = 'general' | 'stealth' | 'hotkey' | 'data' | 'about'
@@ -41,8 +40,11 @@ const hotkeys = ref<{ bossMinimize: HotkeyInfo; bossHideToTray: HotkeyInfo } | n
 const hotkeyMessage = ref<string>('')
 const capturing = ref<'bossMinimize' | 'bossHideToTray' | null>(null)
 
-/** 设置页自己也跟着主题变——改主题的人正是站在这页上，不跟就说不过去 */
-useTheme(config)
+/*
+ * 这一页**不写主题**：改主题的人正站在这里，而主题管的是起始页那一屏——
+ * 设置页是工具，工具的样子不跟着起始页换皮（见 composables/useTheme.ts）。
+ * 那三颗按钮改的是 ui.homeTheme，改完由配置广播带到起始页去。
+ */
 
 const sizePresets = computed(() => Object.keys(SIZE_PRESETS) as SizePreset[])
 const SIZE_LABEL: Record<SizePreset, string> = {
@@ -189,7 +191,7 @@ onMounted(async () => {
   config.value = await window.moyu.config.get()
   hotkeys.value = await window.moyu.hotkey.list()
   // 起始页也能换主题，那一边改完只有这条广播会通知到这里；
-  // 这一页自己改主题时也是同一条路——配置一变，四份文档一起重画。
+  // 这一页自己改主题时也是同一条路——配置一变，五份文档一起重画。
   // 本页自己发的 patch 也会回广播一次，值相同，不冲突。
   offConfig = window.moyu.config.onChanged((next) => {
     config.value = next
@@ -451,7 +453,7 @@ function setSizePreset(preset: SizePreset): void {
           </p>
 
           <div class="field">
-            <label>主题</label>
+            <label>起始页主题</label>
             <div class="control column">
               <div class="themes">
                 <button
@@ -469,8 +471,10 @@ function setSizePreset(preset: SizePreset): void {
           <p class="hint">
             主题不只换配色，还决定披哪一层皮：纸白与暗夜是现代行式列表，磷绿是命令行。
             三套主题的划分与操作完全一致，换的只是观感。
-            它作用在<b>整个界面</b>上——顶栏、地址栏、右栏、悬浮球、弹出面板与这一页都跟着换，
-            <b>网页永远不受影响</b>：那是你正在读的东西，不该被界面的皮肤染上颜色。
+            它只作用在<b>起始页那一屏</b>上——顶栏、地址栏、右栏、悬浮球、弹出面板与这一页
+            都<b>不跟着换</b>，它们的样子是固定的。
+            <b>网页与本机文件也永远不受影响</b>：那是你正在读的东西，不该被界面的皮肤染上颜色
+            （磷绿下整本书变绿这件事，1.5.1 就是为它修的）。
             起始页最底下那条状态行里也能直接换。
           </p>
 

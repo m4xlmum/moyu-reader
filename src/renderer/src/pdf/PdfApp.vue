@@ -1,7 +1,8 @@
 <script setup lang="ts">
 /**
  * 本机 PDF 的阅读页：pdf.js 把每一页画进 canvas，键控把那一层纸收掉，
- * 只留下字；字的颜色跟着当前主题走。
+ * 只留下字；字的颜色取主题层里那一份基准的墨（近黑），**不跟主题换色**
+ * ——这一页画的是内容，内容不该被界面的皮肤染上颜色（见下）。
  *
  * 为什么不是 Chromium 内置的那个阅读器：那一张纸是 PDFium 直接画在插件表面上的，
  * 注入的 CSS 与能算出 alpha 的 SVG 滤镜都落不到它头上（实测注入前后一个像素都不差，
@@ -10,7 +11,7 @@
  * ## 阅读模型
  *
  * **一次一页**。页面宽度铺满正文区（fit-width），一页比正文区高时在页内上下滚，
- * 滚到头再滚就翻页。整本一次只留一张画布——不为相邻页留缓存、换主题就重画，
+ * 滚到头再滚就翻页。整本一次只留一张画布——不为相邻页留缓存、换深浅那一档就重画，
  * 内存因此是平的（一本一千页的书与一本十页的书占的一样多）。代价是翻页要等
  * 重新解析、重画、重新键控（实测一页 50–100ms），这是明写的取舍。
  *
@@ -38,7 +39,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import {
   getDocument,
   GlobalWorkerOptions,
@@ -48,7 +49,6 @@ import {
 } from 'pdfjs-dist'
 import PdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?worker&inline'
 import { useConfig } from '../composables/useConfig'
-import { useTheme } from '../composables/useTheme'
 import { inkCanvas, inkFromCss, type Polarity } from './keying'
 
 /**
@@ -123,7 +123,7 @@ let token = 0
 let painting = false
 /** 下一次画成之后落在页首还是页尾（往回翻要落在页尾，读起来才接得上） */
 let edge: 'top' | 'bottom' = 'top'
-/** 当前墨色，来自 --moyu-ink。不参与响应式：重画由 watchEffect 显式叫 */
+/** 当前墨色，来自 --moyu-ink。这一页不写主题，因此它是一份定值，画的时候直接取用 */
 let inkColor: [number, number, number] = [231, 233, 238]
 
 let wheelAcc = 0
@@ -133,7 +133,6 @@ let resizer: ResizeObserver | null = null
 let dprQuery: MediaQueryList | null = null
 
 const { config } = useConfig()
-useTheme(config)
 
 /**
  * 正文透明度（配置里的 ui.readerOpacity，右栏第三条滑块）。
@@ -149,17 +148,20 @@ useTheme(config)
 const pageOpacity = computed(() => config.value?.ui.readerOpacity ?? 1)
 
 /*
- * 主题一改就换墨色、重画。
+ * 墨色只读一次。
  *
- * 读的是**算好的** --moyu-ink，不是把三个颜色抄在这里：主题层（styles/themes.css）
- * 是配色唯一的真相，抄一份就等于多一处「改了主题但 PDF 里的字没跟着变」。
- * useTheme 的 watchEffect 比这一个先建，因此读到的一定是刚写上去的那一份。
+ * 这一页**不写主题**（useTheme 只有起始页那一份文档调），因此它永远落在
+ * themes.css 的 `:root` 那一组上——纸白那一份近黑的墨。读到的时候样式表已经
+ * 应用完了：五份文档的 `themes.css` 都是 `<link>`，先把样式算好，模块脚本才跑。
+ *
+ * 读的是**算好的** --moyu-ink，不是把颜色抄在这里：配色唯一的真相仍在主题层，
+ * 抄一份就等于多一处「改了主题层但 PDF 里的字没跟着变」。
+ *
+ * 1.5.1 之前这里是跟着主题走的（磷绿下整本书的字都是荧光绿）。那是错的：
+ * 这一页画的是**内容**，内容不该被界面的皮肤染上颜色——与「网页永远不受影响」
+ * 是同一条边界。
  */
-watchEffect(() => {
-  const theme = config.value?.ui.homeTheme
-  inkColor = inkFromCss(getComputedStyle(document.documentElement).getPropertyValue('--moyu-ink'))
-  if (theme && doc) scheduleRender()
-})
+inkColor = inkFromCss(getComputedStyle(document.documentElement).getPropertyValue('--moyu-ink'))
 
 function fail(err: unknown): void {
   note.value = `打不开这本书：${err instanceof Error ? err.message : String(err)}`
@@ -219,8 +221,8 @@ async function paintOnce(): Promise<void> {
   /*
    * 必须显式清一次。
    *
-   * 改画布的 width/height 只在**尺寸真的变了**时才清空它，而「换主题」与
-   * 「换深浅那一档」都是同一尺寸的重画；键控又是就地改写像素的，
+   * 改画布的 width/height 只在**尺寸真的变了**时才清空它，而「换深浅那一档」
+   * 与「重新排版同一页」都是同一尺寸的重画；键控又是就地改写像素的，
    * 不清就会拿上一次的结果当地基，叠两遍之后 alpha 全糊在一起。
    */
   ctx.clearRect(0, 0, el.width, el.height)

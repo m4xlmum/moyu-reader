@@ -101,10 +101,11 @@ const INK_TAIL = 0.005
 /**
  * 就地键控。返回纸的亮度与实际按的那一面（给读数用）。
  *
- * `ink` 是墨色（当前主题的 --moyu-ink，见 PdfApp 里读它的地方）：键控把每个像素
- * 的 alpha 按「它有多像我想要的东西」算出来，RGB 一律写成这个墨色——PDF 里的
- * 彩色（插图、彩色标题）在这一步被放弃，换来的是一份**在任何主题下都读得下去**
- * 的正文。这是自阅方案明写的取舍，不是疏漏。
+ * `ink` 是墨色（themes.css 里 `:root` 那一组的 --moyu-ink，见 PdfApp 里读它的地方）：
+ * 键控把每个像素的 alpha 按「它有多像我想要的东西」算出来，RGB 一律写成这个墨色
+ * ——PDF 里的彩色（插图、彩色标题）在这一步被放弃，换来的是一份**在任何主题下都
+ * 读得下去**的正文（这一页不跟主题换色，见 PdfApp 的文件头注释）。这是自阅方案
+ * 明写的取舍，不是疏漏。
  */
 export function inkCanvas(
   ctx: CanvasRenderingContext2D,
@@ -245,10 +246,11 @@ export function inkCanvas(
 /**
  * 把一条 CSS 颜色读成三个通道。
  *
- * 墨色来自主题层（styles/themes.css 的 --moyu-ink），而它在三套主题里都是
- * 六位十六进制；这里仍认 `rgb()/rgba()` 与三位十六进制，是因为主题是**可以改的**
- * ——改配色的人不该因为换了一种写法就看见一个「墨色没生效」的怪毛病。认不出来时
- * 回落到深色主题那一支（#e7e9ee 之类），绝不回落到纯黑：纯黑在深色主题下等于隐形。
+ * 墨色来自主题层（styles/themes.css 的 --moyu-ink）。这一页不写主题名，因此读到
+ * 的总是 `:root` 那一份（纸白的近黑）；这里仍认 `rgb()/rgba()` 与三位十六进制，
+ * 是因为配色是**可以改的**——改配色的人不该因为换了一种写法就看见一个「墨色没
+ * 生效」的怪毛病。认不出来时回落到深色那一支（#e7e9ee 之类），绝不回落到纯黑：
+ * 纯黑在深色桌面上的透明窗口里等于隐形。
  */
 export function inkFromCss(value: string | null | undefined): [number, number, number] {
   const text = (value ?? '').trim()

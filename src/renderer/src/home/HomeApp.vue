@@ -40,7 +40,7 @@ const config = ref<AppConfig | null>(null)
 const query = ref('')
 /** 此刻停在哪一栏 */
 const plate = ref<SectionId>(DEFAULT_SECTION)
-/** 主题，见 config.ui.homeTheme。它管的是整个界面，不只是这一页 */
+/** 起始页的主题，见 config.ui.homeTheme。**只这一页**跟着它换，界面那几份不动 */
 const theme = ref<HomeTheme>(DEFAULT_HOME_THEME)
 /** 开着几张标签页。页眉要报这个数 */
 const tabCount = ref(0)
@@ -227,7 +227,10 @@ async function openFile(): Promise<void> {
 /**
  * 主题与形态都写在 html 的属性上，样式表按属性挑变量组（见 styles/themes.css）。
  *
- * 具体怎么写交给 useTheme 里那一份实现——界面、面板、设置页三处写的也是它，
+ * **只有这一份文档写它**——界面、面板、设置页、PDF 阅读页那四份都不写，
+ * 于是它们永远落在 `:root` 那一组（纸白）。主题是起始页这一屏的事，
+ * 工具与内容不跟着换皮，理由写在 composables/useTheme.ts 的文件头。
+ *
  * 这里只额外留一个 theme ref 给主题菜单用。
  */
 function applyTheme(next: HomeTheme): void {

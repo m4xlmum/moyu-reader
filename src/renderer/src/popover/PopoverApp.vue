@@ -9,7 +9,6 @@ import { sectionTitle } from '@shared/constants'
 import type { Bookmark, HistoryEntry, PresetSite, SiteRecord, TabState } from '@shared/types'
 import { useConfig } from '../composables/useConfig'
 import { useBackgroundAlpha } from '../composables/useBackgroundAlpha'
-import { useTheme } from '../composables/useTheme'
 
 type Kind = 'sites' | 'history' | 'bookmarks' | 'uaZoom' | 'tabs'
 
@@ -22,8 +21,7 @@ const kind = (new URLSearchParams(location.search).get('kind') ?? 'sites') as Ki
  */
 const { config } = useConfig()
 useBackgroundAlpha(config)
-/** 面板也是另一份文档，主题同样得自己读一遍 */
-useTheme(config)
+// 面板不写主题：它属于「工具」那一层，固定用 :root 那一组（纸白），见 ChromeApp
 
 const mySites = ref<SiteRecord[]>([])
 const presets = ref<PresetSite[]>([])

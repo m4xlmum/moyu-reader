@@ -319,14 +319,16 @@ export const LOCAL_FORMATS_NOTE = 'TXT / PDF 直接读；EPUB / MOBI / AZW3 暂�
 export type HomeWorld = 'modern' | 'terminal'
 
 /**
- * 主题。
+ * 起始页的主题。
  *
  * 三个主题 = 两套世界：现代配色两套，荧光屏一套。
  *
- * 主题管的是**整个界面**：顶栏、地址栏、标签条、右栏、悬浮球、弹出面板、系统设置页，
- * 以及起始页自己。四份文档各加载同一份 styles/themes.css，再各自把主题名写到
- * html[data-theme] 上（见 renderer/src/composables/useTheme.ts）——文档之间没有
- * 继承路径，只能各自写一遍。
+ * 主题管的是**起始页那一屏**，只有它这一份文档把主题名写到 `html[data-theme]` 上
+ * （见 renderer/src/composables/useTheme.ts）。顶栏、地址栏、标签条、右栏、悬浮球、
+ * 弹出面板、系统设置页与 PDF 阅读页那几份文档虽然加载着同一份 styles/themes.css，
+ * 却从不写这个属性——于是永远落在 `:root` 那一组（纸白）上。**这是设计**：
+ * 工具的样子不跟着一页换皮，何况 PDF 那一页画的是内容，墨色跟着主题走会让
+ * 磷绿下的整本书变成荧光绿（1.5.0 实装如此，1.5.1 修掉）。
  *
  * **网页永远不受影响**：访客页面是另一个 WebContentsView，拿不到这份样式表，
  * 也拿不到这个属性。读懂这一条就明白它的边界在哪。

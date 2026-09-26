@@ -343,7 +343,8 @@ function toggleSettings(): void {
 }
 
 .icon.danger:hover {
-  /* 危险色在深色主题里是亮的（#ff8a8a），上面的字得跟着翻面 */
+  /* 悬停时底色换成实心红，字得跟着翻面——用 --moyu-on-fill 而不是写死白色：
+     那是「压在实心色上」的那一支墨，配色改了它跟着改（纸白下是白字） */
   color: var(--moyu-on-fill);
   background: var(--moyu-danger);
 }

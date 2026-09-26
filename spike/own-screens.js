@@ -354,8 +354,8 @@ async function main() {
   record(
     'Q2b',
     '停在自家那两屏上时，快照里仍记着刚才那张网页（顶栏那个开关靠它才不跟着变成屏名）',
-    snapHome.lastGuestId === bId && snapSettings.lastGuestId === bId ? '是' : '否',
-    { 起始页上的: snapHome.lastGuestId, 设置上的: snapSettings.lastGuestId, 刚才那张: bId }
+    snapHome.lastTabId === bId && snapSettings.lastTabId === bId ? '是' : '否',
+    { 起始页上的: snapHome.lastTabId, 设置上的: snapSettings.lastTabId, 刚才那张: bId }
   )
 
   // ------------------------------------------------------------ Q3 不叠视图

@@ -1,5 +1,5 @@
 /**
- * 探针：本机 PDF 的阅读页。从「页面自己取字节」到「白纸逐像素透明、字随主题上色」。
+ * 探针：本机 PDF 的阅读页。从「页面自己取字节」到「白纸逐像素透明、字只用那一份墨」。
  *
  * 内置阅读器那条死路已经量过（Q51）：那张纸是 PDFium 画在插件表面上的，注入的 CSS
  * 与 SVG 滤镜都落不到它头上（0/120000 个透明像素）。这一版换成自家阅读页，因此
@@ -12,8 +12,10 @@
  *       fit-width（画布的 CSS 宽 == 正文区宽）。
  *   Q3  白纸变成透明：**画布上**与**窗口上**分别数像素。窗口那一份才是这个程序
  *       对外的主张——桌面能透过来。
- *   Q4  字随主题：把配置推成暗夜主题，同一页重画，量字色有没有整体翻面
- *       （浅色墨多起来、深色墨归零），而透明区不受影响。
+ *   Q4  字**不**随主题（1.5.1 起）：把配置依次推成暗夜与磷绿，同一页重画，
+ *       墨色仍是纸白那一份（#15181d）、根上也没有 data-theme。这两套配置在过去
+ *       会让这一页的字跟着翻面成浅灰、磷绿下更是整本书变成荧光绿——用户报的
+ *       就是这个毛病，因此这一问既看「还是那个墨」也看「磷绿的绿一个像素都没有」。
  *   Q5  深浅自动判对：深底浅字那两页（fixtures/dark 整页铺满、fixtures/slab 只占四成半）
  *       不许被抹平。它没有单独一问，而是靠换素材再跑一遍 Q3/Q4 量的——同一套判据
  *       在两种极性、两种画满程度的页面上都得成立（slab 那一份正是「画满没画满」这条
@@ -22,7 +24,7 @@
  *       （画布设备像素宽 ×1.2，而 CSS 宽度不变）。
  *   Q7  CSP 一条都没报：这一页的 CSP 比别的页多三条放行（wasm、blob worker、
  *       moyu-pdf:），漏一条就会在运行时被拦下来，而**被拦下来是不出声的**。
- *   Q8  preload 到手了（这一页要读配置才画得出墨色），且页面里没有异常。
+ *   Q8  preload 到手了（这一页要读配置才画得出正文透明度），且页面里没有异常。
  *   Q9  正文透明度（配置 ui.readerOpacity，右栏第三条滑块）：**合成之后的窗口上**
  *       画布那一条的最大 alpha 跟着值一起减半，而右下角那条浮层的纹丝不动
  *       ——浮层是控件，控件不跟着淡。CSS opacity 动不了画布里的像素，
@@ -65,9 +67,16 @@ const SHOTS = process.argv.includes('--shots')
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'))
 const BOOK = args[0] ?? 'panel'
 
-/** 纸白那一档的两个墨色（themes.css 里 --moyu-ink 的原值），Q4 靠它们分辨翻没翻面 */
+/**
+ * 主题层里那三份墨色（themes.css 的 --moyu-ink）。
+ *
+ * PAPER 是这一页**该有**的那一份（`:root`，纸白）；NIGHT 与 GREEN 是另外两套主题
+ * 自己的墨色，Q4 拿它们当**反面**：推了那两套配置之后，这一页上一个近 NIGHT、
+ * 近 GREEN 的像素都不许出现（GREEN 那个正是用户报的「整本书变荧光绿」）。
+ */
 const INK_PAPER = [0x15, 0x18, 0x1d]
 const INK_NIGHT = [0xe7, 0xe9, 0xee]
+const INK_GREEN = [0x57, 0xf0, 0x8c]
 
 const results = []
 function ok(id, pass, detail) {
@@ -287,8 +296,9 @@ async function run(book) {
   mods.pdf.registerPdfProtocol(ses)
   mods.session.hardenWebContents()
 
-  // 页面要读配置才画得出墨色。真程序里这条 IPC 由 registerDataIpc 提供，
-  // 探针给一份最小的替身：只填 ui 那一格，够 useTheme 用
+  // 页面要读配置：正文透明度（Q9）与主题（Q4，用来证明它**不**跟着主题走）都从
+  // 这一条来。真程序里它由 registerDataIpc 提供，探针给一份最小的替身：
+  // 只填 ui 那一格，够这一页用
   const cfg = { ...mods.config.defaultConfig(), ui: { homeTheme: 'paper', backgroundOpacity: 1 } }
   ipcMain.handle(mods.ipc.INVOKE.configGet, () => cfg)
 
@@ -413,28 +423,48 @@ async function run(book) {
   )
   if (SHOTS) fs.writeFileSync(path.join(OUT, `pdf-scheme-${book}-paper.png`), shot.toPNG())
 
-  // -------------------------------------------------------------- Q4 换主题
+  // -------------------------------------------------------------- Q4 字不随主题
+  //
+  // 1.5.1 起主题只管起始页那一屏，这一页固定落在主题层的 `:root`（纸白）上。
+  // 因此这一问是**反面**的：把配置依次推成暗夜与磷绿，墨色与根上那个属性
+  // 一个字节都不许动。磷绿那一趟正是用户报的那个毛病（整本书变荧光绿）——
+  // 它不靠「还是那个墨」间接说明，而是直接数一遍「有没有像素是那个绿」。
   const beforeInk = await readPage(win, INK_PAPER)
-  Object.assign(cfg, { ui: { homeTheme: 'night', backgroundOpacity: 1 } })
-  win.webContents.send(mods.ipc.BROADCAST.configChanged, cfg)
-  await delay(900)
-  const dark = await readPage(win, INK_NIGHT)
+  const pushTheme = async (homeTheme) => {
+    Object.assign(cfg, { ui: { homeTheme, backgroundOpacity: 1 } })
+    win.webContents.send(mods.ipc.BROADCAST.configChanged, cfg)
+    await delay(900)
+  }
+  await pushTheme('night')
+  const night = await readPage(win, INK_PAPER)
+  const nightLeak = await readPage(win, INK_NIGHT)
+  await pushTheme('crt-green')
+  const green = await readPage(win, INK_PAPER)
+  const greenLeak = await readPage(win, INK_GREEN)
   ok(
-    'Q4 字随主题',
-    !!dark &&
-      dark.theme === 'night' &&
-      dark.ink.toLowerCase() === '#e7e9ee' &&
-      dark.lightInk > 200 &&
-      dark.maxInk >= 250 &&
-      dark.paper === 0,
-    `主题 ${beforeInk?.theme} → ${dark?.theme}，墨色 ${beforeInk?.ink} → ${dark?.ink}，浅色墨 ${beforeInk?.lightInk} → ${dark?.lightInk}（最实的 ${dark?.maxInk}/255），白纸 ${dark?.paper}，透明 ${share(dark?.transparent, dark?.total)}%`
+    'Q4 字不随主题',
+    !!night &&
+      !!green &&
+      night.theme === null &&
+      green.theme === null &&
+      night.ink.toLowerCase() === '#15181d' &&
+      green.ink.toLowerCase() === '#15181d' &&
+      night.darkInk > 200 &&
+      green.darkInk > 200 &&
+      night.maxInk >= 250 &&
+      green.maxInk >= 250 &&
+      night.paper === 0 &&
+      green.paper === 0 &&
+      inkCount(nightLeak) === 0 &&
+      inkCount(greenLeak) === 0,
+    `主题名 ${beforeInk?.theme} → ${night?.theme} → ${green?.theme}（都该是 null），` +
+      `墨色 ${beforeInk?.ink} → ${night?.ink} → ${green?.ink}，深色墨 ${beforeInk?.darkInk} → ${night?.darkInk} → ${green?.darkInk} 个像素（最实的 ${green?.maxInk}/255），` +
+      `近夜墨 ${inkCount(nightLeak)} 个、近磷绿墨 ${inkCount(greenLeak)} 个，白纸 ${green?.paper}，透明 ${share(green?.transparent, green?.total)}%`
   )
-  if (SHOTS) fs.writeFileSync(path.join(OUT, `pdf-scheme-${book}-night.png`), (await win.webContents.capturePage()).toPNG())
+  if (SHOTS) fs.writeFileSync(path.join(OUT, `pdf-scheme-${book}-crtgreen.png`), (await win.webContents.capturePage()).toPNG())
 
   // 回到纸白，后面的读数与截图都按默认主题
-  Object.assign(cfg, { ui: { homeTheme: 'paper', backgroundOpacity: 1 } })
-  win.webContents.send(mods.ipc.BROADCAST.configChanged, cfg)
-  await delay(900)
+  await pushTheme('paper')
 
   // -------------------------------------------------------------- Q6 缩放
   const was = await readPage(win, INK_PAPER)
@@ -575,7 +605,11 @@ async function run(book) {
         readerUrl,
         pages,
         first,
-        night: dark,
+        /* 推了夜与磷绿之后各读一圈：这一份是「墨色没跟着主题动」的原始凭据 */
+        night,
+        nightLeak,
+        green,
+        greenLeak,
         zoomed,
         dim: { 不淡, 淡了, 拉回 },
         complaints,

@@ -1,33 +1,50 @@
 /**
- * 探针：主题管到了哪些界面，以及界面那层「透明中部」有没有被弄坏。
+ * 探针：主题落在哪一份文档上，以及「不跟着主题走的那四份」有没有真的不动。
  *
- * 起因是一次范围变更：主题过去只管起始页那一份文档，现在要管到整个界面
- * （顶栏、地址栏、标签条、右栏、悬浮球、弹出面板、系统设置页），**连终端形态
- * 一起**——磷绿时界面也要变直角、换等宽字体。
+ * 起因是 1.5.1 的一次范围收回：1.3.0 把主题铺到了整个界面（顶栏、地址栏、标签条、
+ * 右栏、悬浮球、弹出面板、系统设置页，连终端形态一起），1.5.1 把它收回到**起始页
+ * 那一屏**——用户报的是 PDF 阅读页的字在磷绿下整本变成荧光绿。诊断下来那不是
+ * 一处漏了跟主题，而是「主题管到内容层」这条边界本身就不该划在那里：界面的皮肤
+ * 换一换无妨，**内容**（正在读的那一页书、那张网页）不该被染上颜色。
  *
- * 四份文档各自加载同一份 styles/themes.css，再各自把主题名写到 html[data-theme]
- * 上（文档之间没有继承路径，只能各写一遍）。于是这里有三种问法：
+ * 五份文档各自加载同一份 styles/themes.css，但**只有起始页那一份**把主题名写到
+ * html[data-theme] / html[data-world] 上（见 composables/useTheme.ts）。其余四份
+ * 从不写，于是永远落在主题层的 `:root` 那一组——纸白。这是设计，因此这一版的判据
+ * 与上一版正好反过来：
  *
  * 1. **纸白这一套钉住了**：paper 下界面的每一条 --moyu-* 与一张定格表逐条相同。
- *    主题层里配色散在四份文档各自的变量组里，重做最怕的就是顺手改了不想改的那
- *    一档，而这种改动在截图上看不出来。表本身随配色一起更新，但判据一条不放松
+ *    主题层里配色散在各段变量组里，重做最怕的就是顺手改了不想改的那一档，
+ *    而这种改动在截图上看不出来。表本身随配色一起更新，但判据一条不放松
  *    （见 PAPER_EXPECT 的说明）。
- * 2. **三套主题真的各自生效**：调色板两两不同，且四份文档都拿到了当前主题
- *    （少了任意一份，"改了没反应"就会从那里冒出来）。
- * 3. **透明中部没被弄坏**——本次最要紧的一条。窗口是逐像素透明的，chrome 视图的
- *    中部必须什么也不画，好让下面的网页或桌面露出来。终端世界的扫描线/暗角是
- *    铺满视口的覆盖层，它**绝不能跟着主题进 chrome**：那是机制，不是审美。
- * 4. **新加的那一条「更新提示条」也站得住**。它是一行 30px 的实底，占的是版面
- *    （网页要让出这一行），因此它比这一层里别的任何东西都更容易把中部染上色；
- *    同时它的底、字、强调色必须逐条取自当前主题的令牌——写死一个白底的话，
- *    纸白下看着完全正常，夜与磷绿下当场就是一块白条。这一组单独加载：真机上
- *    提示条只在有新版时才占版面，一直挂着会让上面那几条基准漂移。
- * 5. **停在自家那一屏上时界面没散架**。起始页与系统设置不再是标签页：它们不进
+ * 2. **主题只动起始页，别处一寸不挪**（Q2，本版的核心）：把配置里的 ui.homeTheme
+ *    依次摆成纸白 / 暗夜 / 磷绿，**同一份文档量三次**——界面、面板、设置页、
+ *    PDF 阅读页这四份的三次读数必须逐条相同（而且等于纸白那一份），
+ *    起始页那三次必须两两不同。四份里少问一份，「改了没反应」就会从那一份冒出来；
+ *    而少问「起始页真的变了」这一头，就成了「主题整个坏掉了也叫 OK」。
+ * 3. **终端形态（直角、等宽、发光）也只在起始页**：磷绿下起始页变直角换等宽字，
+ *    界面那四份仍是纸白那一副圆角与无衬线栈，字也不发光。
+ * 4. **透明中部没被弄坏**。窗口是逐像素透明的，chrome 视图的中部必须什么也不画，
+ *    好让下面的网页或桌面露出来。终端世界的扫描线/暗角是铺满视口的覆盖层，
+ *    它**绝不能跟着主题进 chrome**：那是机制，不是审美。如今它连起始页以外的地方
+ *    都在样式上够不着（那段规则在 home.css 里，只有 home.html 加载它），
+ *    但这一条仍然每次量——省掉它的代价是三份文档里多一层盖住桌面的膜。
+ * 5. **「更新提示条」站得住**。它是一行 30px 的实底，占的是版面（网页要让出这一行），
+ *    因此它比这一层里别的任何东西都更容易把中部染上色；同时它的底、字、强调色
+ *    必须逐条取自**界面那一份**令牌——写死一个白底的话纸白下看着完全正常。
+ *    这一组单独加载：真机上提示条只在有新版时才占版面，一直挂着会让上面那几条
+ *    基准漂移。
+ * 6. **停在自家那一屏上时界面没散架**。起始页与系统设置不再是标签页：它们不进
  *    标签条，各有各的入口键。这一态也是一种**没有当前网页**的状态，因此单独加载
  *    三次（Q13，含起点）：标签条一格不多、一格不亮，两颗入口键各亮各的，而顶上
  *    那两处写字的地方（地址栏开关、标签条让位后那一枚）与起点**逐字相同**——
  *    写的都是「一张网页」，不跟着变成那一屏的名字（用户报过两次：先是地址栏开关
  *    跟着顶上了「系统设置」，后是标签条那枚按钮跟着顶，而它正是回到网页的唯一入口）。
+ * 7. **PDF 那一页的墨色是纸白那一份**（Q14）。这一条单独立问，不并进 Q2 里：
+ *    用户报的就是它（磷绿下整本书的字变绿），而这个毛病在 Q2 的「四份文档读数相同」
+ *    里只会体现成一行「pdf 逐条相同」，看不出说的是什么。PDF 这一页在探针里
+ *    打不开书（没有 ?doc，也没有主进程那条 moyu-pdf: 通道），因此量的是**它的输入**
+ *    ——算好的 --moyu-ink 与根上那两个属性；读它的那一行代码在 PdfApp 里只有一行、
+ *    且只在模块初始化时跑一次（见那里的注释），不值得为它在这儿再摆一个真 PDF。
  *
  * 颜色一律经 canvas 归一后比对：getPropertyValue 拿回来的是计算值，写法
  * （`rgb(255 255 255 / 1)` 还是 `#ffffff`）随主题层怎么写出入很大，比字符串
@@ -75,10 +92,18 @@ function stringConstant(name) {
   return m[1]
 }
 
+/**
+ * 会加载主题层的五份文档。`home` 是唯一写主题名的那一份，其余四份的读数
+ * 在 Q2 里必须一字不差地相同——它们就是「主题不落在哪儿」这句话的四个证人。
+ *
+ * pdf 那一份在探针里打不开书（没有 ?doc），量到的是它的**输入**而非它画出来的字，
+ * 见文件头第 7 条。
+ */
 const PAGES = {
   chrome: 'index.html',
   popover: 'popover.html',
   settings: 'settings.html',
+  pdf: 'pdf.html',
   home: 'home.html'
 }
 
@@ -88,6 +113,9 @@ const THEMES = [
   { id: 'night', world: 'modern' },
   { id: 'crt-green', world: 'terminal' }
 ]
+
+/** 不写主题名的那几份。它们的读数在三套主题下必须逐条相同（== 纸白那一份） */
+const THEMED_ONLY_HOME = ['chrome', 'popover', 'settings', 'pdf']
 
 /**
  * 假桥的入参。每次 loadFile 之前改一改，见下面的 setOptions。
@@ -129,8 +157,9 @@ ipcMain.on('preview:options', (event) => {
  *
  * 这张表原先记的是「改动前的字面量」，用来问「默认零回归」。起始页改版时
  * 纸白这一套是**有意重做的**（靛替代浏览器蓝、细线合成一种、字压到 4.5:1 以上），
- * 那一问就不再成立了——但表本身的用处没变，而且现在更值钱：配色散在四份文档
- * 各自的变量组里，改一个想改的值顺手带坏另一个，从截图上完全看不出来。
+ * 那一问就不再成立了——但表本身的用处没变，而且现在更值钱：这一张表管着五份
+ * 文档（配色散在各处、用它的地方更多了），改一个想改的值顺手带坏另一个，
+ * 从截图上完全看不出来。
  * 因此这里不再是「与改动前相同」，而是「与本表逐条相同」，**判据一条没放松**：
  * 仍然逐条比到四通道，仍然要求 --moyu-font 是无衬线栈。
  *
@@ -201,8 +230,8 @@ const TRANSPARENT = ['.root', '.middle', '.main-col', '.spacer']
  *
  * 设置页是全应用里唯一一屏同时有好几种面的文档：左栏是凹面、卡片是浮面、
  * 按钮与选中按钮各是一层。浅色主题下它们各自取色，换到深色最容易剩下
- * 「浅底浅字」——那不需要任何变量出错，只需要有一处忘了跟。而这一页的主题
- * 说明里写着「整个界面都跟着换」，所以这一页自己先得站得住。
+ * 「浅底浅字」——那不需要任何变量出错，只需要有一处忘了跟。而这一页从 1.5.1 起
+ * 固定落在纸白那一份上（它不写主题名），因此它得先在这一份上站得住。
  *
  * 写成 [名字, 字的选择器, 面的选择器]：多数时候两者是同一个元素，
  * 只有品牌字那种自己不画底、坐在左栏上的才分得开。
@@ -260,7 +289,21 @@ const VAR_NAMES = [
   '--moyu-ground',
   '--radius',
   '--radius-sm',
-  '--radius-pill'
+  '--radius-pill',
+  /*
+   * 起始页那一套名字（--ground/--text/…）。它们与上面那批 --moyu-* 是同一个
+   * 主题里的两套叫法，值在 themes.css 里各写一遍。这一版把它们也读回来，
+   * 是因为 Q6 要量起始页自己的对比度——那三套主题现在只落在起始页上，
+   * 不量它就没有任何一处量过夜与磷绿的配色了。
+   */
+  '--ground',
+  '--text',
+  '--text-secondary',
+  '--text-tertiary',
+  '--accent',
+  '--divider',
+  '--tile',
+  '--font'
 ]
 
 /**
@@ -617,6 +660,29 @@ const pass = (id, text) => results.push({ id, ok: true, text })
 
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 const show = (c) => (c ? `#${c.slice(0, 3).map((v) => v.toString(16).padStart(2, '0')).join('')}@${c[3]}` : 'null')
+
+/**
+ * WCAG 的相对亮度与对比度。与页面里那两份同名函数一字不差地重复了一遍。
+ *
+ * 重复而不是把它从页面里带出来：页面那一份算的是「元素上量到的字与它脚下的面」，
+ * 要自下而上叠好几层（composite），非在页面里算不可；而 Q6 后半段要算的是
+ * **两个变量之间**的关系，两边都已经归一成四通道带回来了，在 Node 这侧算更省事、
+ * 也更清楚。两份式子必须一致，改一处就得改另一处。
+ */
+const relLum = ([r, g, b]) => {
+  const f = (c) => {
+    const v = c / 255
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
+  }
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+}
+const contrast = (a, b) => {
+  const la = relLum(a)
+  const lb = relLum(b)
+  const [hi, lo] = la > lb ? [la, lb] : [lb, la]
+  return Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100
+}
+
 /**
  * 计算值的 0 写成 0px，而自定义属性里写的 0 就是 0。
  *
@@ -645,37 +711,93 @@ function checkPaperPinned(paper) {
     bad.push(`--moyu-font 该是无衬线栈，实为 ${paper.vars['--moyu-font'] || '(空)'}`)
   }
   if (paper.vars['--moyu-font'].includes('Cascadia Mono')) {
-    bad.push('--moyu-font 在纸白下不该是等宽')
+    bad.push('--moyu-font 在界面里不该是等宽')
   }
   if (bad.length) fail('Q1', `纸白定格：界面那几条 --moyu-* 与定格表不一致 —— ${bad.join('；')}`)
   else pass('Q1', `纸白定格：${Object.keys(PAPER_EXPECT).length + Object.keys(PAPER_SHAPE).length} 条 --moyu-* 与定格表逐条相同`)
 }
 
-/** 一套主题的"指纹"：配色变了它就变，用来问"三套互不相同" */
+/** 一套主题的"指纹"：配色变了它就变，用来问"起始页那三套互不相同" */
 const fingerprint = (page) =>
-  ['--moyu-surface-rgb', '--moyu-hairline-rgb', '--moyu-ink', '--moyu-accent', '--moyu-ground']
+  ['--moyu-surface-rgb', '--moyu-hairline-rgb', '--moyu-ink', '--moyu-accent', '--moyu-ground', '--ground']
     .map((n) => page.vars[n])
     .join('|')
 
-function checkDistinct(byPage) {
-  const bad = []
-  for (const page of ['chrome', 'popover', 'settings', 'home']) {
-    const prints = THEMES.map((t) => fingerprint(byPage[page][t.id]))
-    if (new Set(prints).size !== THEMES.length) {
-      bad.push(`${page} 的三套主题有重样的：${JSON.stringify(prints)}`)
-    }
-    // 主题名与形态都要落到这一份文档的根上，否则"改了没反应"就从这里冒出来
-    for (const t of THEMES) {
-      const got = byPage[page][t.id]
-      if (got.theme !== t.id) bad.push(`${page}/${t.id} 的 data-theme 是 ${got.theme}`)
-      if (got.world !== t.world) bad.push(`${page}/${t.id} 的 data-world 是 ${got.world}，该是 ${t.world}`)
-    }
+/**
+ * 两份读数不一样在哪儿。空数组就是逐条相同。
+ *
+ * 比的是**量出来的全部东西**：根上那两个属性、每个变量、归一后的每个颜色、
+ * 逐元素量的底色与圆角、body 的字形与发光、以及设置页五个分栏各元素的
+ * 字/底对比度读数。全比而不是挑几个，是因为这一版要证明的正是「主题在
+ * 这四份文档上一寸都没挪」——挑着比就等于把没挑的那几处当成不会动。
+ * 报出来的是**字段名**而不是全文 diff：失败时要一眼看出是配色漏了还是排版漏了。
+ */
+function diffReading(a, b) {
+  const out = []
+  for (const key of ['theme', 'world', 'body', 'bg', 'radius', 'after']) {
+    if (!same(a[key], b[key])) out.push(key)
   }
-  if (bad.length) fail('Q2', `四份文档各自的主题与形态 —— ${bad.join('；')}`)
-  else pass('Q2', '四份文档（界面 / 面板 / 设置 / 起始页）都拿到了当前主题，且三套调色板两两不同')
+  const vars = Object.keys(a.vars).filter((n) => a.vars[n] !== b.vars[n])
+  if (vars.length) out.push(`变量 ${vars.join('/')}`)
+  const colors = Object.keys(a.colors).filter((n) => !same(a.colors[n], b.colors[n]))
+  if (colors.length) out.push(`颜色 ${colors.join('/')}`)
+  if (!same(a.sections, b.sections)) out.push('设置页各栏的可读性读数')
+  return out
 }
 
-function checkTerminalShape(crt) {
+/**
+ * 本版的核心：主题只动起始页那一份文档。
+ *
+ * 两头都要问，缺一头这个断言就等于没写：
+ *
+ * · 四份文档（界面 / 面板 / 设置 / PDF）在**同一套入参下量三次**，三次必须逐条
+ *   相同、且等于纸白那一份。少问一份，"改了没反应"就从那一份冒出来；
+ *   只问变量不问量出来的读数，"变量对了但元素没用它"又漏了。
+ * · 起始页那三次必须**两两不同**，且根上真的写着主题名与形态名。少了这一头，
+ *   把 applyThemeToDocument 整个删掉，上面那四条会全绿——那正是最坏的一种绿。
+ */
+function checkScope(byPage) {
+  const bad = []
+  const lines = []
+  for (const page of THEMED_ONLY_HOME) {
+    const base = byPage[page].paper
+    for (const t of THEMES) {
+      const got = byPage[page][t.id]
+      if (got.theme !== null) bad.push(`${page}/${t.id} 的根上写着 data-theme=${got.theme}，这一份文档不该写主题`)
+      if (got.world !== null) bad.push(`${page}/${t.id} 的根上写着 data-world=${got.world}，这一份文档不该写形态`)
+      const d = diffReading(base, got)
+      if (d.length) bad.push(`${page} 在 ${t.id} 下与纸白不同：${d.join('、')}`)
+    }
+    lines.push(`${page} ×3 相同`)
+  }
+  const prints = THEMES.map((t) => fingerprint(byPage.home[t.id]))
+  if (new Set(prints).size !== THEMES.length) {
+    bad.push(`起始页的三套主题有重样的：${JSON.stringify(prints)}`)
+  }
+  for (const t of THEMES) {
+    const got = byPage.home[t.id]
+    if (got.theme !== t.id) bad.push(`起始页/${t.id} 的 data-theme 是 ${got.theme}，该是 ${t.id}`)
+    if (got.world !== t.world) bad.push(`起始页/${t.id} 的 data-world 是 ${got.world}，该是 ${t.world}`)
+  }
+  if (bad.length) fail('Q2', `主题没守住「只管起始页」这条边界 —— ${bad.join('；')}`)
+  else {
+    pass(
+      'Q2',
+      `主题只落在起始页：界面 / 面板 / 设置 / PDF 四份文档在纸白、暗夜、磷绿下逐条相同（${lines.join('，')}），` +
+        `而起始页那一屏三套各不相同、根上写着 data-theme 与 data-world`
+    )
+  }
+}
+
+/**
+ * 终端形态（直角、等宽、发光）同样只在起始页。
+ *
+ * 上一版这一问问的是反过来的事（「形态跟进了界面」）。两头都要看：磷绿下
+ * 起始页必须真的变直角、换等宽、字发光；而界面那几份必须**仍是纸白那一副**
+ * ——那里的半径与字体由 Q2 逐条比过，这里只再点名一次字形与发光，
+ * 因为它们是这两条里最容易被 text-shadow 这种可继承属性串门的东西。
+ */
+function checkTerminalShape(home, chrome) {
   const bad = []
   for (const n of [
     '--moyu-radius',
@@ -689,37 +811,65 @@ function checkTerminalShape(crt) {
     '--radius-pill'
   ]) {
     // 计算值一律是 px，0 会写成 0px
-    if (!/^0(px)?$/.test(crt.vars[n])) bad.push(`${n} 该是 0，实为 ${crt.vars[n] || '(空)'}`)
+    if (!/^0(px)?$/.test(home.vars[n])) bad.push(`起始页的 ${n} 该是 0，实为 ${home.vars[n] || '(空)'}`)
   }
-  if (!crt.vars['--moyu-font'].includes('Cascadia Mono')) {
-    bad.push(`--moyu-font 该是等宽栈，实为 ${crt.vars['--moyu-font'] || '(空)'}`)
+  if (!home.vars['--moyu-font'].includes('Cascadia Mono')) {
+    bad.push(`起始页的 --moyu-font 该是等宽栈，实为 ${home.vars['--moyu-font'] || '(空)'}`)
   }
-  if (!crt.body.textShadow || crt.body.textShadow === 'none') {
-    bad.push('字没有发光：body 的 text-shadow 是 none')
+  if (!home.vars['--font'].includes('Cascadia Mono')) {
+    bad.push(`起始页的 --font 该是等宽栈（终端世界里展示字就是它），实为 ${home.vars['--font'] || '(空)'}`)
   }
-  if (bad.length) fail('Q3', `终端形态没有跟着进界面 —— ${bad.join('；')}`)
-  else pass('Q3', `终端形态跟进了界面：半径全 0、字体等宽（${crt.vars['--moyu-font'].split(',')[0]}）、字带发光`)
+  if (!home.body.textShadow || home.body.textShadow === 'none') {
+    bad.push('起始页的字没有发光：body 的 text-shadow 是 none')
+  }
+  // 界面那一头：字形与发光都要留在纸白那一副上
+  if (chrome.vars['--font'].includes('Cascadia Mono') || chrome.body.fontFamily.includes('Cascadia Mono')) {
+    bad.push(`界面的字在磷绿下变成了等宽：${chrome.body.fontFamily}`)
+  }
+  if (chrome.body.textShadow && chrome.body.textShadow !== 'none') {
+    bad.push(`界面的字在磷绿下发光了：${chrome.body.textShadow}`)
+  }
+  if (bad.length) fail('Q3', `终端形态越界了 —— ${bad.join('；')}`)
+  else {
+    pass(
+      'Q3',
+      `终端形态只在起始页：磷绿下那一页半径全 0、字体等宽（${home.vars['--moyu-font'].split(',')[0]}）、字带发光，` +
+        `而界面的字仍是无衬线栈、不发光`
+    )
+  }
 }
 
 /**
  * 直角验到元素上。
  *
- * 两头都要：纸白下必须与改前的字面量一致（把写死的圆角换成令牌时最容易
- * 顺手改掉它），磷绿下必须真的是 0（令牌声明了但元素没用上，正是这一步会漏的）。
+ * 变量对了不等于元素用了它——把 `border-radius: 13px` 改成
+ * `var(--moyu-radius-pill)` 时打错一个字母，值会静静地退回初始的 0，
+ * 而 0 恰好也是终端世界的目标值，于是"改对了"和"改坏了"在磷绿下长得一样。
+ * 因此在纸白下把这两处的实测圆角与改前的字面量对一次。
+ *
+ * 磷绿那一半改问「与纸白逐条相同」：这一版起，界面**不该**再跟着形态走，
+ * 所以「磷绿下是 0px」这个期望本身已经错了，而它错得很隐蔽——真按它判，
+ * 一个正确的实现会被报成失败。
  */
 function checkRadius(paper, crt) {
   const bad = []
   for (const [sel, want] of Object.entries(PAPER_RADIUS)) {
     const got = paper.radius[sel]
     if (got === null) bad.push(`纸白下找不到 ${sel}，量不到圆角`)
-    else if (got !== want) bad.push(`纸白下 ${sel} 的圆角是 ${got}，改前是 ${want}`)
+    else if (got !== want) bad.push(`纸白下 ${sel} 的圆角是 ${got}，定格表写的是 ${want}`)
   }
   for (const sel of Object.keys(PAPER_RADIUS)) {
     const got = crt.radius[sel]
-    if (got !== null && !/^0(px)?$/.test(got)) bad.push(`磷绿下 ${sel} 的圆角仍是 ${got}`)
+    if (got !== paper.radius[sel]) bad.push(`磷绿下 ${sel} 的圆角是 ${got}，界面不该跟着形态走（纸白是 ${paper.radius[sel]}）`)
   }
-  if (bad.length) fail('Q8', `圆角没跟着形态走 —— ${bad.join('；')}`)
-  else pass('Q8', `圆角两头顶住了：纸白下 ${Object.entries(PAPER_RADIUS).map(([s, v]) => `${s} ${v}`).join(' / ')} 与改前一致，磷绿下同一批元素是 0px`)
+  if (bad.length) fail('Q8', `圆角越界了 —— ${bad.join('；')}`)
+  else {
+    pass(
+      'Q8',
+      `圆角两头顶住了：纸白下 ${Object.entries(PAPER_RADIUS).map(([s, v]) => `${s} ${v}`).join(' / ')}，` +
+        `磷绿下同一批元素仍是这些值（界面不跟着形态走）`
+    )
+  }
 }
 
 function checkAlpha(alpha) {
@@ -739,51 +889,127 @@ function checkAlpha(alpha) {
   else pass('Q4', '背景透明度仍然只淡底板：0.4 时 --moyu-surface 是 rgb(255 255 255 / 0.4)，强调色不动')
 }
 
-function checkTransparent(byTheme) {
+/**
+ * 透明中部有没有被弄坏，以及那层铺满视口的覆盖层有没有跑出起始页。
+ *
+ * 中部那几块只在界面这一份里（`.root/.middle/.main-col/.spacer`），因此逐主题量的是
+ * chrome：三套入参下都必须逐像素透明——这一版它本来就不该跟着主题变，量三次是
+ * 顺带把 Q2 的结论落到**实际画出来的字节**上（变量相同不等于画出来相同）。
+ *
+ * 后半段是 `body::after`：终端世界的扫描线与暗角，它是铺满视口的覆盖层，
+ * 一旦落在界面这一份上，桌面上就多蒙一层膜。如今那段规则在 home.css 里、
+ * 只有 home.html 加载它，够不着别处；但仍逐页量——省掉这一条，代价是
+ * 某天它被搬进一份共用样式表时没人报得出来。起始页那一头同时问正反两面：
+ * 磷绿下**该有**（那一页的屏就是这样的），纸白下**不该有**。
+ */
+function checkTransparent(byPage) {
   const bad = []
+  const chrome = byPage.chrome
   for (const t of THEMES) {
-    const page = byTheme[t.id]
+    const page = chrome[t.id]
     for (const sel of TRANSPARENT) {
       const got = page.bg[sel]
-      if (got !== 'rgba(0, 0, 0, 0)') bad.push(`${t.id} 的 ${sel} 画了底色 ${got}`)
+      if (got !== 'rgba(0, 0, 0, 0)') bad.push(`${t.id} 的界面里 ${sel} 画了底色 ${got}`)
     }
-    // 终端那层覆盖层只许留在起始页
+  }
+  const fills = (page) => {
     const after = page.after
-    const fills =
+    return (
       after.content !== 'none' &&
       after.content !== 'normal' &&
       after.position === 'fixed' &&
       after.width === `${page.viewport[0]}px` &&
       after.height === `${page.viewport[1]}px`
-    if (fills) {
-      bad.push(`${t.id} 的 body::after 是一层铺满视口的覆盖层（${after.width}×${after.height}），它会把桌面盖住`)
+    )
+  }
+  for (const page of THEMED_ONLY_HOME) {
+    for (const t of THEMES) {
+      if (fills(byPage[page][t.id])) {
+        bad.push(`${t.id} 下 ${page} 的 body::after 是一层铺满视口的覆盖层，它会把桌面盖住`)
+      }
+    }
+  }
+  for (const t of THEMES) {
+    const got = fills(byPage.home[t.id])
+    const want = t.world === 'terminal'
+    if (got !== want) {
+      bad.push(`起始页在 ${t.id} 下的扫描线${got ? '有' : '没有'}，这一套${want ? '该有' : '不该有'}`)
     }
   }
   if (bad.length) fail('Q5', `透明中部被弄坏了 —— ${bad.join('；')}`)
-  else pass('Q5', `三套主题下 chrome 的 ${TRANSPARENT.join(' / ')} 一律逐像素透明，且没有铺满视口的 body::after`)
-}
-
-function checkContrast(byTheme) {
-  const bad = []
-  const lines = []
-  for (const t of THEMES) {
-    const c = byTheme[t.id].contrast
-    lines.push(`${t.id}: ${Object.entries(c).map(([k, v]) => `${k} ${v}`).join(' / ')}`)
-    for (const [name, value] of Object.entries(c)) {
-      if (value === null) bad.push(`${t.id} 的 ${name} 算不出对比度（颜色没解析出来）`)
-      else if (value < 4.5) bad.push(`${t.id} 的 ${name} 只有 ${value}:1，低于 4.5:1`)
-    }
+  else {
+    pass(
+      'Q5',
+      `三套入参下界面的 ${TRANSPARENT.join(' / ')} 一律逐像素透明；铺满视口的 body::after 只在磷绿的起始页上有，` +
+        `界面 / 面板 / 设置 / PDF 四份都没有`
+    )
   }
-  if (bad.length) fail('Q6', `对比度不达标 —— ${bad.join('；')}`)
-  else pass('Q6', `三套主题的字与强调色对底板都 ≥ 4.5:1（${lines.join('；')}）`)
 }
 
 /**
- * 设置页在深色主题下的可读性。
+ * 对比度。
+ *
+ * 两头都量，因为这一版主题只剩起始页那一份在用：
+ *
+ * · 界面那一头是**纸白**——--moyu-* 对 --moyu-surface-rgb 那一张面。这是
+ *   上一版量过的同一批数，只是不再逐主题量（三套相同这件事 Q2 已经证过）。
+ * · 起始页那一头是**三套主题各自的配色**——--text/--text-secondary/--text-tertiary
+ *   对 --ground。不量它，夜与磷绿这两套配色就一处也没量过了：它们今天只落在
+ *   起始页上。三级字量的是**页底**而不是某张面：起始页那行 11px 的注脚就落在
+ *   页底上，压面合格压页底不合格等于没量（themes.css 里 #767e8c 那一档正是
+ *   这么被否掉的）。
+ */
+function checkContrast(byPage) {
+  const bad = []
+  const lines = []
+  const chrome = byPage.chrome.paper
+  lines.push(
+    `界面(纸白): ${Object.entries(chrome.contrast)
+      .map(([k, v]) => `${k} ${v}`)
+      .join(' / ')}`
+  )
+  for (const [name, value] of Object.entries(chrome.contrast)) {
+    if (value === null) bad.push(`界面的 ${name} 算不出对比度（颜色没解析出来）`)
+    else if (value < 4.5) bad.push(`界面的 ${name} 只有 ${value}:1，低于 4.5:1`)
+  }
+  for (const t of THEMES) {
+    const page = byPage.home[t.id]
+    const ground = page.colors['--ground']
+    if (!ground || ground[3] < 0.999) {
+      bad.push(`起始页/${t.id} 的 --ground 读不成实色：${show(ground)}`)
+      continue
+    }
+    const got = []
+    for (const name of ['--text', '--text-secondary', '--text-tertiary', '--accent']) {
+      const ink = page.colors[name]
+      if (!ink) {
+        bad.push(`起始页/${t.id} 的 ${name} 算不出对比度`)
+        continue
+      }
+      const ratio = contrast(ink.slice(0, 3), ground.slice(0, 3))
+      got.push(`${name.replace('--', '')} ${ratio}`)
+      if (ratio < 4.5) bad.push(`起始页/${t.id} 的 ${name} 压页底只有 ${ratio}:1（${show(ink)} on ${show(ground)}），低于 4.5:1`)
+    }
+    lines.push(`起始页(${t.id}): ${got.join(' / ')}`)
+  }
+  if (bad.length) fail('Q6', `对比度不达标 —— ${bad.join('；')}`)
+  else pass('Q6', `字与强调色都 ≥ 4.5:1（${lines.join('；')}）`)
+}
+
+/**
+ * 设置页的可读性。
  *
  * 这一条查的是**元素上量得到的结果**，不是变量里写了什么：主题层把变量接过来了，
  * 元素忘了用它，两边的报告都会是绿的。左栏那块板子尤其典型——它过去写死成
  * #eef0f3，字跟着主题变成浅色之后，「浅底浅字」在纸白下看不出任何异常。
+ *
+ * 上一版这里逐主题量，问的是「换到夜与磷绿还读不读得出来」。这一版设置页
+ * **不跟着主题走**（1.5.1 起），于是这一问变成了两件事：
+ *
+ * · 纸白下这一页仍然处处站得住（原来的那一问，判据一条没放松）；
+ * · 三套入参下的读数**一模一样**——这一半由 Q2 的 diffReading 断言
+ *   （它比的正是这份 sections），这里把三次都跑一遍，是为了让「相同」这件事
+ *   建立在**量出来的数**上，而不是建立在「代码里没写主题」这句自述上。
  *
  * 阈值按字号分档（WCAG 的大字 3:1），免得把一个 15px 的粗标题判成不合格。
  */
@@ -817,7 +1043,7 @@ function checkReadable(byTheme) {
     if (worst) lines.push(`${t.id}: ${worst.name} ${worst.ratio}`)
   }
   if (bad.length) fail('Q9', `设置页有字读不出来 —— ${bad.slice(0, 6).join('；')}${bad.length > 6 ? `（另 ${bad.length - 6} 处）` : ''}`)
-  else pass('Q9', `设置页五个分栏的字都压得住自己的底（最紧的一处 ${lines.join('；')}）`)
+  else pass('Q9', `设置页五个分栏的字都压得住自己的底，三套入参下逐条相同（最紧的一处 ${lines.join('；')}）`)
 }
 
 /**
@@ -829,6 +1055,10 @@ function checkReadable(byTheme) {
  * 最后一条才是这一组存在的理由：提示条是这一层里唯一一块**实底**，
  * 它的底色只要顺着 flex 落到 `.main-col` 上，桌面上就多蒙了一块——那在截图里
  * 看着只是「背景色有点不对」。
+ *
+ * 三套入参各挂一次而不是只挂一次：界面从 1.5.1 起不跟主题走，三次本该完全一样，
+ * 而「本该一样」正是要量出来的东西——真去挂一次的话，某天提示条又把
+ * ui.homeTheme 读回来（比如有人给它加了个按主题换色的分支），这一问不会有任何反应。
  */
 function checkNoticeDrawn(withNotice) {
   const bad = []
@@ -866,16 +1096,22 @@ function checkNoticeDrawn(withNotice) {
     lines.push(`${t.id} ${row.box.w}×${row.box.h}`)
   }
   if (bad.length) fail('Q10', `更新提示条没站住 —— ${bad.join('；')}`)
-  else pass('Q10', `三套主题下提示条都画在自己那一行上（${lines.join(' / ')}），紧贴顶栏下沿、中部仍逐像素透明`)
+  else pass('Q10', `三套入参下提示条都画在自己那一行上（${lines.join(' / ')}），紧贴顶栏下沿、中部仍逐像素透明`)
 }
 
 /**
  * 这一行的颜色从哪儿来。
  *
- * 逐条与当前主题的令牌比，而不是比「三套互不相同」——写死一个 #ffffff 的底色，
- * 在纸白下与令牌恰好相等（所以「与令牌一致」这一条在纸白下不算数），
- * 但在夜与磷绿下会当场露出来。两条一起比才完整：与令牌一致，保证它是**从主题
- * 拿的**；三套互不相同，保证那个令牌本身**确实换了**。
+ * 逐条与**这一份文档自己读到的令牌**比，而不是比三套互不相同——提示条住在界面里，
+ * 而界面从 1.5.1 起不跟主题走，所以正确的画法是三套入参下画出一模一样的一条，
+ * 且那一条逐条取自纸白那一份令牌。三条一起才完整：
+ *
+ * · 与令牌一致，保证它是**从主题层拿的**，不是写死的一串颜色（写死一个 #ffffff，
+ *   在纸白下与令牌恰好相等，光看「一致」看不出来）；
+ * · 三套入参下相同，保证它**没有**偷偷跟着 ui.homeTheme 走——那正是这一版
+ *   收回边界时要防的回头路；
+ * · 纸白的 --moyu-surface 是纯白（Q1 钉着），于是「底色 == 令牌」同时也意味着
+ *   这条提示条在默认这一套下是白的，而不是碰巧与某个深色相等。
  */
 function checkNoticeTokens(withNotice) {
   const bad = []
@@ -914,11 +1150,11 @@ function checkNoticeTokens(withNotice) {
       `${t.id} 底 ${show(row.background)} 字 ${show(page.text?.color ?? null)} 主按钮 ${show(page.primary?.background ?? null)}/${show(page.primary?.color ?? null)} 圆角 ${page.primary?.radius ?? '—'}`
     )
   }
-  if (paints.length === THEMES.length && new Set(paints).size !== THEMES.length) {
-    bad.push(`三套主题画出来的底色有重样的：${JSON.stringify(paints)}`)
+  if (paints.length === THEMES.length && new Set(paints).size !== 1) {
+    bad.push(`三套入参下提示条画出来的底色不一样：${JSON.stringify(paints)}——它住在界面里，不该跟着主题走`)
   }
-  if (bad.length) fail('Q11', `提示条的颜色没跟着主题走 —— ${bad.join('；')}`)
-  else pass('Q11', `提示条的底 / 字 / 强调色 / 圆角逐条取自当前主题的令牌，且三套画出来互不相同（${lines.join('；')}）`)
+  if (bad.length) fail('Q11', `提示条的颜色不对 —— ${bad.join('；')}`)
+  else pass('Q11', `提示条的底 / 字 / 强调色 / 圆角逐条取自界面那一份令牌，且三套入参下画出来的完全相同（${lines.join('；')}）`)
 }
 
 /**
@@ -1046,7 +1282,50 @@ function checkScreens(page, home, settings) {
   }
 }
 
+/**
+ * PDF 阅读页的墨色（Q14）。
+ *
+ * 用户报的就是这一条：磷绿下整本书的字都成了荧光绿。病根不在 PDF 那一页，
+ * 而在边界划错了——1.3.0 让 PDF 那一页也写主题名，于是它的 `--moyu-ink`
+ * 在磷绿下是 #57f08c，键控拿它当墨色把整页每个像素的 RGB 都写成那个绿。
+ * 1.5.1 把主题收回起始页，这一页落回 `:root`（纸白，近黑）。
+ *
+ * 量的是**它的输入**：算好的 --moyu-ink。读它的那一行在 PdfApp 里只有一行，
+ * 且只在模块初始化时跑一次、之后再不重读（见那里的注释），因此「这个变量在
+ * 三套主题下都是纸白那一份」就足够说明它画出来的字也是那一份。真去画一本书
+ * 是另一个探针的事（spike/pdf-scheme.js 逐像素量过键控的结果）。
+ *
+ * 三条一起看：三套入参下相同、等于基准那一份、且**不等于磷绿那一份**
+ * （最后一条是多余的——前两条成立它必然成立——但报出来最直观：失败信息里
+ * 直接写着「磷绿下是 #57f08c，这一页读到的是 #57f08c」，一眼就是那个毛病）。
+ */
+function checkPdfInk(byPage) {
+  const bad = []
+  const pdf = byPage.pdf
+  /* 基准那一份 = `:root` 里那个值，也正是起始页在纸白下拿到的那个 */
+  const base = byPage.home.paper.vars['--moyu-ink']
+  const crt = byPage.home['crt-green'].vars['--moyu-ink']
+  for (const t of THEMES) {
+    const got = pdf[t.id].vars['--moyu-ink']
+    if (got !== base) {
+      bad.push(`${t.id} 下 PDF 那一页读到的 --moyu-ink 是 ${got || '(空)'}，该是基准的 ${base}`)
+    }
+    if (t.id === 'crt-green' && got === crt) {
+      bad.push(`磷绿下 PDF 那一页的墨色正是磷绿的 ${crt}——键控会把整本书写成这个颜色`)
+    }
+  }
+  if (bad.length) fail('Q14', `PDF 阅读页的墨色跟着主题走了 —— ${bad.join('；')}`)
+  else {
+    pass(
+      'Q14',
+      `PDF 阅读页的墨色不跟主题换：纸白 / 暗夜 / 磷绿三套入参下读到的都是 ${base}（` +
+        `磷绿那一套自己的 --moyu-ink 是 ${crt}，没有落到这一页上）`
+    )
+  }
+}
+
 // ---------------------------------------------------------------- 跑
+
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
     width: 960,
@@ -1061,7 +1340,12 @@ app.whenReady().then(async () => {
     }
   })
 
-  /** 换一套入参再加载一份文档，等它把配置读回来并写上面属性 */
+  /**
+   * 换一套入参再加载一份文档，读一圈回来。
+   *
+   * 五份文档 × 三套主题这一圈就是 Q2 的全部依据：入参里只动 ui.homeTheme，
+   * 于是「哪几份读数动了」这一问题本身就回答了「主题落在哪一份文档上」。
+   */
   const load = async (page, theme, bgAlpha = 1) => {
     opts.theme = theme
     opts.bgAlpha = bgAlpha
@@ -1129,25 +1413,38 @@ app.whenReady().then(async () => {
   withNotice.downloading = await loadNotice('paper', 'downloading')
 
   checkPaperPinned(byPage.chrome.paper)
-  checkDistinct(byPage)
-  checkTerminalShape(byPage.chrome['crt-green'])
+  checkScope(byPage)
+  checkTerminalShape(byPage.home['crt-green'], byPage.chrome['crt-green'])
   checkRadius(byPage.chrome.paper, byPage.chrome['crt-green'])
   checkAlpha(alphaProbe)
-  checkTransparent(byPage.chrome)
-  checkContrast(byPage.chrome)
+  checkTransparent(byPage)
+  checkContrast(byPage)
   checkReadable(byPage)
   checkNoticeDrawn(withNotice)
   checkNoticeTokens(withNotice)
   checkNoticeProgress(withNotice)
   checkScreens(screenPage, screenHome, screenSettings)
+  checkPdfInk(byPage)
 
   for (const r of results) console.log(`[${r.id}] ${r.ok ? 'OK  ' : 'FAIL'} ${r.text}`)
 
-  // 圆角与字体逐主题列一份：直角这件事只有摆成表才看得出"到没到位"
+  /*
+   * 圆角与字形逐主题列一份，界面的与起始页的分开列。
+   *
+   * 这一行是这一版最直观的那张读数：界面那三行**必须一模一样**（磷绿不该把它
+   * 变直角），起始页那一行里磷绿**必须**是 0px 与等宽。光看判据那一行
+   * 「Q2 OK / Q3 OK」看不出这件事，而它正是用户要看的那件事。
+   */
   for (const t of THEMES) {
     const page = byPage.chrome[t.id]
     const cells = RADIUS_SELECTORS.map((s) => `${s} ${page.radius[s] ?? '—'}`).join('  ')
-    console.log(`SHAPE ${t.id.padEnd(10)} ${cells}  字体 ${page.body.fontFamily.split(',')[0]}`)
+    console.log(`SHAPE 界面 ${t.id.padEnd(10)} ${cells}  字体 ${page.body.fontFamily.split(',')[0]}`)
+  }
+  for (const t of THEMES) {
+    const page = byPage.home[t.id]
+    console.log(
+      `SHAPE 起始页 ${t.id.padEnd(10)} --radius ${page.vars['--radius']} --radius-sm ${page.vars['--radius-sm']} --radius-pill ${page.vars['--radius-pill']}  字体 ${page.body.fontFamily.split(',')[0]}  发光 ${page.body.textShadow === 'none' ? '无' : '有'}`
+    )
   }
 
   // 界面上实际画了什么，值得单独看一眼：调色板变了不等于界面用了它
@@ -1159,23 +1456,53 @@ app.whenReady().then(async () => {
       rail: page.bg['.rail'],
       railFont: page.body.fontFamily,
       settingsGround: byPage.settings[t.id].bg['html'],
-      homeGround: byPage.home[t.id].bg['html']
+      homeGround: byPage.home[t.id].bg['html'],
+      pdfInk: byPage.pdf[t.id].vars['--moyu-ink']
     }
   }
   for (const [id, row] of Object.entries(painted)) {
     console.log(
-      `PAINT ${id.padEnd(10)} 顶栏 ${row.topbar} 右栏 ${row.rail} | 设置页底 ${row.settingsGround} | 起始页底 ${row.homeGround}`
+      `PAINT ${id.padEnd(10)} 顶栏 ${row.topbar} 右栏 ${row.rail} | 设置页底 ${row.settingsGround} | 起始页底 ${row.homeGround} | PDF 墨 ${row.pdfInk}`
     )
   }
-  const paintedSame = THEMES.every((t) => painted[t.id].topbar === painted.paper.topbar)
-  if (paintedSame) fail('Q7', '三套主题下顶栏画出来的颜色一模一样——变量有了，界面没用上')
-  else pass('Q7', '三套主题下顶栏、右栏、设置页与起始页画出来的颜色确实各不相同')
+  /*
+   * 画出来的颜色。两头都问：界面这几处**不该**变，起始页那一处**必须**变。
+   *
+   * 上一版这一问是反过来的（界面三套各不相同）。反过来之后它反而更难糊弄：
+   * 单问「起始页变了」的话，把主题整个铺回去也能通过；单问「界面没变」的话，
+   * 把 applyThemeToDocument 删掉也能通过。两条一起才是「只落在起始页」。
+   */
+  const interfaceSame = THEMES.every(
+    (t) =>
+      painted[t.id].topbar === painted.paper.topbar &&
+      painted[t.id].rail === painted.paper.rail &&
+      painted[t.id].settingsGround === painted.paper.settingsGround
+  )
+  const homeDiffers = new Set(THEMES.map((t) => painted[t.id].homeGround)).size === THEMES.length
+  if (!interfaceSame) {
+    fail('Q7', '三套入参下界面画出来的颜色不一样——界面从 1.5.1 起不该跟着主题走')
+  } else if (!homeDiffers) {
+    fail('Q7', `三套主题下起始页画出来的底色一模一样（${painted.paper.homeGround}）——变量有了，那一页没用上`)
+  } else {
+    pass('Q7', '三套入参下顶栏 / 右栏 / 设置页底逐条相同（都是纸白那一份），而起始页的页底三套各不相同')
+  }
 
-  // 设置页面那几块面实际画成了什么。左栏过去写死一块浅灰，是这次的重点之一
+  // 设置页面那几块面实际画成了什么。三行必须一模一样——这一页不跟主题走
   for (const t of THEMES) {
     const page = byPage.settings[t.id]
     console.log(
       `SETTINGS ${t.id.padEnd(10)} 左栏 ${page.bg['.sidebar']} 左栏当前项 ${page.bg['.nav-item.active']} 卡面 ${page.bg['.card']}`
+    )
+  }
+
+  /*
+   * PDF 阅读页那一行。这是用户报的那个毛病的位置，单列出来：
+   * 「墨」那一列在三套入参下必须一个字符都不变，而磷绿那一套自己的墨色
+   * 写在右边做对照——两个数一样就是毛病回来了。
+   */
+  for (const t of THEMES) {
+    console.log(
+      `PDFINK ${t.id.padEnd(10)} 这一页读到 ${byPage.pdf[t.id].vars['--moyu-ink']} | 磷绿那一套自己的 --moyu-ink ${byPage.home['crt-green'].vars['--moyu-ink']}`
     )
   }
 

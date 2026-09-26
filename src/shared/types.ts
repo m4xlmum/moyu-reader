@@ -62,11 +62,9 @@ export interface UiConfig {
   /** 显示右侧功能栏。顶栏隐藏时这一栏会被强制保留，见 WindowRuntime.railVisible */
   railOpen: boolean
   /**
-   * 主题。管整个界面（顶栏、右栏、悬浮球、面板、系统设置页与起始页），
-   * 不影响阅读网页时的观感。见 @shared/constants 的 HomeTheme。
-   *
-   * 键名仍叫 homeTheme：它从起始页那一页长起来，如今管得宽了。改名要动迁移阶梯
-   * （CONFIG_VERSION 加一档）与校验逻辑，而这个名字用户看不到，不如把注释写准。
+   * 起始页的主题（纸白 / 暗夜 / 磷绿），只作用于起始页那一屏——
+   * 顶栏、右栏、悬浮球、面板、系统设置页与 PDF 阅读页都不跟着换，
+   * 网页与本机文件更不受影响。见 @shared/constants 的 HomeTheme。
    */
   homeTheme: HomeTheme
   /**

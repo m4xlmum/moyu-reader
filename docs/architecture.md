@@ -106,10 +106,13 @@
     球涨一点点就会被窗口边缘切出四个方角。
 
 15. **按钮与输入框不继承颜色。** UA 样式表给它们各自带一份（`buttontext` /
-    `fieldtext`），作者样式表不写 `color: inherit` 就压不过它。四份文档是四份
+    `fieldtext`），作者样式表不写 `color: inherit` 就压不过它。五份文档是五份
     文档，这一条要在每一页各写一遍；系统设置那一页不加载 `base.css`，漏了它那一页
-    就是**黑底黑字**——暗夜下探针量出来 1.18:1，而纸白下看不出来，因为 UA 给的那个
-    黑与正文色几乎一样（`styles/settings.css`，`spike/theme-chrome.js` 的 Q9）。
+    就是**黑底黑字**——当年主题还铺满整个界面时，暗夜下探针量出来 1.18:1，而纸白下
+    看不出来，因为 UA 给的那个黑与正文色几乎一样（`styles/settings.css`，
+    `spike/theme-chrome.js` 的 Q9）。1.5.1 起设置页恒定落在纸白那一份上，
+    那个 1.18 已经复现不出来了；留下的这条仍然是「每一页各写一遍」的凭据——
+    探针如今量的是「五个分栏的字都压得住自己的底，且三套入参下逐条相同」。
 
 16. **「占多少版面」只能是主进程的状态。** 网页是原生视图，它那一块矩形只由
     `computeLayout()` 算出来——界面里自己画的东西再多，也不会真的把网页推走。
@@ -185,13 +188,13 @@ src/renderer/  chrome 界面 / 弹出面板 / 系统设置 / PDF 阅读页
 | `src/main/services/pdfReader.ts` | 本机 PDF 那条路：`moyu-pdf://` 的两张面（字节与资源）、token ↔ 路径的对应表、阅读页的地址 |
 | `src/main/services/pageStyler.ts` | 注入访客页面的三样东西：透明底、藏滚动条、离线阅读正文的 `opacity`（第三条只给本机文件，见第 20 条） |
 | `src/renderer/src/home/useRows.ts` | 起始页的行模型与交互：三套主题共用，世界组件只负责画 |
-| `src/renderer/src/pdf/PdfApp.vue` | 阅读页：pdf.js 把一页画进画布，再把纸收掉、把字上成当前主题的墨色（排版在 `styles/pdf.css`） |
+| `src/renderer/src/pdf/PdfApp.vue` | 阅读页：pdf.js 把一页画进画布，再把纸收掉、把字上成一份固定的近黑墨（这一页不写主题，见 `useTheme.ts`；排版在 `styles/pdf.css`） |
 | `src/renderer/src/pdf/keying.ts` | 键控本身：这一页的纸是哪一张（有没有、浅还是深）、墨的零点在哪儿、要不要翻面 |
 | `src/renderer/src/composables/useWindowDrag.ts` | 「按控件是操作、按别处是拖窗口」的唯一判据，界面各处共用 |
 | `src/renderer/src/composables/useBackgroundAlpha.ts` | 底板透明度写进文档根（必须与令牌同层，见架构要点第 9 条） |
-| `src/renderer/src/composables/useTheme.ts` | 主题与形态写进文档根，四份文档各调一次（它们之间没有继承路径） |
+| `src/renderer/src/composables/useTheme.ts` | 主题与形态写进文档根——**只有起始页那一份文档调它**，其余四份不写这两个属性，于是永远落在纸白那一组（文档之间没有继承路径，这就是边界的机制） |
 | `src/renderer/src/chrome/TabStrip.vue` | 顶栏标签条，含「放不下就让位给下拉清单」的实测判断 |
-| `src/renderer/src/styles/themes.css` | 三套主题的配色与两套世界的形态，四份文档共用这一份 |
+| `src/renderer/src/styles/themes.css` | 三套主题的配色与两套世界的形态，五份文档共用这一份（谁把主题名写上去，见上一行） |
 | `src/renderer/src/styles/home.css` | 起始页自己的排版，以及**只在起始页**出现的扫描线与暗角 |
 | `src/shared/ipc.ts` | 三个进程共享的通道与载荷契约 |
 
