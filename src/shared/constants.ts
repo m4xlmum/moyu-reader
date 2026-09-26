@@ -162,6 +162,18 @@ export const OPACITY_MAX = 1
 export const BACKGROUND_OPACITY_MIN = 0
 export const BACKGROUND_OPACITY_MAX = 1
 
+/**
+ * 离线阅读正文的不透明度范围。
+ *
+ * 下限同样是 0，理由与背景透明度一样：它只作用在**被读的内容**上，
+ * 界面那几条栏与控件都不受它影响，因此拉到 0 也锁不住自己
+ * ——右栏那条滑块就摆在眼前，随时拉得回来。0% 的那一态是「正文不在，
+ * 界面还在」（对照的是老板键那种「整扇窗不在」）。
+ * 上限给 1：这是「淡」，不是「变清楚」，没有比原来的字更实的东西。
+ */
+export const READER_OPACITY_MIN = 0
+export const READER_OPACITY_MAX = 1
+
 /** 窗口尺寸预设（DIP）。四个都严格 16:9，换尺寸不会让版面在两个方向上各自重排 */
 export const SIZE_PRESETS = {
   mini: { width: 480, height: 270 },
@@ -190,8 +202,11 @@ export const DEFAULT_BOSS_HIDE = 'Alt+X'
  * 9：新增 ui.backgroundOpacity（界面底板透明度），默认 1（与旧行为一致）。
  * 10：新增 ui.ballIcon / ui.ballCustomFit（悬浮球图标）。默认值与旧行为一致，
  *     自定义图标本身另存 userData/ball-icon.json，不在配置里。
+ * 11：新增 ui.readerOpacity（离线阅读正文的不透明度）。默认 1，
+ *     也就是这一版之前的样子：正文不淡。旧配置没有这一项，
+ *     逐字段校验会给它默认值，因此迁移逻辑一个字都不用写。
  */
-export const CONFIG_VERSION = 10
+export const CONFIG_VERSION = 11
 
 /** 1 版时代的竖屏尺寸；命中这些值说明是「没改过尺寸」的旧配置，迁移时重置 */
 export const LEGACY_PORTRAIT_SIZES: ReadonlyArray<{ width: number; height: number }> = [

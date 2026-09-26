@@ -104,7 +104,7 @@ let lastGuestId = FIRST_TAB
 const tabListeners = new Set()
 
 const config = {
-  version: 10,
+  version: 11,
   window: {
     x: null,
     y: null,
@@ -119,6 +119,7 @@ const config = {
     railOpen: true,
     homeTheme: opts.theme,
     backgroundOpacity: opts.bgAlpha ?? 1,
+    readerOpacity: opts.readerAlpha ?? 1,
     ballIcon: opts.ballIcon,
     ballCustomFit: opts.ballFit
   },
@@ -181,6 +182,39 @@ const SITES = [  {
  * **解码回来**的文件名——假数据要是直接写中文，那条解码的路就没走过。
  */
 const fileUrl = (name) => `file:///E:/books/${encodeURIComponent(name)}`
+
+/**
+ * --reader [%]：此刻正在读一本本机 TXT。
+ *
+ * 右栏第三条滑块（离线阅读正文的透明度）只在**本机文件**上有对象，因此要摆出
+ * 「它活着」那一态，正文区底下就得真是一本本机 TXT——停在网页上它按规矩是禁用的
+ * （见 Rail.vue 的 offlineReading），拿那种界面来验这条滑块等于什么都没验。
+ *
+ * 开这一页的办法与「打开文件…」那一路**逐字相同**（见下面的 openLocalFiles）：
+ * 追加一格、让它成为正在看的那一页、起始页退到后台。于是这里摆出来的标签条与
+ * 真机点开一本 TXT 之后的样子没有差别——预览要是另摆一个更整齐的形状
+ * （比如就地换掉某一格、好让标签条仍是五格），量出来的栏高就不是用户看到的那一栏。
+ *
+ * 数值那一半由 --reader 后面可选的百分数说了算（不给就是 100%），与 --bg 同一条
+ * 规矩：「它此刻活在什么值上」与「它此刻活不活」是两件事，各自都要能单独摆。
+ */
+if (opts.reader === true) {
+  TABS.push({
+    id: 'r0',
+    url: fileUrl('斗破苍穹.txt'),
+    title: '斗破苍穹.txt',
+    faviconUrl: undefined,
+    isLoading: false,
+    canGoBack: false,
+    canGoForward: false,
+    uaMode: 'desktop',
+    zoom: 1,
+    muted: false
+  })
+  activeTabId = 'r0'
+  lastGuestId = 'r0'
+  screen = null
+}
 
 /**
  * 两本本机书，排在历史里。

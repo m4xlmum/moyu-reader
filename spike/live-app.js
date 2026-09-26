@@ -15,6 +15,9 @@
  *   3. 配置写进口袋之后，界面手里那份镜像跟不跟得上（A10 / A11）。这条线由
  *      index.ts 亲手接（ConfigStore 的订阅 → 广播），别的探针都够不着——它们
  *      要么自己拼服务、要么用假桥。整体透明度那条滑块跳回 100% 就是这么来的。
+ *   4. 本机 TXT 那一屏上的**像素**（A12）。离线阅读正文的透明度是主进程往那一页
+ *      注入的一条 CSS，界面侧看不见、DOM 也不变——只有把那一屏合成之后的像素
+ *      量一遍，才知道「淡下去」是真的发生了。
  *
  * ## 为什么要抄一份 userData
  *
@@ -48,6 +51,7 @@ const { app, BaseWindow, webContents: wcModule, screen } = require('electron')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const { pathToFileURL } = require('node:url')
 
 const ROOT = path.join(__dirname, '..')
 const OUT_DIR = path.join(__dirname, 'out')
@@ -632,6 +636,257 @@ async function main() {
       })()`)
     )
     record('A11', '没人碰界面、只改配置（win.setOpacity）时，那一条滑块显示的值跟着改吗', 状态.显示 === `${Math.round(目标 * 100)}%` ? '是' : '不是', 状态)
+  }
+
+  // ------------------------------------------------------------ A12 离线阅读正文的透明度
+  //
+  // 右栏第三条滑块（ui.readerOpacity）。它管的是**被读的东西**：本机 TXT 与自家
+  // PDF 阅读页——网页永远不吃这一条。这一问要在真身上验四件事，缺一条这条滑块
+  // 就只是「界面上多了一个能拖的东西」：
+  //
+  //   1. 开一本本机 TXT 之后它**活过来**（停在网页上时它按规矩是禁用的）；
+  //   2. 拖动真的写进了配置（ui.readerOpacity 变成 0.4）；
+  //   3. **正文真的淡下去了**——这一条只有量像素才算验过。它是 CSS opacity，
+  //      由合成器做，页面里的 DOM 一个字都没变（`html { opacity: .4 }` 那条
+  //      注入的样式表是主进程塞进去的，界面侧读不到，圈里也就量不出东西来）；
+  //   4. 拉回 100% 之后**恢复原样**——只验「淡了」不验「回得来」，
+  //      就成了一个只管往一个方向去的开关。
+  //
+  // 书是探针现写的一本，不碰用户机器上任何真实文件（名字里带括号，顺带把
+  // file: 那条「非 ASCII 百分号编码」的路也走一遍）。
+  mark('A12 打开一本本机 TXT，拖右栏第三条滑块')
+  {
+    const 书 = path.join(TEMP, '摸鱼样本（探针）.txt')
+    fs.writeFileSync(
+      书,
+      '摸鱼阅读\n\n' + '这是一行用来量透明度的字，写得长一点好占满一整行。\n'.repeat(24),
+      'utf8'
+    )
+    const 地址 = pathToFileURL(书).href
+
+    /** 三条滑块里「阅读」那一条此刻是什么样（禁用着的那一档也要看得见） */
+    const 读滑块 = async () =>
+      JSON.parse(
+        await chrome.webContents.executeJavaScript(`(() => {
+          const box = [...document.querySelectorAll('.rail .opacity')]
+            .find((e) => e.querySelector('.label')?.textContent?.trim() === '阅读')
+          if (!box) return 'null'
+          const el = box.querySelector('.slider')
+          return JSON.stringify({
+            显示: box.querySelector('.value')?.textContent?.trim() ?? null,
+            值: Number(el.value),
+            禁用: el.disabled
+          })
+        })()`)
+      )
+
+    /*
+     * 开书**之前**先读一眼那条滑块：此刻正文区底下是一张网页（A8 换到了「视频」
+     * 那一栏，正文区还是起始页——两种都不是本机文件），它按规矩该是禁用的。
+     * 这一读必须在开书之前，否则量到的是「开了书之后」那一态，这一问就成了
+     * 自己问自己。
+     */
+    const 停在网页上 = await 读滑块()
+
+    await chrome.webContents.executeJavaScript(
+      `window.moyu.tabs.create({ url: ${JSON.stringify(地址)}, activate: true })`
+    )
+    await delay(1500)
+
+    /*
+     * 认那一格新开的视图：**按地址逐字认**，不按 `file:` 前缀。
+     *
+     * 这一跤摔过一次：界面层自己（index.html）与起始页、设置页、pdf.html 都是
+     * `file:` 开头的地址（未打包时它们都由 loadFile 从磁盘取），因此
+     * 「找到第一个 file: 开头的孩子」量到的是**界面层**——一整扇窗那么大、
+     * 三个读数一模一样，看上去像「淡了也没淡」，其实一次都没量到那本书。
+     */
+    const 读的那一屏 = win.contentView.children.find(
+      (v) => v.webContents.getURL() === 地址
+    )
+
+    /**
+     * 一张截图里的明暗分布。
+     *
+     * 量的是**合成之后**的像素，因此两种底都要算出来：这一屏的纸是透明的
+     * （本机文件那条注入的样式表把白底收掉了），而 capturePage 给回来的图
+     * 到底带不带 alpha 通道，不是我们说了算——于是
+     *   「在黑上」= 亮度 × alpha（贴在黑桌面上看到的样子）
+     *   「在白上」= 亮度 × alpha + 255 × (1 − alpha)（贴在白纸上的样子）
+     * 两条各报一份，哪一条在淡下去，一眼看得出来。判据用**幅**（最深与最浅
+     * 之差）：整体乘一个数，幅就按同一个数缩，与底是什么颜色无关。
+     */
+    const 明暗 = (img) => {
+      const { width, height } = img.getSize()
+      const bgra = img.toBitmap()
+      let 黑上最深 = 255
+      let 黑上最浅 = 0
+      let 白上最深 = 255
+      let 白上最浅 = 0
+      let 透的 = 0
+      let 数了 = 0
+      // 隔几个像素取一个：量的是分布，几万个样本已经足够，不必把整张图走完
+      for (let i = 0; i + 3 < bgra.length; i += 16) {
+        const b = bgra[i]
+        const g = bgra[i + 1]
+        const r = bgra[i + 2]
+        const a = bgra[i + 3]
+        数了++
+        if (a === 0) 透的++
+        const 亮度 = 0.114 * b + 0.587 * g + 0.299 * r
+        const 黑上 = (亮度 * a) / 255
+        const 白上 = (亮度 * a) / 255 + (255 * (255 - a)) / 255
+        if (黑上 < 黑上最深) 黑上最深 = 黑上
+        if (黑上 > 黑上最浅) 黑上最浅 = 黑上
+        if (白上 < 白上最深) 白上最深 = 白上
+        if (白上 > 白上最浅) 白上最浅 = 白上
+      }
+      return {
+        尺寸: `${width}×${height}`,
+        采样: 数了,
+        透明像素占比: Number((透的 / 数了).toFixed(3)),
+        黑上: { 最深: Math.round(黑上最深), 最浅: Math.round(黑上最浅), 幅: Math.round(黑上最浅 - 黑上最深) },
+        白上: { 最深: Math.round(白上最深), 最浅: Math.round(白上最浅), 幅: Math.round(白上最浅 - 白上最深) }
+      }
+    }
+
+    const 拍 = async () => {
+      if (!读的那一屏) return null
+      // 连等两帧：透明度的注入与重画都在下一个合成帧里才看得见
+      await delay(600)
+      return 明暗(await 读的那一屏.webContents.capturePage())
+    }
+
+    /**
+     * 这一页**自己算出来**的 html opacity。
+     *
+     * 与上面那份像素读数合起来看，才能分清是哪种坏法：
+     *   · 算出 0.4、像素也是 0.4 —— 那张样式表还在（主进程没撤掉）；
+     *   · 算出 1、像素还是 0.4 —— 样式表撤掉了，可这一屏**没重画**
+     *     （未显示的窗口里，合成器何时出新帧不由我们说了算）。
+     * 两种坏法要修的地方完全不同，因此两个数缺一不可。
+     */
+    const 读样式 = async () => {
+      if (!读的那一屏) return null
+      try {
+        return await 读的那一屏.webContents.executeJavaScript(
+          'getComputedStyle(document.documentElement).opacity'
+        )
+      } catch {
+        return '(读不到)'
+      }
+    }
+
+    const 淡之前 = await 拍()
+    const 淡之前样式 = await 读样式()
+
+    // 走真路：拖那条滑块（与 A10 同一套合成事件，onInput 读的就是 target.value）
+    const 目标 = 40
+    await chrome.webContents.executeJavaScript(`(() => {
+      const box = [...document.querySelectorAll('.rail .opacity')]
+        .find((e) => e.querySelector('.label')?.textContent?.trim() === '阅读')
+      if (!box) return false
+      const el = box.querySelector('.slider')
+      el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }))
+      el.value = String(${目标})
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }))
+      return true
+    })()`)
+    await delay(900)
+    const 淡之后 = await 拍()
+    const 淡之后样式 = await 读样式()
+    const 配置里 = JSON.parse(
+      await chrome.webContents.executeJavaScript(`(async () => {
+        const cfg = await window.moyu.config.get()
+        return JSON.stringify({ 阅读: cfg.ui.readerOpacity })
+      })()`)
+    )
+
+    // 拉回 100%：只验「淡得下去」不验「回得来」，这开关就只管一个方向
+    await chrome.webContents.executeJavaScript(`(() => {
+      const box = [...document.querySelectorAll('.rail .opacity')]
+        .find((e) => e.querySelector('.label')?.textContent?.trim() === '阅读')
+      const el = box?.querySelector('.slider')
+      if (!el) return false
+      el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1 }))
+      el.value = '100'
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+      el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerId: 1 }))
+      return true
+    })()`)
+    await delay(900)
+    const 拉回来 = await 拍()
+    const 拉回来样式 = await 读样式()
+    /*
+     * 拉回那一半也要读一眼**配置与滑块**，不能只量像素。
+     *
+     * 「淡还是没淡」是一个数，而它可能坏在两处：滑块那一下没写进配置（界面这一半），
+     * 或者写进去了、注入的样式表没被撤掉（主进程那一半）。只看像素分不清是哪一处，
+     * 于是把这两个数一起记下来——下一跑读 detail 就知道该往哪边查。
+     */
+    const 恢复之后 = JSON.parse(
+      await chrome.webContents.executeJavaScript(`(async () => {
+        const box = [...document.querySelectorAll('.rail .opacity')]
+          .find((e) => e.querySelector('.label')?.textContent?.trim() === '阅读')
+        const cfg = await window.moyu.config.get()
+        return JSON.stringify({
+          显示: box?.querySelector('.value')?.textContent?.trim() ?? null,
+          配置: cfg.ui.readerOpacity,
+          禁用: box?.querySelector('.slider')?.disabled ?? null
+        })
+      })()`)
+    )
+
+    const 幅 = (m, 底) => m?.[底]?.幅 ?? null
+    const 缩到 = (之前, 之后, 底) => {
+      const a = 幅(之前, 底)
+      const b = 幅(之后, 底)
+      return a ? Number((b / a).toFixed(3)) : null
+    }
+    /*
+     * 判据：
+     *   · 停在网页上时那一条必须是禁用的（它没有可作用的对象）；
+     *   · 开了本机 TXT 之后它得是活的，且显示/配置都是刚拖到的那个值；
+     *   · 幅按透明度缩——0.4 就该缩到 0.4 上下（两种底都算，取量得出来的那一条：
+     *     带 alpha 的那张图「黑上」缩得准，「白上」会因为底被补成白而偏大）；
+     *   · 拉回 100% 之后幅回到原样（±8% 内）。
+     */
+    const 缩黑 = 缩到(淡之前, 淡之后, '黑上')
+    const 缩白 = 缩到(淡之前, 淡之后, '白上')
+    const 缩回黑 = 缩到(淡之前, 拉回来, '黑上')
+    const 缩回白 = 缩到(淡之前, 拉回来, '白上')
+    const 淡下去的 = [缩黑, 缩白].filter((v) => v !== null)
+    const 判淡 =
+      淡下去的.length > 0 &&
+      淡下去的.some((v) => Math.abs(v - 目标 / 100) < 0.12) &&
+      淡下去的.every((v) => v < 0.75)
+    const 判回 =
+      [缩回黑, 缩回白].filter((v) => v !== null).length > 0 &&
+      [缩回黑, 缩回白].filter((v) => v !== null).every((v) => Math.abs(v - 1) < 0.08)
+    const ok =
+      停在网页上?.禁用 === true &&
+      淡之前 !== null &&
+      淡之后 !== null &&
+      拉回来 !== null &&
+      恢复之后.配置 === 1 &&
+      判回 &&
+      (await 读滑块())?.禁用 === false &&
+      配置里.阅读 === 目标 / 100 &&
+      判淡 &&
+      判回
+    record('A12', '读一本本机 TXT 时，右栏第三条滑块活着、拖下去正文真的淡了、拉回来又恢复吗', ok ? '是' : '不是', {
+      书的地址: 地址,
+      认出来的那一屏: 读的那一屏 ? String(读的那一屏.webContents.getURL()).slice(0, 60) : '(没认出来)',
+      停在网页上时那一条: 停在网页上,
+      淡之前,
+      淡之后,
+      拉回来,
+      算出来的opacity: { 淡之前: 淡之前样式, 淡之后: 淡之后样式, 拉回来: 拉回来样式 },
+      恢复之后,
+      配置里: 配置里.阅读,
+      幅缩到: { 黑上: 缩黑, 白上: 缩白, 拉回之后黑上: 缩回黑, 拉回之后白上: 缩回白 }
+    })
   }
 
   // ------------------------------------------------------------ 收尾

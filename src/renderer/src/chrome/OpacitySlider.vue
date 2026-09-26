@@ -1,12 +1,18 @@
 <script setup lang="ts">
 /**
- * 竖直百分比滑块（右栏版）。界面透明度与背景透明度共用这一个。
+ * 竖直百分比滑块（右栏版）。整体透明度、背景透明度与离线阅读透明度共用这一个。
  *
- * 两者的下限不一样，因此 min / max 由调用方给：
+ * 三条的下限不一样，因此 min / max 由调用方给：
  * 界面透明度的下限锁在 5%（0% 会让窗口不可见却仍可交互，用户会以为自己
- * 把窗口弄丢了，真正「藏起来」请用老板键或托盘）；背景透明度的下限是 0——
- * 它只作用在界面自己画的底板上，字与图标始终不透明，拉到 0 剩下的是
- * 「浮在桌面上的几个按钮」，锁不住自己。
+ * 把窗口弄丢了，真正「藏起来」请用老板键或托盘）；背景透明度与阅读透明度的
+ * 下限都是 0——它们分别只作用在界面自己画的底板上、以及被读的正文上，
+ * 栏与控件始终不透明，拉到 0 剩下的是「浮在桌面上的一排按钮」或者
+ * 「正文不在、界面还在」，锁不住自己。
+ *
+ * 而「此刻管不管得着」是另一回事：阅读透明度只作用在离线阅读的正文上，
+ * 停在网页或起始页上时它下面没有可作用的对象，于是由调用方传 disabled
+ * 禁掉——与右栏那三格缩放同一个道理，不装作能点（见 Rail.vue）。
+ * 禁用时只剩「读数 + 一个灰点」，值仍在，只是这一档改不动它。
  *
  * 横条转 90° 放置，而不是用竖排 Input：Chromium 的 range 只有横向是稳定的，
  * 竖排写法各版本表现不一，而 transform 一定可靠。
@@ -26,8 +32,15 @@ const props = withDefaults(
     max?: number
     /** tooltip 里追加的一句说明 */
     hint?: string
+    /**
+     * 此刻没有可作用的对象（见文件头）。
+     *
+     * 禁用是**真的禁用**（input 上那颗 disabled），不只是画灰一点：
+     * 灰着却还能拖，会让人以为「拖了没反应」是坏了。
+     */
+    disabled?: boolean
   }>(),
-  { min: 0, max: 1 }
+  { min: 0, max: 1, disabled: false }
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: number] }>()
@@ -85,7 +98,7 @@ const title = computed(
 </script>
 
 <template>
-  <div class="opacity">
+  <div class="opacity" :class="{ off: disabled }">
     <span class="label">{{ label }}</span>
     <span class="value">{{ displayValue }}%</span>
     <div class="track-wrap">
@@ -95,6 +108,7 @@ const title = computed(
         :min="Math.round(min * 100)"
         :max="Math.round(max * 100)"
         :value="displayValue"
+        :disabled="disabled"
         :title="title"
         :aria-label="title"
         @pointerdown="onPointerDown"
@@ -112,7 +126,15 @@ const title = computed(
   flex-direction: column;
   align-items: center;
   gap: 1px;
-  padding: 2px 0 4px;
+  /*
+   * 上下各留一点，下面那 1px 是去掉了 4px 换来的。
+   *
+   * 第三条滑块（阅读）一进来，960×540 这一档的功能栈就从「正好不滚」变成
+   * 溢出 3px——最下面那条滑块的底边被裁掉一线。一列里三条各让出 3px 就够，
+   * 而它们之间本来还有栈的 2px 空隙与分隔线自己的 6px 外边距，少这 3px
+   * 一点也不挤。实测（preview.js 的 RAIL_STACK）：溢出 3px → 余 6px。
+   */
+  padding: 2px 0 1px;
 }
 
 .label,
@@ -148,10 +170,12 @@ const title = computed(
  *
  * 因此这里把「居中」写成明确的一半尺寸偏移，与父级宽度无关。
  *
- * 56px 是竖向空间的约束：默认 960×540 下右侧栏留给功能栈的只有四百多像素，
- * 而这一栏里现在有两条滑块。原先一条 72px 的滑块独占时正好把空间用完；
- * 两条各 56px 加上各自的两行小字，与「去掉手机 / 置顶两个按钮」（各 26px）
- * 之后的空间相当，整列既不用滚，滑块也不必再短到丧失精度。
+ * 56px 是竖向空间的约束：这一栏里现在有**三条**滑块（整体、背景、阅读），
+ * 而 960×540 这一档留给功能栈的只有 488px。三条各 56px 的轨道，连着各自
+ * 上下两行小字，一条占 85px，加上上面那几格按钮与分隔线，正好把这一列填满
+ * ——实测溢出 0px，一格不多一格不少（preview.js 的 RAIL_STACK）。再短下去
+ * 就没有精度可言，而这一列本来也是为「矮窗口里放不下就滚」设计的（迷你档
+ * 480×270 实测溢出 264px，那一档由整条栈自己滚）。
  */
 .slider {
   position: absolute;
@@ -194,5 +218,23 @@ const title = computed(
 .slider:focus-visible {
   outline: 2px solid var(--moyu-accent);
   outline-offset: 3px;
+}
+
+/*
+ * 禁用态：读数退到最淡的一档，滑块从那颗实心点变成一个灰点。
+ *
+ * **位置照旧按当前值摆着**——这个值是存下来的配置，不是「没有值」；
+ * 换回一本本机文件，它就照这个值淡给你看。因此这里只改颜色，不动读数。
+ */
+.opacity.off .value {
+  color: var(--moyu-text-faint);
+}
+
+.opacity.off .slider {
+  cursor: default;
+}
+
+.opacity.off .slider::-webkit-slider-thumb {
+  background: var(--moyu-border);
 }
 </style>

@@ -17,6 +17,10 @@
  *   npx electron spike/preview.js --click-tab 0   # 点第 0 格标签，再截一张
  *   npx electron spike/preview.js --click-rail-pause  # 点右栏那格开关，再截一张
  *   npx electron spike/preview.js --drag-opacity 40   # 拖「整体」透明度那条滑块到 40%，问松手之后它显示什么
+ *   npx electron spike/preview.js --reader --drag-opacity 40 --drag-slider 阅读
+ *   # 上一行：正文区底下摆一本本机 TXT，再拖右栏第三条滑块（见 --reader / --drag-slider）
+ *   npx electron spike/preview.js --reader 40     # 同上，但第三条停在 40% 上照一张静止的图
+ *   npx electron spike/preview.js --reader 40 --width 480 --height 270  # 迷你档：三条滑块塞不塞得下
  *   npx electron spike/preview.js --screen settings   # 界面停在系统设置上：标签条哪一格都不高亮
  *   npx electron spike/preview.js --screen home       # 停在起始页上：起始页那颗键亮着
  *   npx electron spike/preview.js --click-screen      # 用两颗键各进出一次，打一行 SCREEN 再截两张
@@ -209,6 +213,25 @@ const PLATE_TARGET = PLATE ?? (OPEN_FILE ? 'local' : null)
  * 因此 MEASURE 里除了截图还回报顶栏的实测底色与图标的实测字色。
  */
 const BG = Math.min(1, Math.max(0, num('--bg', 1)))
+
+/**
+ * --reader [%]：正文区底下摆一本本机 TXT，也就是右栏第三条滑块（离线阅读正文的
+ * 透明度）**唯一**活着的场合。
+ *
+ * 它与前两条不同：那两条任何时候都管得着（窗与界面一直在），这一条只在读一本
+ * 本机文件时才有对象，因此界面把它按右栏那三格缩放的规矩禁掉了。于是这一条要
+ * 两态各照一张：不给 --reader 的一张看「禁用」（灰点、读数照旧、鼠标不是手），
+ * 给了的一张看「活着」。
+ *
+ * 数值那一半是后面可选的百分数（不给就是 100%），与 --bg 同一条规矩。
+ */
+const READER_ALPHA = (() => {
+  const i = args.indexOf('--reader')
+  if (i < 0) return null
+  const next = args[i + 1]
+  const value = next && !next.startsWith('--') ? Number(next) : NaN
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value / 100)) : 1
+})()
 /**
  * --resize 1100x700：截完第一张之后把窗口改到这么大，再截一张。
  *
@@ -442,6 +465,8 @@ ipcMain.on('preview:options', (event) => {
     noTabs: NO_TABS,
     screen: SCREEN,
     bgAlpha: BG,
+    reader: READER_ALPHA !== null,
+    readerAlpha: READER_ALPHA ?? 1,
     ballIcon: BALL_ICON,
     ballFit: BALL_FIT,
     ballImage: BALL_IMAGE_DATA,
@@ -687,11 +712,15 @@ const MEASURE = `(() => {
      */
     addressLabel: document.querySelector('.address-toggle .ellipsis')?.textContent?.trim() ?? null,
     /*
-     * 右栏那两条透明度滑块，以及功能栈有没有被撑出滚动区。
+     * 右栏那三条透明度滑块，以及功能栈有没有被撑出滚动区。
      *
-     * 这一栏刚做过一次「去掉两个 26px 的按钮、换进一条 56px 的滑块」，
-     * 净空是否够用是算出来的，得实测一遍：scrollHeight 大于 clientHeight
-     * 就意味着有控件被裁在可视区外，那一栏的功能就点不到了。
+     * 这一栏陆续加过东西（去掉手机 / 置顶两个按钮、换进一条 56px 的滑块、
+     * 又添了第三条「阅读」），净空是否够用是算出来的，得实测一遍：scrollHeight
+     * 大于 clientHeight 就意味着有控件被裁在可视区外，那一栏的功能就点不到了。
+     *
+     * disabled 也要报：第三条只在读本机文件时活着，而「禁用」这件事在截图上
+     * 只是那颗点变灰了一点，肉眼看不出它到底是真的 disabled，还是只画灰了
+     * 却照样能拖——这一条正是最容易做假的地方。
      */
     sliders: [...document.querySelectorAll('.opacity')].map((el) => {
       const track = el.querySelector('input')
@@ -700,7 +729,14 @@ const MEASURE = `(() => {
         value: el.querySelector('.value')?.textContent?.trim() ?? null,
         min: track?.getAttribute('min') ?? null,
         max: track?.getAttribute('max') ?? null,
-        hint: el.getAttribute('title'),
+        disabled: track?.disabled ?? null,
+        offClass: el.classList.contains('off'),
+        /*
+         * tooltip 长在 **input** 上（Slider 把整句话写在那一格），不在外框上。
+         * 外框上那个 title 一直是 null——先前照外框读，读出来的是一列 null，
+         * 看着像「三条都没写说明」，其实是一个读错了元素的读数。
+         */
+        hint: track?.getAttribute('title') ?? null,
         box: (() => {
           const r = el.getBoundingClientRect()
           return { y: Math.round(r.y), h: Math.round(r.height) }
@@ -1477,6 +1513,26 @@ app.whenReady().then(async () => {
       // 两屏那两颗键的实测配色：亮着的那颗是不是真的亮着，暗夜下靠肉眼分不清
       console.log(`SCREEN_KEYS ${JSON.stringify(measured.screenKeys)}`)
       /*
+       * 三条透明度滑块各自长什么样，以及功能栈有没有被撑出滚动区。
+       *
+       * 只印「标签 / 读数 / 上下限 / 禁没禁」这四样：它们正是判据的全部——
+       * 第三条在网页上是禁用的（disabled 为 true）、在读本机 TXT 时是活的，
+       * 而读数的上下限与 shared/constants 里那三对常量应当逐一相符。
+       */
+      console.log(
+        `SLIDERS ${JSON.stringify(
+          measured.sliders.map((s) => ({
+            标签: s.label,
+            读数: s.value,
+            范围: `${s.min}–${s.max}`,
+            禁用: s.disabled,
+            灰着: s.offClass,
+            tooltip: s.hint
+          }))
+        )}`
+      )
+      console.log(`RAIL_STACK ${JSON.stringify(measured.stackScroll)}`)
+      /*
        * 地址栏开关上写着什么，以及**它有没有跟着屏名变**——用户报的就是这一条。
        *
        * 判据：停在自家那两屏上时，那一格必须仍是刚才那张网页（与不给 --screen 时
@@ -1570,6 +1626,12 @@ app.whenReady().then(async () => {
   const tabs = TABS ? `-${TABS}tabs` : ''
   // 底板透明度同理：跑了 0.35 那一档之后，默认那一档的图不该被它盖掉
   const bg = BG !== 1 ? `-bg${BG}` : ''
+  /*
+   * 本机 TXT 那一态同理，而且它必须跟着值走：不给 --reader 的那张是「禁用」
+   * （默认那张图里第三条是灰的），--reader 100 与 --reader 40 又是两种读数。
+   * 三张图各说一件事，谁也不该盖掉谁。
+   */
+  const reader = READER_ALPHA !== null ? `-reader${Math.round(READER_ALPHA * 100)}` : ''
   /*
    * 球面上画的是什么也写进名字：八枚内置图标是八张图，跑第二轮时彼此不能覆盖。
    * 自定义那张用落法而不是文件名做标记——同一个落法同一张图，重跑就该盖掉旧的那张。
@@ -1705,7 +1767,7 @@ app.whenReady().then(async () => {
     const name =
       page !== 'chrome'
         ? `${page}${themeTag}${plateTag}${page === 'popover' ? `-${KIND}` : ''}${size}${tabs}${bg}${ball}${zoom}`
-        : `preview-${mode}${max}${themeTag}${noticeTag}${screenTag}${size}${tabs}${bg}${ball}${zoom}`
+        : `preview-${mode}${max}${themeTag}${noticeTag}${screenTag}${size}${tabs}${bg}${ball}${zoom}${reader}`
     await shoot(name)
 
     /*
@@ -1804,10 +1866,10 @@ app.whenReady().then(async () => {
     }
 
     /*
-     * 拖右栏那条「整体」透明度滑块，问松手之后它显示的是刚拖到的那个值，
-     * 还是弹回改动前的旧值（默认 100%）。
+     * 拖右栏某一条透明度滑块，问松手之后它显示的是刚拖到的那个值，还是弹回
+     * 改动前的旧值（默认 100%）。拖哪一条由 --drag-slider 说了算，默认「整体」。
      *
-     * 用户报的正是这一条。这条滑块走的是窗口级属性（win.setOpacity），与设置页
+     * 用户报的正是「整体」这一条。它走的是窗口级属性（win.setOpacity），与设置页
      * 那条走 configPatch 的不是同一条路，而配置广播从前只挂在 configPatch 上——
      * 界面手里那份配置镜像一直停在挂载时读到的旧值上，用户一松手显示就回落到它，
      * 调小多少次都还是 100%。
@@ -1817,8 +1879,15 @@ app.whenReady().then(async () => {
      * 迟早会来，这里永远不来。于是这一问量的是滑块自己那半边：松手之后它该守着
      * 自己刚拖到的值，直到 props 真的换掉，而不是立刻回落到 props 里的旧值。
      *
+     * 三条滑块共用这一段，是因为它们各自那条路都从**同一个组件**出去，而那件
+     * 报告的事（守不住自己刚拖到的值）是组件里的状态机——换一条滑块不换这个机制，
+     * 抄第二份探针只会让两边慢慢走岔。差异只在两处，都按标签取：
+     *   写进哪个键 —— 整体是 win.setOpacity，另两条是 config 的两条 ui 字段；
+     *   怎么确认请求真的出去了 —— 整体看假桥记的那笔账，另两条看配置读回来是什么
+     *   （它们本来就经 configPatch，假桥那一份是真的会改的）。
+     *
      * 三问，缺一不可：
-     *   拖动中   —— 显示跟得上手指，且请求真的发了出去（假桥那边记着账）；
+     *   拖动中   —— 显示跟得上手指，且请求真的发了出去；
      *   松手     —— **用户报的那一帧**：显示仍是刚拖到的值，不是 100%；
      *   模型换掉 —— 让假桥广播一个**别的**值进来（模拟主进程夹过一道），显示必须
      *               改听它的。这一问盯的是「守着自己那个值」不许守成死锁：换了值
@@ -1829,13 +1898,37 @@ app.whenReady().then(async () => {
       // 与目标明显不同，用来把滑块从「守着自己那个值」里拽出来
       const 别的值 = 目标 > 50 ? 20 : 80
 
+      const 拖哪条 = (() => {
+        const i = args.indexOf('--drag-slider')
+        return i >= 0 && args[i + 1] && !args[i + 1].startsWith('--') ? args[i + 1] : '整体'
+      })()
+      /*
+       * 每一条滑块「改写的是配置里的哪一格」，以及「怎么把那一格读回来」。
+       * 整体那一格**读不回来**（假桥的 setOpacity 只记账、不改配置，见上面那段
+       * 说明），因此它的证据是那笔账；另两条的证据是配置里真的变成了这个值。
+       */
+      const 键 = {
+        整体: { 广播: (v) => `{ window: { opacity: ${v} } }`, 读回: null },
+        背景: { 广播: (v) => `{ ui: { backgroundOpacity: ${v} } }`, 读回: (c) => c.ui.backgroundOpacity },
+        阅读: { 广播: (v) => `{ ui: { readerOpacity: ${v} } }`, 读回: (c) => c.ui.readerOpacity }
+      }[拖哪条]
+      if (!键) {
+        console.error(`PREVIEW --drag-slider 只认「整体」「背景」「阅读」：${拖哪条}`)
+        app.exit(1)
+        return
+      }
+
       const 找 = `[...document.querySelectorAll('.rail .opacity')]
-        .find((e) => e.querySelector('.label')?.textContent?.trim() === '整体')`
+        .find((e) => e.querySelector('.label')?.textContent?.trim() === ${JSON.stringify(拖哪条)})`
       const 读 = `(() => {
         const box = ${找}
         if (!box) return null
         const el = box.querySelector('.slider')
-        return { 显示: box.querySelector('.value')?.textContent?.trim() ?? null, 值: Number(el.value) }
+        return {
+          显示: box.querySelector('.value')?.textContent?.trim() ?? null,
+          值: Number(el.value),
+          禁用: el.disabled
+        }
       })()`
       const 按 = (type) =>
         run(`(() => {
@@ -1868,19 +1961,22 @@ app.whenReady().then(async () => {
       })()`)
       await wait(50)
       const 拖动中 = await run(读)
-      const 发出去的请求 = (await run(`window.moyu.win.opacityLog().calls`)).slice(-1)[0] ?? null
+      const 发出去的请求 = 键.读回
+        ? 键.读回(await run(`window.moyu.config.get()`))
+        : ((await run(`window.moyu.win.opacityLog().calls`)).slice(-1)[0] ?? null)
 
       await 按('pointerup')
       await wait(50)
       const 松手 = await run(读)
 
       // 广播一个别的值进来：走的是与真机同一条路（假桥的 patch 真的会广播）
-      await run(`window.moyu.config.patch({ window: { opacity: ${别的值 / 100} } })`)
+      await run(`window.moyu.config.patch(${键.广播(别的值 / 100)})`)
       await wait(250)
       const 模型换掉之后 = await run(读)
 
       console.log(
         `DRAG_OPACITY ${JSON.stringify({
+          拖的是: 拖哪条,
           目标: `${目标}%`,
           拖之前,
           拖动中,
@@ -1891,6 +1987,15 @@ app.whenReady().then(async () => {
         })}`
       )
       const 破了 = []
+      /*
+       * 禁用着的那条不许被这一问悄悄放过。
+       *
+       * 派发出来的 input 事件**绕得开 disabled**（dispatchEvent 不看那个属性），
+       * 于是拿一条禁用的滑块跑这一问会有两个后果：写进配置的那个值在真机上
+       * 用户根本拖不出来，而三问还会全绿。因此先把「它此刻该活着」这件事
+       * 摆在最前面——想量禁用态就换 --drag-slider，不要拖一条禁着的。
+       */
+      if (拖动中?.禁用) 破了.push(`${拖哪条}这条滑块此刻是禁用的，这一问量不到它`)
       if (拖动中?.显示 !== `${目标}%`) 破了.push(`拖动中显示的是 ${拖动中?.显示}`)
       if (发出去的请求 === null || Math.abs(发出去的请求 * 100 - 目标) > 1) {
         破了.push(`假桥收到的不是 ${目标}%：${发出去的请求}`)
@@ -1898,7 +2003,7 @@ app.whenReady().then(async () => {
       if (松手?.显示 !== `${目标}%`) 破了.push(`松手之后跳成了 ${松手?.显示}`)
       if (模型换掉之后?.显示 !== `${别的值}%`) 破了.push(`模型换成 ${别的值}% 之后显示的是 ${模型换掉之后?.显示}`)
       console.log(破了.length ? `DRAG_OPACITY_FAIL ${JSON.stringify(破了)}` : 'DRAG_OPACITY_OK')
-      await shoot(`${name}-dragopacity${目标}`)
+      await shoot(`${name}-drag${拖哪条}${目标}`)
     }
 
     /*

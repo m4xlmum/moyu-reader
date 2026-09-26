@@ -138,3 +138,25 @@ export function isLocalPdf(url: string | null | undefined): boolean {
   if (typeof url !== 'string') return false
   return fileNameOf(url)?.toLowerCase().endsWith('.pdf') ?? false
 }
+
+/**
+ * 本机文件：`file:` 协议。**离线阅读读的就是它。**
+ *
+ * 与 isLocalPdf 分工不同：那个回答「谁来排这一页」（自家阅读页 vs 交给
+ * Chromium），只管 PDF；这个回答「界面上的阅读透明度此刻管不管得着」，
+ * 本机 TXT 与自家 PDF 阅读页都算，而网页（http/https，以及自家那两屏的
+ * `moyu://` 伪地址）一律不算——`ui.readerOpacity` 永远不许落到网页头上。
+ *
+ * 因此判据只有「协议是不是 file:」这一条：本机 PDF 在**界面这一侧**对外
+ * 露的正是那个 `file:///…/book.pdf` 地址（阅读页的地址只属于视图内部，
+ * 见 TabManager.wireEvents 的 did-navigate），于是同一个谓词在
+ * 主进程（注入哪一页）与渲染进程（那条滑块此刻是不是活的）说的是同一件事。
+ */
+export function isLocalFile(url: string | null | undefined): boolean {
+  if (typeof url !== 'string') return false
+  try {
+    return new URL(url).protocol === 'file:'
+  } catch {
+    return false
+  }
+}

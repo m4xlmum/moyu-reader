@@ -1,6 +1,6 @@
 # 架构要点
 
-有十九处实现与直觉相反，都是被真机验证倒逼出来的，改动前请先读
+有二十处实现与直觉相反，都是被真机验证倒逼出来的，改动前请先读
 [spike-findings.md](spike-findings.md)：
 
 1. **每个 `WebContentsView` 都必须调用 `setBackgroundColor('#00000000')`。**
@@ -146,6 +146,20 @@
     （`willReadFrequently: true`）再交给 pdf.js；pdf.js 自己那份是 `{alpha: false}`，
     晚一步就轮到它说了算（Q55）。
 
+20. **离线阅读的正文透明度不用 `insertCSS` 注入，而且它必须由主进程推。** 这一条管的
+    是「被读的东西」（本机 TXT 与自家 PDF 阅读页），判据是 `isLocalFile(entry.url)`
+    ——**网页永远吃不到它**（与第 5、17 条同一条边界）。TXT 那一页是 Chromium 自己
+    渲染的，界面侧没有那座桥（访客页不带 preload），因此值只能由主进程写进去：
+    写配置的路不止一条，所以这件事挂在 `ConfigStore.subscribe` 上
+    （`TabManager.refreshReaderOpacity()`），与界面那份镜像的广播同一处。
+    **注入方式是 CSSOM 上的一条行内声明**（`documentElement.style.setProperty('opacity',
+    v, 'important')`），不是 `wc.insertCSS`：`removeInsertedCSS` 对 **user origin** 注入的
+    表**不报错也不生效**（Electron 44.4.3 实测，default origin 同一对调用正常），
+    于是「拉回 100%」这一半会当着用户的面失效——而且它安静得只有量像素才看得出来
+    （第 20 条这一条与 `spike/css-remove.js`、`live-app.js` 的 A12 一起读；Q58）。
+    行内 `!important` 顺带压过页面自己样式表里的任何同属性声明，也不受 CSP 约束。
+    PDF 那一页走的是另一条实现——它是自家排的，直接给画布乘同一个数（第 17 条）。
+
 > 早期版本用 `setShape` 裁剪窗口的命中区域来实现「隐藏区域点击穿透」。
 > 改为收起成球之后这套机制已整体移除：窗口真的缩小了，就不需要再靠裁剪
 > 去欺骗命中测试，`setShape` 也不再有存在的理由。
@@ -169,6 +183,7 @@ src/renderer/  chrome 界面 / 弹出面板 / 系统设置 / PDF 阅读页
 | `src/main/services/geometry.ts` | 版面矩形计算，坐标判断的唯一来源 |
 | `src/main/services/updateService.ts` | 更新那一路：查 `latest.yml` → 比版本 → 下载并校验 sha512 → 起安装程序。**不用 electron-updater** 的三条理由写在文件头 |
 | `src/main/services/pdfReader.ts` | 本机 PDF 那条路：`moyu-pdf://` 的两张面（字节与资源）、token ↔ 路径的对应表、阅读页的地址 |
+| `src/main/services/pageStyler.ts` | 注入访客页面的三样东西：透明底、藏滚动条、离线阅读正文的 `opacity`（第三条只给本机文件，见第 20 条） |
 | `src/renderer/src/home/useRows.ts` | 起始页的行模型与交互：三套主题共用，世界组件只负责画 |
 | `src/renderer/src/pdf/PdfApp.vue` | 阅读页：pdf.js 把一页画进画布，再把纸收掉、把字上成当前主题的墨色（排版在 `styles/pdf.css`） |
 | `src/renderer/src/pdf/keying.ts` | 键控本身：这一页的纸是哪一张（有没有、浅还是深）、墨的零点在哪儿、要不要翻面 |

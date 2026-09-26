@@ -34,9 +34,9 @@ import {
 } from '@shared/constants'
 import type { TabsStatePayload } from '@shared/ipc'
 import type { OwnScreen, Rect, TabState } from '@shared/types'
-import { fileNameOf, isLocalPdf, resolveInput } from '@shared/url'
+import { fileNameOf, isLocalFile, isLocalPdf, resolveInput } from '@shared/url'
 import { uaFor, type UaMode } from '@shared/ua'
-import { injectPageStyles } from './pageStyler'
+import { applyReaderOpacity, injectPageStyles } from './pageStyler'
 import { pdfReaderUrl } from './pdfReader'
 import { rendererUrl } from './rendererUrl'
 import { log } from './logger'
@@ -146,6 +146,10 @@ export interface TabManagerDeps {
       newWindowAsTab: boolean
       searchTemplate: string
       newTabUrl: string
+    }
+    ui: {
+      /** 离线阅读正文的透明度：开着的本机文件要按它往自己的视图里注入 */
+      readerOpacity: number
     }
   }
   onStateChange: () => void
@@ -806,9 +810,40 @@ export class TabManager {
    */
   private applyPageStyles(entry: TabEntry): void {
     if (entry.kind !== 'guest') return
+    const cfg = this.deps.getConfig()
     void injectPageStyles(entry.view.webContents, {
-      hideScrollbars: this.deps.getConfig().browser.hideScrollbars
+      hideScrollbars: cfg.browser.hideScrollbars
     })
+    /*
+     * 离线阅读正文的透明度走另一张样式表，**只有本机文件吃**。
+     *
+     * 判据必须在这里：pageStyler 不知道这一页是什么，而「网页永远不许淡」
+     * 是这一条的硬边界（见 PRODUCT.md）。本机 PDF 是自家阅读页（kind 是 'pdf'，
+     * 上面那一步就返回了），它的正文透明度由页面自己在 canvas 上乘——同一个
+     * 配置项，两条实现，因为那一页是我们画的、这一页是 Chromium 画的。
+     */
+    const reader = isLocalFile(entry.url) ? cfg.ui.readerOpacity : 1
+    void applyReaderOpacity(entry.view.webContents, reader)
+  }
+
+  /**
+   * 正文透明度改了：把开着的本机文件**当场**重注入一遍。
+   *
+   * 不能等下一次导航。那是一条会被拖着走的滑块，用户盯着眼前这本 TXT 拖，
+   * 指望的就是它跟着淡；等下一次 reload 才生效等于这条滑块是坏的。
+   * 调用点挂在 index.ts 的配置订阅上（写配置的路不止一条，挂 store 才不漏）。
+   *
+   * 不判「值变了没有」：写配置的路很多，而其中大多数与这一项无关，
+   * 每一次都对开着的本机文件重注入一遍样式表，代价是一次 IPC 往返乘以
+   * 本机文件的张数（一般就是一两张）；反过来判「变没变」要在这儿再存一份
+   * 影子状态，两处不同步时就是一条静默失效的滑块。
+   */
+  refreshReaderOpacity(): void {
+    const value = this.deps.getConfig().ui.readerOpacity
+    for (const entry of this.tabs.values()) {
+      if (entry.kind !== 'guest' || !isLocalFile(entry.url)) continue
+      void applyReaderOpacity(entry.view.webContents, value)
+    }
   }
 
   private wireEvents(entry: TabEntry): void {

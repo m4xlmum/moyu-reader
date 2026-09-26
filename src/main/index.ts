@@ -167,8 +167,15 @@ function bootstrap(): void {
    * 里：最典型的是整体透明度——右栏那条滑块的依据是渲染进程手里这份配置镜像，
    * 它一直停在挂载时读到的旧值（默认 100%）上，用户每调小一次、一松手
    * 滑块就跳回 100%。
+   *
+   * 同一处还要接第二条线：**已经开着的**本机文件（离线阅读的 TXT）拿不到广播——
+   * 它们不是自家页面，没有那座桥，正文的透明度只能由主进程往它们的视图里注入。
+   * 而这件事同样「写配置的路不止一条」，因此也挂在这里，与广播同一处。
    */
-  config.subscribe((next) => broadcast(BROADCAST.configChanged, next))
+  config.subscribe((next) => {
+    broadcast(BROADCAST.configChanged, next)
+    tabs.refreshReaderOpacity()
+  })
 
   const popover = new PopoverWindowService(
     registry,

@@ -23,6 +23,10 @@
  *   Q7  CSP 一条都没报：这一页的 CSP 比别的页多三条放行（wasm、blob worker、
  *       moyu-pdf:），漏一条就会在运行时被拦下来，而**被拦下来是不出声的**。
  *   Q8  preload 到手了（这一页要读配置才画得出墨色），且页面里没有异常。
+ *   Q9  正文透明度（配置 ui.readerOpacity，右栏第三条滑块）：**合成之后的窗口上**
+ *       画布那一条的最大 alpha 跟着值一起减半，而右下角那条浮层的纹丝不动
+ *       ——浮层是控件，控件不跟着淡。CSS opacity 动不了画布里的像素，
+ *       因此这一问只能量合成结果（getImageData 读回来一个字节都不变）。
  *
  * 一问一个进程：本仓库的探针在同一个进程里开第二扇窗加载 file:// 会 ERR_FAILED
  * （Q24 那条环境的脾气），而这一支每个素材都要重新 loadURL 一次。因此跑法是一串
@@ -448,6 +452,108 @@ async function run(book) {
   )
   win.webContents.zoomLevel = 0
 
+  // -------------------------------------------------------------- Q9 正文透明度
+  //
+  // 右栏第三条滑块（ui.readerOpacity）改的是这一页的**正文**：画布上乘一道
+  // CSS opacity。量的是合成之后的窗口，不是画布里的像素——CSS opacity 由合成器
+  // 做，getImageData 读回来的字节一个都不变（这正是选它、而不选「把 alpha 乘进
+  // 键控那一趟」的原因：后者要整页重算 50–100ms，一条滑块拖不动）。
+  //
+  // 两处各取一个矩形：
+  //   · 画布顶上那一条 —— 里面只有字，最大 alpha 应当跟着值一起降；
+  //   · 右下角那条浮层 —— 它是控件，最大 alpha 应当纹丝不动。
+  // 量浮层之前先按一下 Shift 把它叫醒（它静止 2.6 秒就自己淡出去，
+  // 淡出去之后那一块当然是透明的，量出来是一条**假通过**）。
+  const 叫醒 = `window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }))`
+  const 取矩形 = `(() => {
+    const box = (el) => {
+      const r = el.getBoundingClientRect()
+      return { x: r.x, y: r.y, width: r.width, height: r.height }
+    }
+    const c = document.querySelector('canvas')
+    const hud = document.querySelector('.hud')
+    return JSON.stringify({
+      canvas: box(c),
+      hud: hud && !hud.classList.contains('off') ? box(hud) : null,
+      canvasOpacity: parseFloat(getComputedStyle(c).opacity),
+      hudOpacity: hud ? parseFloat(getComputedStyle(hud).opacity) : null,
+      视口: { w: window.innerWidth, h: window.innerHeight }
+    })
+  })()`
+
+  /** 一个矩形里最实的那一点。alpha 的最大值就是「有没有被淡掉」这一个数 */
+  async function maxAlpha(rect, 视口) {
+    // 与视口求交：画布比窗口高（一页要滚着看），越界的矩形交给 capturePage 是自找麻烦
+    const x = Math.max(0, Math.round(rect.x))
+    const y = Math.max(0, Math.round(rect.y))
+    const shot = await win.webContents.capturePage({
+      x,
+      y,
+      width: Math.max(1, Math.min(Math.round(rect.width), 视口.w - x)),
+      height: Math.max(1, Math.min(Math.round(rect.height), 视口.h - y))
+    })
+    const bmp = shot.toBitmap()
+    let max = 0
+    for (let i = 3; i < bmp.length; i += 4) if (bmp[i] > max) max = bmp[i]
+    return max
+  }
+
+  /**
+   * 量一轮：叫醒浮层 → 读矩形与两处 opacity → 各取一次最大 alpha。
+   *
+   * 叫醒与读矩形必须是两次调用，中间还得等**比它那条过渡更长**的一会儿
+   * （浮层的 opacity 有 220ms 的 transition）：Vue 把 `hudOn` 画到 class 上是在
+   * 微任务里，同一个任务里读到的还是「淡出去」的那一帧；而等不够的话量到的是
+   * 淡入到一半的浮层（实测 150ms 时读到 0.79），那一条读数就成了「浮层自己
+   * 在淡」，与这条滑块一点关系都没有。
+   */
+  async function 量正文() {
+    await win.webContents.executeJavaScript(叫醒)
+    await delay(450)
+    const 几何 = JSON.parse(await win.webContents.executeJavaScript(取矩形))
+    const 画布条 = { ...几何.canvas, height: Math.min(160, 几何.canvas.height) }
+    return {
+      几何,
+      画布最大alpha: await maxAlpha(画布条, 几何.视口),
+      浮层最大alpha: 几何.hud ? await maxAlpha(几何.hud, 几何.视口) : null
+    }
+  }
+
+  const 不淡 = await 量正文()
+  const 淡到 = 0.4
+  Object.assign(cfg, { ui: { homeTheme: 'paper', backgroundOpacity: 1, readerOpacity: 淡到 } })
+  win.webContents.send(mods.ipc.BROADCAST.configChanged, cfg)
+  await delay(700)
+  const 淡了 = await 量正文()
+
+  // 回到 1：这一问还要证「拉回来就真的回来了」——注入过的那条 opacity 不许赖着
+  Object.assign(cfg, { ui: { homeTheme: 'paper', backgroundOpacity: 1, readerOpacity: 1 } })
+  win.webContents.send(mods.ipc.BROADCAST.configChanged, cfg)
+  await delay(700)
+  const 拉回 = await 量正文()
+  if (SHOTS) fs.writeFileSync(path.join(OUT, `pdf-scheme-${book}-dim.png`), (await win.webContents.capturePage()).toPNG())
+
+  {
+    const 应到 = Math.round(不淡.画布最大alpha * 淡到)
+    const 到了 = Math.abs(淡了.画布最大alpha - 应到) <= 6
+    const 浮层没动 =
+      不淡.浮层最大alpha !== null &&
+      淡了.浮层最大alpha !== null &&
+      Math.abs(淡了.浮层最大alpha - 不淡.浮层最大alpha) <= 2
+    const 拉得回来 = Math.abs(拉回.画布最大alpha - 不淡.画布最大alpha) <= 4
+    ok(
+      'Q9 正文透明度只淡正文',
+      不淡.几何.canvasOpacity === 1 &&
+        淡了.几何.canvasOpacity === 淡到 &&
+        到了 &&
+        浮层没动 &&
+        拉得回来,
+      `画布 opacity ${不淡.几何.canvasOpacity} → ${淡了.几何.canvasOpacity} → ${拉回.几何.canvasOpacity}；` +
+        `画布最大 alpha ${不淡.画布最大alpha} → ${淡了.画布最大alpha}（按 ${淡到} 应当到 ${应到}）→ ${拉回.画布最大alpha}；` +
+        `浮层（控件）最大 alpha ${不淡.浮层最大alpha} → ${淡了.浮层最大alpha}，自身 opacity ${不淡.几何.hudOpacity}`
+    )
+  }
+
   // -------------------------------------------------------------- Q7 Q8
   const csp = complaints.filter((m) => /Content Security Policy|Refused to/i.test(m))
   ok(
@@ -463,7 +569,21 @@ async function run(book) {
 
   fs.writeFileSync(
     path.join(OUT, `pdf-scheme-${book}.json`),
-    JSON.stringify({ book, readerUrl, pages, first, night: dark, zoomed, complaints, results }, null, 2)
+    JSON.stringify(
+      {
+        book,
+        readerUrl,
+        pages,
+        first,
+        night: dark,
+        zoomed,
+        dim: { 不淡, 淡了, 拉回 },
+        complaints,
+        results
+      },
+      null,
+      2
+    )
   )
   win.destroy()
 }

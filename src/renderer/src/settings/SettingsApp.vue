@@ -323,8 +323,35 @@ function setSizePreset(preset: SizePreset): void {
             只淡界面自己画的底板：顶栏、地址栏、右侧栏与弹出面板。字与图标始终不透明，
             因此下限可以给到 0%——那时剩下的是浮在桌面上的一排按钮，仍然点得到，
             不会把自己锁在外面。<b>网页与这一页都不受影响</b>：它们是被读的内容，
-            不是窗口的边框。两条滑块配合着用：整体管「连网页一起淡」，
-            背景只管「窗口自己的边框」。
+            不是窗口的边框。三条滑块配合着用：整体管「连网页一起淡」，
+            背景只管「窗口自己的边框」，下面那条管「离线阅读的正文」。
+          </p>
+
+          <div class="field">
+            <label>离线阅读透明度</label>
+            <div class="control">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                :value="Math.round(config.ui.readerOpacity * 100)"
+                @input="
+                  patch({
+                    ui: {
+                      readerOpacity: Number(($event.target as HTMLInputElement).value) / 100
+                    }
+                  })
+                "
+              />
+              <span class="value">{{ Math.round(config.ui.readerOpacity * 100) }}%</span>
+            </div>
+          </div>
+          <p class="hint">
+            只淡<b>被读的正文</b>：拿本机文件（TXT）与自家的 PDF 阅读页，也就是起始页那一栏
+            「离线阅读」里的东西。界面与网页都不受影响，因此这一条可以与上两条各走各的——
+            「界面清清楚楚、正文淡下去」是它最常见的用法。<b>网页永远不吃这一条</b>：
+            网页是别人的东西，要淡它请用「整体透明度」。下限同样是 0%：那时正文不在，
+            界面还在，右栏那条滑块就摆在眼前，随时拉得回来。
           </p>
 
           <div class="field">

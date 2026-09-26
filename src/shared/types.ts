@@ -66,7 +66,7 @@ export interface UiConfig {
    * 不影响阅读网页时的观感。见 @shared/constants 的 HomeTheme。
    *
    * 键名仍叫 homeTheme：它从起始页那一页长起来，如今管得宽了。改名要动迁移阶梯
-   * （CONFIG_VERSION 10→11）与校验逻辑，而这个名字用户看不到，不如把注释写准。
+   * （CONFIG_VERSION 加一档）与校验逻辑，而这个名字用户看不到，不如把注释写准。
    */
   homeTheme: HomeTheme
   /**
@@ -78,6 +78,19 @@ export interface UiConfig {
    * 网页与自家页面不受影响。
    */
   backgroundOpacity: number
+  /**
+   * 离线阅读正文的不透明度 0–1。
+   *
+   * 前两条滑块管的是**窗口**（整体连带网页、背景只管界面底板），这一条管的是
+   * **被读的东西**：本机 TXT（Chromium 自己渲染的那一页）与自家 PDF 阅读页。
+   * 于是「界面 100%、正文 40%」这种搭配成立——字淡下去、栏还是实的。
+   * 从前要淡一本 PDF 只有整体透明度一条路，那会把右栏与顶栏一起淡掉。
+   *
+   * **网页永远不受它影响**（见 PRODUCT.md 的硬边界）：网页是别人的东西，
+   * 该由整体透明度管。阅读页右下角那一条浮层（第几页 / 深浅键）也不跟着淡——
+   * 它是控件，控件要一直看得见（与 backgroundOpacity 里的字与图标同理）。
+   */
+  readerOpacity: number
   /**
    * 悬浮球画哪个图标。
    *

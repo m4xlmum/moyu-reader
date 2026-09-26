@@ -5,15 +5,15 @@
  */
 import path from 'node:path'
 import {
-  BALL_ICONS,
+  BACKGROUND_OPACITY_MAX,
+  BACKGROUND_OPACITY_MIN,
   BALL_CUSTOM_FITS,
+  BALL_ICONS,
   CONFIG_VERSION,
   CUSTOM_BALL_ICON,
   DEFAULT_BALL_CUSTOM_FIT,
   DEFAULT_BALL_ICON,
   DEFAULT_BOSS_HIDE,
-  BACKGROUND_OPACITY_MAX,
-  BACKGROUND_OPACITY_MIN,
   DEFAULT_BOSS_MINIMIZE,
   DEFAULT_HOME_THEME,
   DEFAULT_NEW_TAB_URL,
@@ -24,7 +24,9 @@ import {
   LEGACY_PORTRAIT_SIZES,
   OPACITY_MAX,
   OPACITY_MIN,
-  PERSIST_DEBOUNCE_MS
+  PERSIST_DEBOUNCE_MS,
+  READER_OPACITY_MAX,
+  READER_OPACITY_MIN
 } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
 import type {
@@ -58,6 +60,9 @@ export function defaultConfig(): AppConfig {
       homeTheme: DEFAULT_HOME_THEME,
       // 默认不透明：底板是界面的一部分，一上来就是半透的会让人以为没画好
       backgroundOpacity: 1,
+      // 正文默认不淡：这一条管的是「我在读的那点字」，一上来就淡着
+      // 等于把可读性默认调低，而它的用处只在「想让它更不容易被看见」时才有
+      readerOpacity: 1,
       ballIcon: DEFAULT_BALL_ICON,
       ballCustomFit: DEFAULT_BALL_CUSTOM_FIT
     },
@@ -124,6 +129,7 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
     railOpen: input.ui?.railOpen ?? d.ui.railOpen,
     homeTheme: input.ui?.homeTheme ?? d.ui.homeTheme,
     backgroundOpacity: input.ui?.backgroundOpacity ?? d.ui.backgroundOpacity,
+    readerOpacity: input.ui?.readerOpacity ?? d.ui.readerOpacity,
     ballIcon: input.ui?.ballIcon ?? d.ui.ballIcon,
     ballCustomFit: input.ui?.ballCustomFit ?? d.ui.ballCustomFit
   }
@@ -200,6 +206,12 @@ function normalize(input: Partial<AppConfig> | null | undefined): AppConfig {
     ui.backgroundOpacity = d.ui.backgroundOpacity
   }
   ui.backgroundOpacity = clamp(ui.backgroundOpacity, BACKGROUND_OPACITY_MIN, BACKGROUND_OPACITY_MAX)
+  // 同一条规矩：非数值先回落默认再夹取。这里默认是 1，写坏的值不该让正文
+  // 悄悄变淡（正文淡了是「读不出来」，比底板淡了更费解）
+  if (typeof ui.readerOpacity !== 'number' || !Number.isFinite(ui.readerOpacity)) {
+    ui.readerOpacity = d.ui.readerOpacity
+  }
+  ui.readerOpacity = clamp(ui.readerOpacity, READER_OPACITY_MIN, READER_OPACITY_MAX)
   if (!HOME_THEMES.some((t) => t.id === ui.homeTheme)) {
     ui.homeTheme = d.ui.homeTheme as HomeTheme
   }

@@ -38,7 +38,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
-import { onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue'
 import {
   getDocument,
   GlobalWorkerOptions,
@@ -134,6 +134,19 @@ let dprQuery: MediaQueryList | null = null
 
 const { config } = useConfig()
 useTheme(config)
+
+/**
+ * 正文透明度（配置里的 ui.readerOpacity，右栏第三条滑块）。
+ *
+ * 只乘在**画布**上：右下角那条浮层是控件，控件要一直看得见——与「背景透明度
+ * 不淡字与图标」是同一条规矩。于是「界面 100%、正文 40%」这种搭配才成立。
+ *
+ * 用 CSS opacity，不把 alpha 乘进键控那一趟：键控要读回像素、把整页重算一遍
+ * （实测一页 50–100ms），而滑块每一格都得跟手。CSS opacity 由合成器做，
+ * 一个像素都不改——**所以画布里的像素读数不会变**，要量它只能量合成之后的窗口
+ * （探针 spike/pdf-scheme.js 的 Q9 就是这么量的）。
+ */
+const pageOpacity = computed(() => config.value?.ui.readerOpacity ?? 1)
 
 /*
  * 主题一改就换墨色、重画。
@@ -466,7 +479,7 @@ onBeforeUnmount(() => {
       滚动条藏起来：这一页是「浮在桌面上的一叠纸」，一条灰色的槽会把它拆穿。
     -->
     <div ref="stage" class="stage" @wheel="onWheel">
-      <canvas ref="canvas" class="sheet" />
+      <canvas ref="canvas" class="sheet" :style="{ opacity: pageOpacity }" />
     </div>
 
     <!-- 出错与进度都写在这一句里：这一页没有别的可说话的地方 -->

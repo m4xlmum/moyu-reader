@@ -2,7 +2,7 @@
 /**
  * 右侧功能栏。
  *
- * 站点、历史、书签、缩放、两条透明度滑块这些原本摊在底栏的功能都收在这里。
+ * 站点、历史、书签、缩放、三条透明度滑块这些原本摊在底栏的功能都收在这里。
  * 横屏下纵向空间最贵，而底栏那条横带子要吃掉整个宽度；换成一条竖栏，
  * 代价只是正文窄了 48px。
  *
@@ -20,10 +20,13 @@ import {
   BACKGROUND_OPACITY_MAX,
   BACKGROUND_OPACITY_MIN,
   OPACITY_MAX,
-  OPACITY_MIN
+  OPACITY_MIN,
+  READER_OPACITY_MAX,
+  READER_OPACITY_MIN
 } from '@shared/constants'
 import type { ConfigPatch } from '@shared/ipc'
 import type { AppConfig, TabState } from '@shared/types'
+import { isLocalFile } from '@shared/url'
 import Icon from './Icon.vue'
 import OpacitySlider from './OpacitySlider.vue'
 import { useWindowDrag } from '../composables/useWindowDrag'
@@ -80,11 +83,33 @@ function setBackgroundOpacity(value: number): void {
 }
 
 /**
+ * 离线阅读正文的透明度，界面与网页都不受影响。
+ *
+ * 判据是「此刻这张网页是不是本机文件」——本机 TXT 与自家 PDF 阅读页都对外的
+ * 地址是 `file:`（见 @shared/url 的 isLocalFile），因此一个谓词两处通用。
+ * 与上面两条不一样的是：**那两条任何时候都管得着**（窗与界面一直在），
+ * 这一条只在读一本本机文件时才有对象。于是它按右栏那三格缩放的规矩来——
+ * 没有对象就禁掉，而不是装作能点。
+ */
+function setReaderOpacity(value: number): void {
+  emit('patch', { ui: { readerOpacity: value } })
+}
+
+const offlineReading = computed(() => isLocalFile(props.activeTab?.url))
+
+const readerHint = computed(() =>
+  offlineReading.value
+    ? '只影响离线阅读的正文（本机 TXT 与 PDF），界面与网页不受影响'
+    : '只影响离线阅读的正文——此刻没有正在读的本机文件。先打开一本：起始页 → 离线阅读 → 打开文件…'
+)
+
+/**
  * 收起时是否暂停网页里正在播的媒体。
  *
  * 这一项在系统设置里也有（隐蔽 → 收起时暂停音视频），两处改的是同一份配置，
  * 靠配置广播对齐——因此在设置里改完，这里那一格的高亮会跟着变。
- * 摆在本栏最上面一格：小窗口下这条功能栈是**会滚的**（迷你档实测溢出 174px），
+ * 摆在本栏最上面一格：小窗口下这条功能栈是**会滚的**（迷你档
+ * 480×270 实测溢出 264px，默认档 960×540 刚好放满、溢出 0px），
  * 排在下面的东西等于藏起来了，而这一枚本来就是嫌设置里不好找才搬上来的。
  */
 const pauseOnCollapse = computed(() => props.config?.stealth.muteMediaOnCollapse ?? false)
@@ -175,6 +200,21 @@ function togglePauseOnCollapse(): void {
         :min="BACKGROUND_OPACITY_MIN"
         :max="BACKGROUND_OPACITY_MAX"
         @update:model-value="setBackgroundOpacity"
+      />
+
+      <!--
+        第三条：离线阅读的正文。前两条管窗口，这一条管「我在读的那点字」——
+        因此它们可以各走各的（界面 100% + 正文 40% 是常用的一种搭配）。
+        只在读本机文件时是活的（见 offlineReading）。
+      -->
+      <OpacitySlider
+        label="阅读"
+        :hint="readerHint"
+        :model-value="config?.ui.readerOpacity ?? 1"
+        :min="READER_OPACITY_MIN"
+        :max="READER_OPACITY_MAX"
+        :disabled="!offlineReading"
+        @update:model-value="setReaderOpacity"
       />
     </div>
   </aside>
